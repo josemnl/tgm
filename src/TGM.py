@@ -64,8 +64,14 @@ class TGM:
         predFreeMap = 1 - predStaticMap - predDynamicMap - predWeatherMap
 
         # Compute the normalized maps
-        nStatic = instStaticMap * predStaticMap / self.staticPrior
-        nDynamic = instDynamicMap * predDynamicMap / self.dynamicPrior
+        if self.staticPrior != 0:
+            nStatic = instStaticMap * predStaticMap / self.staticPrior
+        else:
+            nStatic = np.zeros_like(instStaticMap)
+        if self.dynamicPrior != 0:
+            nDynamic = instDynamicMap * predDynamicMap / self.dynamicPrior
+        else:
+            nDynamic = np.zeros_like(instDynamicMap)
         if self.weatherPrior != 0:
             nWeather = instWeatherMap * predWeatherMap / self.weatherPrior
         else:
