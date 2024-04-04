@@ -8,32 +8,50 @@ from TGM import TGM
 from SLAM import lsqnl_matching
 
 def run():
-    # PARAMETERS
-    logID = '2024-02-28-15-54-14'
+    # Our method vs baseline
+    isBaseline = True
+
+    # Log parameters
+    logID = '2024-03-15-11-25-54'
     is3D = True
-    initialTimeStep = 60
+    initialTimeStep = 600
     simHorizon = 10000
-    
+
+    # SLAM parameters
     isSLAM = True
     numTimeStepsSLAM = 1
-    startPoseSLAM = [100, 100, 0]
+    startPoseSLAM = [500, 500, 0]
     
     # Plotting parameters
     saveVideo = False
-    followingVideo = False
+    followingVideo = True
+    followingWidth = 100
+    followingWeight = 100
     
-    # TGM parameters
+    # Grid parameters
     origin = [0,0]
-    width = 300
-    height = 300
+    width = 1000
+    height = 1000
     resolution = 2
     
-    staticPrior = 0.3
-    dynamicPrior = 0.3
+    # TGM parameters
+    if isBaseline:
+        staticPrior = 0.5
+        dynamicPrior = 0
+    else:
+        staticPrior = 0.3
+        dynamicPrior = 0.3
     weatherPrior = 0
-    maxVelocity = 1/resolution
-    saturationLimits = [0, 1, 0, 1]
+    maxVelocity = 1
+    saturationLimits = [0, 0.99, 0.01, 1]
     fftConv = True
+
+    # Filter parameters
+    groundThreshold = -1.5
+    skyThreshold = 1
+    minDistance = 2
+    maxDistance = 10
+    voxelGridSize = 1/resolution
     
     # Sensor Model parameters
     smWidth = 100
@@ -58,7 +76,7 @@ def run():
         # Import sensor data
         if is3D:
             z_t_3D = readLidarData3D(logPath, i)
-            z_t = z_t_3D.removeGround(-1).removeSky(1).convertTo2D().removeClosePoints(3).voxelGridFilter(1/resolution).orderByAngle()
+            z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
         else:
             z_t = readLidarData(logPath, i)
         timeData = time.time()
@@ -86,7 +104,7 @@ def run():
 
         # Plot maps
         fig.clear()
-        tgm.plotCombinedMap(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), following=followingVideo, width=100, height=100)
+        tgm.plotCombinedMap(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), following=followingVideo, width=followingWidth, height=followingWeight)
         timePlot = time.time()
 
         # Print times
