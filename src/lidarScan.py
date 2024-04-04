@@ -30,6 +30,9 @@ class lidarScan:
 
     def removeClosePoints(self, minRange):
         return lidarScan(self.angles[self.ranges > minRange], self.ranges[self.ranges > minRange])
+    
+    def removeFarPoints(self, maxRange):
+        return lidarScan(self.angles[self.ranges < maxRange], self.ranges[self.ranges < maxRange])
 
     def orderByAngle(self):
         idx = np.argsort(self.angles)
