@@ -9,12 +9,12 @@ from SLAM import lsqnl_matching
 
 def run():
     # Our method vs baseline
-    isBaseline = True
+    isBaseline = False
 
     # Log parameters
     logID = '2024-03-15-11-25-54'
     is3D = True
-    initialTimeStep = 600
+    initialTimeStep = 1
     simHorizon = 10000
 
     # SLAM parameters
@@ -32,26 +32,28 @@ def run():
     origin = [0,0]
     width = 1000
     height = 1000
-    resolution = 2
+    resolution = 4
     
     # TGM parameters
     if isBaseline:
         staticPrior = 0.5
         dynamicPrior = 0
+        saturationLimits = [0, 1, 0, 1]
     else:
         staticPrior = 0.3
         dynamicPrior = 0.3
+        saturationLimits = [0, 0.95, 0.05, 1]
     weatherPrior = 0
     maxVelocity = 1
-    saturationLimits = [0, 0.99, 0.01, 1]
     fftConv = True
 
     # Filter parameters
     groundThreshold = -1.5
     skyThreshold = 1
     minDistance = 2
-    maxDistance = 10
+    maxDistance = 30
     voxelGridSize = 1/resolution
+    angRes = 360
     
     # Sensor Model parameters
     smWidth = 100
@@ -76,6 +78,9 @@ def run():
         # Import sensor data
         if is3D:
             z_t_3D = readLidarData3D(logPath, i)
+            # Option with new sensor model
+            #z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).removeClosePoints(minDistance).convertTo2D_new(angRes, maxDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
+            # Option with old sensor model
             z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
         else:
             z_t = readLidarData(logPath, i)
