@@ -52,8 +52,8 @@ class sensorModel:
                 try:
                     if data[point[0]][point[1]] != self.invModel[1]:
                         data[point[0]][point[1]] = self.invModel[0]
-                    else:
-                        break
+                    #else:
+                    #    break # Uncomment this line to stop the ray at the first occupied cell. This causes the map to acumulate static cells behing obstacles that never get removed.
                 except:
                     pass
         for i in range(ox.size):
