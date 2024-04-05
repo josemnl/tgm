@@ -74,8 +74,27 @@ class lidarScan3D:
     def removeSky(self, skyThreshold):
         return lidarScan3D(self.points3D[self.points3D[:, 2] < skyThreshold])
     
+    def removeClosePoints(self, minRange):
+        return lidarScan3D(self.points3D[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange])
+    
     def convertTo2D(self):
         return lidarScan(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2))
+    
+    def convertTo2D_new(self, angRes, maxRange):
+        # This function converts the 3D scan to a 2D scan taking only the closest point in each angular sector
+        # Create lidarScan object with the specified angular resolution and maximum range
+        z_t = lidarScan(np.linspace(-np.pi, np.pi, angRes), np.ones(angRes)*maxRange)
+        # Iterate through each point in the 3D scan
+        for point in self.points3D:
+            # Compute the angle and range of the point
+            angle = np.arctan2(point[1], point[0])
+            range = np.sqrt(point[0]**2 + point[1]**2)
+            # Find the closest index in the 2D scan
+            idx = np.argmin(np.abs(z_t.angles - angle))
+            # Update the range if the new range is smaller
+            if range < z_t.ranges[idx]:
+                z_t.ranges[idx] = range
+        return z_t
     
     def plot(self, ax=None):
         if ax is None:
