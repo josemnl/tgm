@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import yaml
 
 from utilities import readLidarData, readLidarData3D, readPoseData, createVideo
 from sensorModel import sensorModel
@@ -8,58 +9,50 @@ from TGM import TGM
 from SLAM import lsqnl_matching
 
 def run():
-    # Our method vs baseline
-    isBaseline = False
+    # Config file
+    configFile = './config/baseline.yaml'
+    # Import parameters from config file
+    parameters = yaml.safe_load(open(configFile))
 
+    # Load parameters
     # Log parameters
-    logID = '2024-03-15-11-25-54'
-    is3D = True
-    initialTimeStep = 1
-    simHorizon = 10000
-
+    logID = parameters['logID']
+    is3D = parameters['is3D']
+    initialTimeStep = parameters['initialTimeStep']
+    simHorizon = parameters['simHorizon']
     # SLAM parameters
-    isSLAM = True
-    numTimeStepsSLAM = 1
-    startPoseSLAM = [500, 500, 0]
-    
+    isSLAM = parameters['isSLAM']
+    numTimeStepsSLAM = parameters['numTimeStepsSLAM']
+    startPoseSLAM = parameters['startPoseSLAM']
     # Plotting parameters
-    saveVideo = False
-    followingVideo = True
-    followingWidth = 100
-    followingWeight = 100
-    
+    saveVideo = parameters['saveVideo']
+    followingVideo = parameters['followingVideo']
+    followingWidth = parameters['followingWidth']
+    followingWeight = parameters['followingWeight']
     # Grid parameters
-    origin = [0,0]
-    width = 1000
-    height = 1000
-    resolution = 4
-    
+    origin = parameters['origin']
+    width = parameters['width']
+    height = parameters['height']
+    resolution = parameters['resolution']
     # TGM parameters
-    if isBaseline:
-        staticPrior = 0.5
-        dynamicPrior = 0
-        saturationLimits = [0, 1, 0, 1]
-    else:
-        staticPrior = 0.3
-        dynamicPrior = 0.3
-        saturationLimits = [0, 0.95, 0.05, 1]
-    weatherPrior = 0
-    maxVelocity = 1
-    fftConv = True
-
+    staticPrior = parameters['staticPrior']
+    dynamicPrior = parameters['dynamicPrior']
+    weatherPrior = parameters['weatherPrior']
+    maxVelocity = parameters['maxVelocity']
+    saturationLimits = parameters['saturationLimits']
+    fftConv = parameters['fftConv']
     # Filter parameters
-    groundThreshold = -1.5
-    skyThreshold = 1
-    minDistance = 2
-    maxDistance = 30
+    groundThreshold = parameters['groundThreshold']
+    skyThreshold = parameters['skyThreshold']
+    minDistance = parameters['minDistance']
+    maxDistance = parameters['maxDistance']
     voxelGridSize = 1/resolution
-    angRes = 360
-    
+    angRes = parameters['angRes']
     # Sensor Model parameters
-    smWidth = 100
-    smHeight = 100
-    sensorRange = 50
-    invModel = [0.1, 0.9]
+    smWidth = parameters['smWidth']
+    smHeight = parameters['smHeight']
+    sensorRange = parameters['sensorRange']
+    invModel = parameters['invModel']
     occPrior = staticPrior + dynamicPrior + weatherPrior
 
     # Paths
