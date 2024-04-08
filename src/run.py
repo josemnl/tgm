@@ -10,9 +10,10 @@ from SLAM import lsqnl_matching
 
 def run():
     # Config file
-    configFile = './config/baseline.yaml'
+    configPath = './config/'
+    configFile = 'TGM'
     # Import parameters from config file
-    parameters = yaml.safe_load(open(configFile))
+    parameters = yaml.safe_load(open(configPath + configFile + '.yaml'))
 
     # Load parameters
     # Log parameters
@@ -20,6 +21,12 @@ def run():
     is3D = parameters['is3D']
     initialTimeStep = parameters['initialTimeStep']
     simHorizon = parameters['simHorizon']
+    # If simHorizon is not defined, check all the z_t files in the log folder and set simHorizon to the number of files found
+    if simHorizon == 0:
+        import os
+        logPath = './logs/' + logID + '/'
+        simHorizon = len([name for name in os.listdir(logPath) if os.path.isfile(os.path.join(logPath, name)) and 'z_' in name])
+        print('simHorizon set to ' + str(simHorizon))
     # SLAM parameters
     isSLAM = parameters['isSLAM']
     numTimeStepsSLAM = parameters['numTimeStepsSLAM']
@@ -57,7 +64,13 @@ def run():
 
     # Paths
     logPath = './logs/' + logID + '/'
-    videoPath = './videos/'
+    videoPath = './videos/' + logID + '-' + configFile + '/'
+
+    # Create video folder if it does not exist
+    if saveVideo:
+        import os
+        if not os.path.exists(videoPath):
+            os.makedirs(videoPath)
 
     # Create Sensor Model and TGM
     sM = sensorModel(origin, smWidth, smHeight, resolution, sensorRange, invModel, occPrior)
@@ -116,7 +129,7 @@ def run():
 
     # Save video
     if saveVideo:
-        createVideo(logID, videoPath)
+        createVideo(logID, videoPath, removeFrames = False)
 
     # Save last frame
     tgm.plotCombinedMap(fig, saveImg=True, imgName= videoPath + logID)

@@ -2,7 +2,7 @@
 logID : '2024-03-15-11-25-54'
 is3D : True
 initialTimeStep : 1
-simHorizon : 10000
+simHorizon : 0
 
 # SLAM parameters
 isSLAM : True

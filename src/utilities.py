@@ -18,8 +18,9 @@ def readPoseData(path, i):
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
     return x_t
 
-def createVideo(logID, videoPath):
+def createVideo(logID, videoPath, removeFrames = True):
     subprocess.call(['ffmpeg', '-framerate', '8', '-i', videoPath + 'frame_%d.png', '-r', '10', '-pix_fmt', 'yuv420p',videoPath + logID + '.mp4'])
-    for file in os.listdir(videoPath):
-        if file.endswith('.png'):
-            os.remove(videoPath + file)
+    if removeFrames:
+        for file in os.listdir(videoPath):
+            if file.endswith('.png'):
+                os.remove(videoPath + file)
