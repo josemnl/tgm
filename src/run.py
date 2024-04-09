@@ -1,9 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-import yaml
 
-from utilities import readLidarData, readLidarData3D, readPoseData, createVideo
+from utilities import readLidarData, readLidarData3D, readPoseData, createVideo, loadConfig
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
@@ -12,56 +11,16 @@ def run():
     # Config file
     configPath = './config/'
     configFile = '2024-03-15-11-25-54-TGM'
-    # Import parameters from config file
-    parameters = yaml.safe_load(open(configPath + configFile + '.yaml'))
 
     # Load parameters
-    # Log parameters
-    logID = parameters['logID']
-    is3D = parameters['is3D']
-    initialTimeStep = parameters['initialTimeStep']
-    simHorizon = parameters['simHorizon']
-    # If simHorizon is not defined, check all the z_t files in the log folder and set simHorizon to the number of files found
-    if simHorizon == 0:
-        import os
-        logPath = './logs/' + logID + '/'
-        simHorizon = len([name for name in os.listdir(logPath) if os.path.isfile(os.path.join(logPath, name)) and 'z_' in name])
-        print('simHorizon set to ' + str(simHorizon))
-    # SLAM parameters
-    isSLAM = parameters['isSLAM']
-    numTimeStepsSLAM = parameters['numTimeStepsSLAM']
-    startPoseSLAM = parameters['startPoseSLAM']
-    # Plotting parameters
-    saveVideo = parameters['saveVideo']
-    removeFrames = parameters['removeFrames']
-    followingVideo = parameters['followingVideo']
-    followingWidth = parameters['followingWidth']
-    followingWeight = parameters['followingWeight']
-    # Grid parameters
-    origin = parameters['origin']
-    width = parameters['width']
-    height = parameters['height']
-    resolution = parameters['resolution']
-    # TGM parameters
-    staticPrior = parameters['staticPrior']
-    dynamicPrior = parameters['dynamicPrior']
-    weatherPrior = parameters['weatherPrior']
-    maxVelocity = parameters['maxVelocity']
-    saturationLimits = parameters['saturationLimits']
-    fftConv = parameters['fftConv']
-    # Filter parameters
-    groundThreshold = parameters['groundThreshold']
-    skyThreshold = parameters['skyThreshold']
-    minDistance = parameters['minDistance']
-    maxDistance = parameters['maxDistance']
-    voxelGridSize = 1/resolution
-    angRes = parameters['angRes']
-    # Sensor Model parameters
-    smWidth = parameters['smWidth']
-    smHeight = parameters['smHeight']
-    sensorRange = parameters['sensorRange']
-    invModel = parameters['invModel']
-    occPrior = staticPrior + dynamicPrior + weatherPrior
+    (
+        logID, is3D, initialTimeStep, simHorizon, isSLAM, numTimeStepsSLAM, 
+        startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, 
+        followingWeight, origin, width, height, resolution, staticPrior, 
+        dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, 
+        groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, 
+        angRes, smWidth, smHeight, sensorRange, invModel, occPrior
+    ) = loadConfig(configPath, configFile)
 
     # Paths
     logPath = './logs/' + logID + '/'
