@@ -5,7 +5,7 @@ import time
 from utilities import readLidarData, readLidarData3D, readPoseData, createVideo, loadConfig
 from sensorModel import sensorModel
 from TGM import TGM
-from SLAM import lsqnl_matching
+from SLAM import lsqnl_matching, plotCostFunction
 
 def run():
     # Config file
@@ -67,6 +67,10 @@ def run():
         else:
             x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), x_t, sensorRange).x
         timeSLAM = time.time()
+
+        # Plot cost function
+        #if i == 303:
+        #    plotCostFunction(z_t, tgm.computeStaticGridMap(), x_t, sensorRange, res=10)
 
         # Save SLAM results
         if isSLAM:
