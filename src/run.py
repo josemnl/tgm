@@ -16,7 +16,7 @@ def run():
     (
         logID, is3D, initialTimeStep, simHorizon, isSLAM, numTimeStepsSLAM, 
         startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, 
-        followingWeight, origin, width, height, resolution, staticPrior, 
+        followingWeight, style, origin, width, height, resolution, staticPrior, 
         dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, 
         groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, 
         angRes, smWidth, smHeight, sensorRange, invModel, occPrior
@@ -83,7 +83,7 @@ def run():
 
         # Plot maps
         fig.clear()
-        tgm.plotCombinedMap(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), following=followingVideo, width=followingWidth, height=followingWeight)
+        tgm.plot(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), following=followingVideo, width=followingWidth, height=followingWeight, style=style)
         timePlot = time.time()
 
         # Print times
@@ -104,7 +104,7 @@ def run():
         createVideo(logID, videoPath, removeFrames = removeFrames)
 
     # Save last frame
-    tgm.plotCombinedMap(fig, saveImg=True, imgName= videoPath + logID)
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID)
 
 if __name__ == '__main__':
     run()

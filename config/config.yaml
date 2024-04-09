@@ -15,6 +15,7 @@ removeFrames : True                     # If True, it removes the frames after s
 followingVideo : True                   # If True, the video follows the agent
 followingWidth : 100                    # Width of the following window
 followingWeight : 100                   # Height of the following window
+style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters
 origin : [0,0]                          # Origin of the grid

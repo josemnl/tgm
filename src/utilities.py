@@ -53,6 +53,7 @@ def loadConfig(configPath, configFile):
     followingVideo = parameters['followingVideo']
     followingWidth = parameters['followingWidth']
     followingWeight = parameters['followingWeight']
+    style = parameters['style']
 
     # Grid parameters
     origin = parameters['origin']
@@ -83,4 +84,4 @@ def loadConfig(configPath, configFile):
     invModel = parameters['invModel']
     occPrior = staticPrior + dynamicPrior + weatherPrior
 
-    return logID, is3D, initialTimeStep, simHorizon, isSLAM, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, followingWeight, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior
+    return logID, is3D, initialTimeStep, simHorizon, isSLAM, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, followingWeight, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior

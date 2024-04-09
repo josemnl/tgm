@@ -129,34 +129,16 @@ class TGM:
     
     def computeStaticGridMap(self):
         return gridMap(self.origin, self.width, self.height, self.resolution, self.staticMap)
-    
-    def plotStaticMap(self, fig=None):
-        if fig is None:
-            fig = plt.figure()
-        I = 1 - np.transpose(self.staticMap)
-        ax = fig.add_subplot(1, 1, 1)
-        ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.origin[0], self.origin[0] + self.width,
-                           self.origin[1], self.origin[1] + self.height))
-        if self.x_t is not None and len(self.x_t) != 0:
-            plt.plot(self.x_t[0], self.x_t[1], 'ro')
-        plt.show()
 
-    def plotDynamicMap(self, fig=None):
-        if fig is None:
-            fig = plt.figure()
-        I = 1 - np.transpose(self.dynamicMap)
-        ax = fig.add_subplot(1, 1, 1)
-        ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.origin[0], self.origin[0] + self.width,
-                           self.origin[1], self.origin[1] + self.height))
-        if self.x_t is not None and len(self.x_t) != 0:
-            plt.plot(self.x_t[0], self.x_t[1], 'ro')
-        plt.show()
+    def plot(self, fig=None, saveImg=False, imgName='', following = False, width = 0, height = 0, style='combined'):
+        # Assert that the style is valid
+        assert style in ['combined', 'static', 'dynamic', 'weather']
 
-    def plotCombinedMap(self, fig=None, saveImg=False, imgName='', following = False, width = 0, height = 0):
+        # If fig is None, create a new figure
         if fig is None:
             fig = plt.figure()
+
+        # If following is True, compute the overlaping grid and crop the maps
         if following:
             assert width != 0 and height != 0
             origin = int((self.x_t[0] - width/2) * self.resolution) / self.resolution, int((self.x_t[1] - height/2) * self.resolution) / self.resolution
@@ -169,6 +151,7 @@ class TGM:
             staticMap = self.cropStaticMap(overlapOrigin, overlapWidth, overlapHeight)
             dynamicMap = self.cropDynamicMap(overlapOrigin, overlapWidth, overlapHeight)
             weatherMap = self.cropWeatherMap(overlapOrigin, overlapWidth, overlapHeight)
+        # Otherwise, use the full maps
         else:
             overlapOrigin = self.origin
             overlapWidth = self.width
@@ -176,19 +159,45 @@ class TGM:
             staticMap = self.staticMap
             dynamicMap = self.dynamicMap
             weatherMap = self.weatherMap
-        I = np.zeros((int(overlapHeight*self.resolution), int(overlapWidth*self.resolution), 3))
-        I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 1.0*weatherMap)
-        I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap)
-        I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 1.0*weatherMap)
-        ax = fig.add_subplot(1, 1, 1)
-        ax.imshow(I, vmin=0, vmax=1, origin ="lower",
-                   extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
-                           overlapOrigin[1], overlapOrigin[1] + overlapHeight))
+
+        # Plot the map according to the style
+        if style == 'combined':
+            I = np.zeros((int(overlapHeight*self.resolution), int(overlapWidth*self.resolution), 3))
+            I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 1.0*weatherMap)
+            I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap)
+            I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 1.0*weatherMap)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(I, vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
+                            overlapOrigin[1], overlapOrigin[1] + overlapHeight))
+        elif style == 'static':
+            I = 1 - np.transpose(staticMap)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
+                            overlapOrigin[1], overlapOrigin[1] + overlapHeight))
+        elif style == 'dynamic':
+            I = 1 - np.transpose(dynamicMap)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
+                            overlapOrigin[1], overlapOrigin[1] + overlapHeight))
+        elif style == 'weather':
+            I = 1 - np.transpose(weatherMap)
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
+                            overlapOrigin[1], overlapOrigin[1] + overlapHeight))
+            
+        # Plot the ego position
         if self.x_t is not None and len(self.x_t) != 0:
             plt.plot(self.x_t[0], self.x_t[1], 'ro')
+
+        # If saveImg is True, save the image
         if saveImg:
-            #plt.savefig(imgName + '.png')
             imsave(imgName + '.png', I, origin ="lower")
+        
+        # Pause to show the image
         plt.pause(0.01)
 
     def cropStaticMap(self, origin, width, height):
@@ -250,4 +259,4 @@ if __name__ == '__main__':
     maxVelocity = 1
     saturationLimits = [0.1, 0.9, 0.1, 0.9]
     tgm = TGM(origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits)
-    tgm.plotCombinedMap()
+    tgm.plot()
