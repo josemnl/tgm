@@ -2,7 +2,7 @@
 logID : '2024-03-15-11-25-54'           # Unique identifier for the log
 is3D : True                             # Set to True if the point cloud is 3D
 initialTimeStep : 300                   # Initial time step to start the simulation
-simHorizon : 0                          # If 0, it runs until the end of the log
+simHorizon : 650                        # If 0, it runs until the end of the log
 
 # SLAM parameters
 isSLAM : True                           # If True, it computes x_t using SLAM
@@ -11,7 +11,7 @@ startPoseSLAM : [500, 500, 0]           # Initial pose for the SLAM algorithm if
 
 # Plotting parameters
 saveVideo : True                        # If True, it saves the video
-removeFrames : True                     # If True, it removes the frames after saving the video
+removeFrames : False                    # If True, it removes the frames after saving the video
 followingVideo : True                   # If True, the video follows the agent
 followingWidth : 100                    # Width of the following window
 followingWeight : 100                   # Height of the following window
