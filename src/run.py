@@ -11,7 +11,7 @@ from SLAM import lsqnl_matching
 def run():
     # Config file
     configPath = './config/'
-    configFile = 'TGM'
+    configFile = '2024-03-15-11-25-54-TGM'
     # Import parameters from config file
     parameters = yaml.safe_load(open(configPath + configFile + '.yaml'))
 
@@ -33,6 +33,7 @@ def run():
     startPoseSLAM = parameters['startPoseSLAM']
     # Plotting parameters
     saveVideo = parameters['saveVideo']
+    removeFrames = parameters['removeFrames']
     followingVideo = parameters['followingVideo']
     followingWidth = parameters['followingWidth']
     followingWeight = parameters['followingWeight']
@@ -64,7 +65,7 @@ def run():
 
     # Paths
     logPath = './logs/' + logID + '/'
-    videoPath = './videos/' + logID + '-' + configFile + '/'
+    videoPath = './results/' + configFile + '/'
 
     # Create video folder if it does not exist
     if saveVideo:
@@ -75,6 +76,10 @@ def run():
     # Create Sensor Model and TGM
     sM = sensorModel(origin, smWidth, smHeight, resolution, sensorRange, invModel, occPrior)
     tgm = TGM(origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv)
+
+    # Empty arrays for the results
+    x_t_SLAM_array = []
+    n_occ_cells_array = []
 
     # Main loop
     fig= plt.figure()
@@ -104,6 +109,10 @@ def run():
             x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), x_t, sensorRange).x
         timeSLAM = time.time()
 
+        # Save SLAM results
+        if isSLAM:
+            x_t_SLAM_array.append(x_t)
+
         # Compute instantaneous grid map with inverse sensor model
         sM.updateBasedOnPose(x_t)
         gm = sM.generateGridMap(z_t, x_t)
@@ -127,9 +136,13 @@ def run():
         print('Total:   ' + str(time.time() - timeStart))
         print('')
 
+    # Save SLAM results
+    if isSLAM:
+        np.savetxt(videoPath + 'x_t_SLAM.csv', x_t_SLAM_array, delimiter=',')
+
     # Save video
     if saveVideo:
-        createVideo(logID, videoPath, removeFrames = False)
+        createVideo(logID, videoPath, removeFrames = removeFrames)
 
     # Save last frame
     tgm.plotCombinedMap(fig, saveImg=True, imgName= videoPath + logID)

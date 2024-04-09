@@ -10,7 +10,8 @@ numTimeStepsSLAM : 1                    # Number of time steps to use ground tru
 startPoseSLAM : [500, 500, 0]           # Initial pose for the SLAM algorithm if x_t is not available
 
 # Plotting parameters
-saveVideo : False                       # If True, it saves the video
+saveVideo : True                       # If True, it saves the video
+removeFrames : True                     # If True, it removes the frames after saving the video
 followingVideo : True                   # If True, the video follows the agent
 followingWidth : 100                    # Width of the following window
 followingWeight : 100                   # Height of the following window
