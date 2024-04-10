@@ -14,7 +14,7 @@ def run():
 
     # Load parameters
     (
-        logID, is3D, initialTimeStep, simHorizon, isSLAM, numTimeStepsSLAM, 
+        logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, 
         startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, 
         followingWeight, style, origin, width, height, resolution, staticPrior, 
         dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, 
@@ -39,6 +39,9 @@ def run():
     # Empty arrays for the results
     x_t_SLAM_array = []
     n_occ_cells_array = []
+
+    # Initial guess for the velocity
+    v_t = [0, 0, 0]
 
     # Main loop
     fig= plt.figure()
@@ -65,7 +68,13 @@ def run():
             except:
                 x_t = np.array(startPoseSLAM)
         else:
-            x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), x_t, sensorRange).x
+            x_prev = x_t
+            if velTracking:
+                initialGuess = x_t + v_t
+            else:
+                initialGuess = x_t
+            x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), initialGuess, sensorRange).x
+            v_t = x_t - x_prev
         timeSLAM = time.time()
 
         # Plot cost function

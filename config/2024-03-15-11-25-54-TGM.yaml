@@ -6,6 +6,7 @@ simHorizon : 650                        # If 0, it runs until the end of the log
 
 # SLAM parameters
 isSLAM : True                           # If True, it computes x_t using SLAM
+velTracking : False                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 1                    # Number of time steps to use ground truth x_t before starting SLAM
 startPoseSLAM : [500, 500, 0]           # Initial pose for the SLAM algorithm if x_t is not available
 
