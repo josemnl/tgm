@@ -195,7 +195,7 @@ class TGM:
 
         # If saveImg is True, save the image
         if saveImg:
-            imsave(imgName + '.png', I, origin ="lower")
+            imsave(imgName + '.png', I, origin ="lower", cmap='gray')
         
         # Pause to show the image
         plt.pause(0.01)
