@@ -36,7 +36,7 @@ fftConv : True                          # If True, it uses FFT to compute the co
 groundThreshold : -1.5                  # Threshold to consider a point as ground
 skyThreshold : 1                        # Threshold to consider a point as sky
 minDistance : 2                         # Minimum distance to consider a point
-maxDistance : 30                        # Maximum distance to consider a point
+maxDistance : 25                        # Maximum distance to consider a point
 angRes : 360                            # Angular resolution of the sensor
 
 # Inverse Sensor Model parameters
@@ -44,4 +44,4 @@ smWidth : 100                           # Width of the inverse sensor model
 smHeight : 100                          # Height of the inverse sensor model
 sensorRange : 50                        # Maximum range of the sensor
 invModel : [0.1, 0.9]                   # High and low values of the beam inverse sensor model
-freeUpGroundDetections : False          # If True, it frees up the ground detections
+freeUpGroundDetections : True          # If True, it frees up the ground detections
