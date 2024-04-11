@@ -130,7 +130,7 @@ class TGM:
     def computeStaticGridMap(self):
         return gridMap(self.origin, self.width, self.height, self.resolution, self.staticMap)
 
-    def plot(self, fig=None, saveImg=False, imgName='', following = False, width = 0, height = 0, style='combined'):
+    def plot(self, fig=None, saveImg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined'):
         # Assert that the style is valid
         assert style in ['combined', 'static', 'dynamic', 'weather']
 
@@ -138,10 +138,17 @@ class TGM:
         if fig is None:
             fig = plt.figure()
 
-        # If following is True, compute the overlaping grid and crop the maps
-        if following:
-            assert width != 0 and height != 0
+        # If section is Following, compute the origin
+        if section == 'Following':
             origin = int((self.x_t[0] - width/2) * self.resolution) / self.resolution, int((self.x_t[1] - height/2) * self.resolution) / self.resolution
+
+        # If section is Constant, assert that the origin is not None
+        if section == 'Constant':
+            assert origin is not None
+
+        # If section is Following or Constant, compute the overlaping grid and crop the maps
+        if section == 'Following' or section == 'Constant':
+            assert width != 0 and height != 0
             # Compute overlaping grid
             overlapOrigin = [max(self.origin[0], origin[0]), max(self.origin[1], origin[1])]
             overlapWidth = min(self.origin[0] + self.width, origin[0] + width) - overlapOrigin[0]

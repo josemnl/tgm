@@ -51,9 +51,10 @@ def loadConfig(configPath, configFile):
     # Plotting parameters
     saveVideo = parameters['saveVideo']
     removeFrames = parameters['removeFrames']
-    followingVideo = parameters['followingVideo']
-    followingWidth = parameters['followingWidth']
-    followingWeight = parameters['followingWeight']
+    videoSection = parameters['videoSection']
+    videoWidth = parameters['videoWidth']
+    videoHeight = parameters['videoHeight']
+    videoOrigin = parameters['videoOrigin']
     style = parameters['style']
 
     # Grid parameters
@@ -86,4 +87,4 @@ def loadConfig(configPath, configFile):
     occPrior = staticPrior + dynamicPrior + weatherPrior
     freeUpGroundDetections = parameters['freeUpGroundDetections']
 
-    return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, followingWeight, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
+    return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, videoSection, videoWidth, videoHeight, videoOrigin, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections

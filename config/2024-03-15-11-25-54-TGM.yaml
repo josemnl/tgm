@@ -13,9 +13,10 @@ startPoseSLAM : [500, 500, 0]           # Initial pose for the SLAM algorithm if
 # Plotting parameters
 saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
-followingVideo : True                   # If True, the video follows the agent
-followingWidth : 100                    # Width of the following window
-followingWeight : 100                   # Height of the following window
+videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoWidth : 100                        # Width of the following window
+videoHeight : 100                       # Height of the following window
+videoOrigin : [500,450]                 # Origin of the video
 style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters

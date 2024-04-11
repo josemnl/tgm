@@ -15,8 +15,8 @@ def run():
     # Load parameters
     (
         logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, 
-        startPoseSLAM, saveVideo, removeFrames, followingVideo, followingWidth, 
-        followingWeight, style, origin, width, height, resolution, staticPrior, 
+        startPoseSLAM, saveVideo, removeFrames, videoSection, videoWidth, videoHeight,
+        videoOrigin, style, origin, width, height, resolution, staticPrior, 
         dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, 
         groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, 
         angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
@@ -104,7 +104,7 @@ def run():
 
         # Plot maps
         fig.clear()
-        tgm.plot(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), following=followingVideo, width=followingWidth, height=followingWeight, style=style)
+        tgm.plot(fig, saveImg=saveVideo, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), section = videoSection, width=videoWidth, height=videoHeight, origin=videoOrigin, style=style)
         timePlot = time.time()
 
         # Print times
