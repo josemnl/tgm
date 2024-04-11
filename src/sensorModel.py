@@ -16,8 +16,9 @@ class sensorModel:
     def updateBasedOnPose(self, x_t):
         self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
 
-    def generateGridMap(self, z_t, x_t):
+    def generateGridMap(self, z_t, x_t, z_t_ground=None):
         assert isinstance(z_t, lidarScan)
+        assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
         ang, dist = z_t.angles, z_t.ranges
         # Update measurement orientation with agent's pose
         ang = ang + x_t[2]
@@ -26,6 +27,13 @@ class sensorModel:
         # Compute detection points on global frame
         ox = x_t[0] + np.cos(ang) * dist
         oy = x_t[1] + np.sin(ang) * dist
+        # If ground points are provided, compute them as well
+        if z_t_ground is not None:
+            ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
+            ang_ground = ang_ground + x_t[2]
+            dist_ground[dist_ground>self.sensorRange] = self.sensorRange
+            ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
+            oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
         # Compute matrix index for ego pose
         ix_t = ((x_t[0:2]-self.origin) * self.resolution).astype(int)
         # Initialize matrix with prior
@@ -41,7 +49,7 @@ class sensorModel:
                     data[ix][iy] = self.invModel[1]
                 except:
                     pass
-        # Mark free cells
+        # Mark free cells along the rays
         for (x, y, d) in zip(ox, oy, dist):
             # Compute the matrix index for detection points
             ix = int(round((x - self.origin[0]) * self.resolution))
@@ -56,6 +64,13 @@ class sensorModel:
                     #    break # Uncomment this line to stop the ray at the first occupied cell. This causes the map to acumulate static cells behing obstacles that never get removed.
                 except:
                     pass
+        # If ground points are provided, mark them as free unless they are occupied
+        if z_t_ground is not None:
+            for (x, y) in zip(ox_ground, oy_ground):
+                ix = int(round((x - self.origin[0]) * self.resolution))
+                iy = int(round((y - self.origin[1]) * self.resolution))
+                if data[ix][iy] != self.invModel[1]:
+                    data[ix][iy] = self.invModel[0]
         for i in range(ox.size):
             ix1 = int(round((ox[i] - self.origin[0]) * self.resolution))
             iy1 = int(round((oy[i] - self.origin[1]) * self.resolution))

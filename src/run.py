@@ -19,7 +19,7 @@ def run():
         followingWeight, style, origin, width, height, resolution, staticPrior, 
         dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, 
         groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, 
-        angRes, smWidth, smHeight, sensorRange, invModel, occPrior
+        angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
     ) = loadConfig(configPath, configFile)
 
     # Paths
@@ -54,7 +54,12 @@ def run():
             # Option with new sensor model
             #z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).removeClosePoints(minDistance).convertTo2D_new(angRes, maxDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
             # Option with old sensor model
-            z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
+            if freeUpGroundDetections:
+                z_t_ground_3D, z_t_objects_3D = z_t_3D.removeSky(skyThreshold).splitByHeight(groundThreshold)
+                z_t_ground = z_t_ground_3D.convertTo2D().removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize)
+                z_t = z_t_objects_3D.convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
+            else:
+                z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
         else:
             z_t = readLidarData(logPath, i)
         timeData = time.time()
@@ -87,7 +92,10 @@ def run():
 
         # Compute instantaneous grid map with inverse sensor model
         sM.updateBasedOnPose(x_t)
-        gm = sM.generateGridMap(z_t, x_t)
+        if freeUpGroundDetections:
+            gm = sM.generateGridMap(z_t, x_t, z_t_ground)
+        else:
+            gm = sM.generateGridMap(z_t, x_t)
         timeSensorModel = time.time()
 
         # Update TGM

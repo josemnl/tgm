@@ -74,6 +74,11 @@ class lidarScan3D:
     def removeSky(self, skyThreshold):
         return lidarScan3D(self.points3D[self.points3D[:, 2] < skyThreshold])
     
+    def splitByHeight(self, height):
+        bottom = lidarScan3D(self.points3D[self.points3D[:, 2] < height])
+        top = lidarScan3D(self.points3D[self.points3D[:, 2] >= height])
+        return bottom, top
+    
     def removeClosePoints(self, minRange):
         return lidarScan3D(self.points3D[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange])
     
