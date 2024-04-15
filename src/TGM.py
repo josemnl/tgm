@@ -130,9 +130,12 @@ class TGM:
     def computeStaticGridMap(self):
         return gridMap(self.origin, self.width, self.height, self.resolution, self.staticMap)
 
-    def plot(self, fig=None, saveImg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined'):
+    def plot(self, fig=None, saveImg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         # Assert that the style is valid
         assert style in ['combined', 'static', 'dynamic', 'weather']
+
+        # Assert that the egoStyle is valid
+        assert egoStyle in ['none', 'dot', 'rectangle']
 
         # If fig is None, create a new figure
         if fig is None:
@@ -196,9 +199,33 @@ class TGM:
                     extent=(overlapOrigin[0], overlapOrigin[0] + overlapWidth,
                             overlapOrigin[1], overlapOrigin[1] + overlapHeight))
             
-        # Plot the ego position
+        # Plot the ego pose
         if self.x_t is not None and len(self.x_t) != 0:
-            plt.plot(self.x_t[0], self.x_t[1], 'ro')
+            if egoStyle == 'dot':
+                plt.plot(self.x_t[0], self.x_t[1], 'ro')
+            elif egoStyle == 'rectangle':
+                x = self.x_t[0]
+                y = self.x_t[1]
+                theta = self.x_t[2]
+                length = 4.953
+                width = 1.923
+                x1 = x + length/2 * np.cos(theta) + width/2 * np.cos(theta + np.pi/2)
+                y1 = y + length/2 * np.sin(theta) + width/2 * np.sin(theta + np.pi/2)
+                x2 = x + length/2 * np.cos(theta) - width/2 * np.cos(theta + np.pi/2)
+                y2 = y + length/2 * np.sin(theta) - width/2 * np.sin(theta + np.pi/2)
+                x3 = x - length/2 * np.cos(theta) - width/2 * np.cos(theta + np.pi/2)
+                y3 = y - length/2 * np.sin(theta) - width/2 * np.sin(theta + np.pi/2)
+                x4 = x - length/2 * np.cos(theta) + width/2 * np.cos(theta + np.pi/2)
+                y4 = y - length/2 * np.sin(theta) + width/2 * np.sin(theta + np.pi/2)
+                plt.fill([x1, x2, x3, x4, x1], [y1, y2, y3, y4, y1], color='white', edgecolor='black')
+                # Plot the heading as a triangle
+                x1 = x + length/2 * np.cos(theta)
+                y1 = y + length/2 * np.sin(theta)
+                x2 = x + (length/2-width) * np.cos(theta) + width/2 * np.sin(theta)
+                y2 = y + (length/2-width) * np.sin(theta) - width/2 * np.cos(theta)
+                x3 = x + (length/2-width) * np.cos(theta) - width/2 * np.sin(theta)
+                y3 = y + (length/2-width) * np.sin(theta) + width/2 * np.cos(theta)
+                plt.fill([x1, x2, x3, x1], [y1, y2, y3, y1], color='white', edgecolor='black')
 
         # If saveImg is True, save the image
         if saveImg:
