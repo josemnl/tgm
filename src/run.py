@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = '2024-03-15-11-25-54-TGM'
+    configFile = '2024-04-05-12-36-08-TGM'
 
     # Load parameters
     (
@@ -26,11 +26,10 @@ def run():
     logPath = './logs/' + logID + '/'
     videoPath = './results/' + configFile + '/'
 
-    # Create video folder if it does not exist
-    if saveVideo:
-        import os
-        if not os.path.exists(videoPath):
-            os.makedirs(videoPath)
+    # Create results folder if it does not exist
+    import os
+    if not os.path.exists(videoPath):
+        os.makedirs(videoPath)
 
     # Create Sensor Model and TGM
     sM = sensorModel(origin, smWidth, smHeight, resolution, sensorRange, invModel, occPrior)
