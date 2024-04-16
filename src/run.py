@@ -127,5 +127,14 @@ def run():
     # Save last frame
     tgm.plot(fig, saveImg=True, imgName= videoPath + logID)
 
+    # Save static grid map
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_static', style='static')
+
+    # Save dynamic grid map
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
+
+    # Save weather grid map
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_weather', style='weather')
+
 if __name__ == '__main__':
     run()
