@@ -69,8 +69,11 @@ class sensorModel:
             for (x, y) in zip(ox_ground, oy_ground):
                 ix = int(round((x - self.origin[0]) * self.resolution))
                 iy = int(round((y - self.origin[1]) * self.resolution))
-                if data[ix][iy] != self.invModel[1]:
-                    data[ix][iy] = self.invModel[0]
+                try:
+                    if data[ix][iy] != self.invModel[1]:
+                        data[ix][iy] = self.invModel[0]
+                except:
+                    pass
         for i in range(ox.size):
             ix1 = int(round((ox[i] - self.origin[0]) * self.resolution))
             iy1 = int(round((oy[i] - self.origin[1]) * self.resolution))
