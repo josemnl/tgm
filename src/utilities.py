@@ -51,6 +51,7 @@ def loadConfig(configPath, configFile):
     # Plotting parameters
     saveVideo = parameters['saveVideo']
     removeFrames = parameters['removeFrames']
+    saveSvg = parameters['saveSvg']
     videoSection = parameters['videoSection']
     videoWidth = parameters['videoWidth']
     videoHeight = parameters['videoHeight']
@@ -87,4 +88,4 @@ def loadConfig(configPath, configFile):
     occPrior = staticPrior + dynamicPrior + weatherPrior
     freeUpGroundDetections = parameters['freeUpGroundDetections']
 
-    return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, videoSection, videoWidth, videoHeight, videoOrigin, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
+    return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, saveSvg, videoSection, videoWidth, videoHeight, videoOrigin, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections

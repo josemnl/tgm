@@ -130,7 +130,7 @@ class TGM:
     def computeStaticGridMap(self):
         return gridMap(self.origin, self.width, self.height, self.resolution, self.staticMap)
 
-    def plot(self, fig=None, saveImg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
+    def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         # Assert that the style is valid
         assert style in ['combined', 'static', 'dynamic', 'weather']
 
@@ -230,6 +230,10 @@ class TGM:
         # If saveImg is True, save the image
         if saveImg:
             imsave(imgName + '.png', I, origin ="lower", cmap='gray')
+
+        # If saveSvg is True, save the plot
+        if saveSvg:
+            plt.savefig(imgName + '.svg', format='svg', dpi=1200)
         
         # Pause to show the image
         plt.pause(0.01)
