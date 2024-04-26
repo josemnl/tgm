@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = '2024-04-05-12-36-08-TGM'
+    configFile = '2024-03-01-15-10-32-BaselineSat'
 
     # Load parameters
     (
@@ -105,6 +105,9 @@ def run():
         fig.clear()
         tgm.plot(fig, saveImg=saveVideo, saveSvg=saveSvg, imgName= videoPath + 'frame_' + str(i-initialTimeStep+1), section = videoSection, width=videoWidth, height=videoHeight, origin=videoOrigin, style=style)
         timePlot = time.time()
+
+        # Print progress
+        print('Frame:   ' + str(i-initialTimeStep+1) + ' / ' + str(simHorizon))
 
         # Print times
         print('Data:    ' + str(timeData - timeStart))
