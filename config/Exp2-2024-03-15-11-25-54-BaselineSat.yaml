@@ -15,7 +15,7 @@ saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveSvg : True                          # If True, it saves each frame as a SVG file
 videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
-videoWidth : 100                        # Width of the following window
+videoWidth : 80                         # Width of the following window
 videoHeight : 50                        # Height of the following window
 videoOrigin : [500,475]                 # Origin of the video
 style : 'static'                        # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
