@@ -24,9 +24,9 @@ class lidarScan:
     def plot(self, ax=None):
         if ax is None:
             ax = plt.gca()
-        ax.plot(self.computeCartesian()[:, 0], self.computeCartesian()[:, 1], 'r.')
+        ax.plot(self.computeCartesian()[:, 0], self.computeCartesian()[:, 1], 'k.', markersize=1)
         ax.axis('equal')
-        plt.show()
+        #plt.show()
 
     def removeClosePoints(self, minRange):
         return lidarScan(self.angles[self.ranges > minRange], self.ranges[self.ranges > minRange])
