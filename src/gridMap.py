@@ -2,11 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 class gridMap:
-    def __init__(self, origin, width, height, resolution, data):
-        assert len(origin) == 2
-        assert data.shape[0] == width*resolution
-        assert data.shape[1] == height*resolution
-        self.origin = origin
+    def __init__(self, origin_x, origin_y, width, height, resolution, data):
+        assert isinstance(origin_x, int)
+        assert isinstance(origin_y, int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        assert data.shape[0] == width
+        assert data.shape[1] == height
+        self.origin_x = origin_x
+        self.origin_y = origin_y
         self.width = width
         self.height = height
         self.resolution = resolution
@@ -18,39 +22,43 @@ class gridMap:
         """
         I = 1 - np.transpose(self.data)
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.origin[0], self.origin[0] + self.width,
-                           self.origin[1], self.origin[1] + self.height))
+                   extent=(self.origin_x*self.resolution, (self.origin_x + self.width)*self.resolution,
+                           self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
         plt.show()
 
-    def crop(self, origin, width, height):
+    def crop(self, origin_x, origin_y, width, height):
         """
         Crop the grid map
         """
-        assert len(origin) == 2
-        assert origin[0] >= self.origin[0]
-        assert origin[1] >= self.origin[1]
-        assert origin[0] + width <= self.origin[0] + self.width
-        assert origin[1] + height <= self.origin[1] + self.height
-        x0 = int((origin[0] - self.origin[0]) * self.resolution)
-        y0 = int((origin[1] - self.origin[1]) * self.resolution)
-        x1 = int((origin[0] + width - self.origin[0]) * self.resolution)
-        y1 = int((origin[1] + height - self.origin[1]) * self.resolution)
-        return gridMap(origin, width, height, self.resolution, self.data[x0:x1, y0:y1])
+        assert isinstance(origin_x, int)
+        assert isinstance(origin_y, int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        assert origin_x >= self.origin_x
+        assert origin_y >= self.origin_y
+        assert origin_x + width <= self.origin_x + self.width
+        assert origin_y + height <= self.origin_y + self.height
+        x0 = origin_x - self.origin_x
+        y0 = origin_y - self.origin_y
+        x1 = x0 + width
+        y1 = y0 + height
+        return gridMap(origin_x, origin_y, width, height, self.resolution, self.data[x0:x1, y0:y1])
 
 def main():
-    origin = [0, 0]
-    width = 10
-    height = 5
-    resolution = 2
+    origin_x = 0
+    origin_y = 0
+    width = 10*2
+    height = 5*2
+    resolution = 0.5
 
-    data = np.zeros((width*resolution, height*resolution))
+    data = np.zeros((width, height))
     data[0][0] = 1
     data[19][0] = 0.5
     
-    grid = gridMap(origin, width, height, resolution, data)
+    grid = gridMap(origin_x, origin_y, width, height, resolution, data)
     grid.plot()
 
-    grid.crop([5, 0], 5, 3).plot()
+    grid.crop(10, 0, 10, 6).plot()
 
 if __name__ == '__main__':
     main()
