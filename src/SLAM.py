@@ -11,15 +11,16 @@ def lsqnl_matching(scan, lsq_map, x0, max_range):
 
     # Perform the least squares optimization
     x = least_squares(lsq_fun, x0, max_nfev=500, args=(lsq_scan, lsq_map), method='lm')
+    x = x.x
     return x
 
 def lsq_fun(relPose, lsq_scan, lsq_map):
     # Extract grid parameters
-    limit_x = lsq_map.width
-    limit_y = lsq_map.height
-    origin_x = lsq_map.origin[0]
-    origin_y = lsq_map.origin[1]
-    cell_length = 1 / lsq_map.resolution
+    limit_x = lsq_map.width*lsq_map.resolution
+    limit_y = lsq_map.height*lsq_map.resolution
+    origin_x = lsq_map.origin_x*lsq_map.resolution
+    origin_y = lsq_map.origin_y*lsq_map.resolution
+    cell_length = lsq_map.resolution
 
     # Create the grid
     x = np.linspace(origin_x, origin_x + limit_x - cell_length, lsq_map.data.shape[0])

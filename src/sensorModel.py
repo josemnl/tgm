@@ -86,7 +86,7 @@ class sensorModel:
                         data[point[0]][point[1]] = self.occPrior
                 except:
                     pass
-        return gridMap(self.origin, self.width, self.height, self.resolution, data)
+        return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, data)
 
 def bresenham(start, end):
     # setup initial conditions
