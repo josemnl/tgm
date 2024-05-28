@@ -43,6 +43,8 @@ class TGM:
 
         self.x_t = []
 
+        self.prevVisibleMask = np.full((self.width, self.height), False)
+
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
         assert instGridMap.resolution == self.resolution
@@ -97,17 +99,25 @@ class TGM:
         dynamicMatrix[dynamicMatrix > self.satHighD] = self.satHighD
         dynamicMatrix[dynamicMatrix < self.satLowD] = self.satLowD
 
-        # Set the dynamic map to the prior (TODO: improve this)
-        self.dynamicMap = (1 - self.staticMap) * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
-
-        # Update the portion of the TGM that overlaps with the instantaneous map
+        # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
         x0 = overlapOrigin_x - self.origin_x
         y0 = overlapOrigin_y - self.origin_y
         x1 = x0 + overlapWidth
         y1 = y0 + overlapHeight
+
+        # Set the cells that went from visible to invisible to the prior
+        mask = self.prevVisibleMask.copy()
+        mask[x0:x1, y0:y1] = False
+        self.dynamicMap[mask] = (1 - self.staticMap[mask]) * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
+
+        # Update the visible cells
         self.staticMap[x0:x1, y0:y1] = staticMatrix
         self.dynamicMap[x0:x1, y0:y1] = dynamicMatrix
         self.weatherMap[x0:x1, y0:y1] = weatherMatrix
+
+        # Update the previous visible mask
+        self.prevVisibleMask.fill(False)
+        self.prevVisibleMask[x0:x1, y0:y1] = True
 
     def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:
