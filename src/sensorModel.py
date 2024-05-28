@@ -5,11 +5,12 @@ import time
 
 class sensorModel:
     def __init__ (self, origin, width, height, resolution, sensorRange, invModel ,occPrior):
-        self.origin = origin
-        self.width = width
-        self.height = height
-        self.resolution = resolution
-        self.sensorRange = sensorRange
+        # Units are converted to meters for the origin, width and height; and to cells/meter for the resolution
+        self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
+        self.width = int(width*resolution)
+        self.height = int(height*resolution)
+        self.resolution = int(1/resolution)
+        self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
         self.occPrior = occPrior
 

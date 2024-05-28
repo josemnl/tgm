@@ -7,29 +7,23 @@ from scipy.signal import convolve2d, fftconvolve
 
 class TGM:
     def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False):
-        #assert isinstance(origin_x, int)
-        #assert isinstance(origin_y, int)
-        #assert isinstance(width, int)
-        #assert isinstance(height, int)
+        assert isinstance(origin[0], int)
+        assert isinstance(origin[1], int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
 
-        #self.origin_x = origin_x
-        #self.origin_y = origin_y
-        #self.width = width
-        #self.height = height
-        #self.resolution = resolution
-
-        self.origin_x = int(origin[0]*resolution)
-        self.origin_y = int(origin[1]*resolution)
-        self.width = int(width*resolution)
-        self.height = int(height*resolution)
-        self.resolution = 1/resolution
+        self.origin_x = origin[0]
+        self.origin_y = origin[1]
+        self.width = width
+        self.height = height
+        self.resolution = resolution
 
         self.staticPrior = staticPrior
         self.dynamicPrior = dynamicPrior
         self.weatherPrior = weatherPrior
         self.freePrior = 1 - staticPrior - dynamicPrior - weatherPrior
 
-        r = int(maxVelocity * resolution)
+        r = int(maxVelocity / self.resolution)
         shape = disk(r).astype(float)
         self.D0 = 1 / np.sum(shape)
         shape /= np.sum(shape)

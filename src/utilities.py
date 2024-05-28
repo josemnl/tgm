@@ -60,8 +60,8 @@ def loadConfig(configPath, configFile):
 
     # Grid parameters
     origin = parameters['origin']
-    width = parameters['width']
-    height = parameters['height']
+    width = int(parameters['width']/parameters['resolution'])
+    height = int(parameters['height']/parameters['resolution'])
     resolution = parameters['resolution']
 
     # TGM parameters
@@ -77,13 +77,13 @@ def loadConfig(configPath, configFile):
     skyThreshold = parameters['skyThreshold']
     minDistance = parameters['minDistance']
     maxDistance = parameters['maxDistance']
-    voxelGridSize = 1/resolution
+    voxelGridSize = resolution
     angRes = parameters['angRes']
 
     # Sensor Model parameters
-    smWidth = parameters['smWidth']
-    smHeight = parameters['smHeight']
-    sensorRange = parameters['sensorRange']
+    smWidth = int(parameters['smWidth']/parameters['resolution'])
+    smHeight = int(parameters['smHeight']/parameters['resolution'])
+    sensorRange = int(parameters['sensorRange']/parameters['resolution'])
     invModel = parameters['invModel']
     occPrior = staticPrior + dynamicPrior + weatherPrior
     freeUpGroundDetections = parameters['freeUpGroundDetections']
