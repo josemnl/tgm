@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = '2024-03-01-15-10-32-BaselineSat'
+    configFile = 'Exp1-2024-03-01-15-10-32-TGM'
 
     # Load parameters
     (
@@ -77,7 +77,7 @@ def run():
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), initialGuess, sensorRange).x
+            x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), initialGuess, sensorRange)
             v_t = x_t - x_prev
         timeSLAM = time.time()
 

@@ -5,11 +5,12 @@ import time
 
 class sensorModel:
     def __init__ (self, origin, width, height, resolution, sensorRange, invModel ,occPrior):
-        self.origin = origin
-        self.width = width
-        self.height = height
-        self.resolution = resolution
-        self.sensorRange = sensorRange
+        # Units are converted to meters for the origin, width and height; and to cells/meter for the resolution
+        self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
+        self.width = int(width*resolution)
+        self.height = int(height*resolution)
+        self.resolution = int(1/resolution)
+        self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
         self.occPrior = occPrior
 
@@ -86,7 +87,7 @@ class sensorModel:
                         data[point[0]][point[1]] = self.occPrior
                 except:
                     pass
-        return gridMap(self.origin, self.width, self.height, self.resolution, data)
+        return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, data)
 
 def bresenham(start, end):
     # setup initial conditions

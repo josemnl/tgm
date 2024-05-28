@@ -24,7 +24,7 @@ style : 'combined'                      # Style of the plot: 'combined', 'static
 origin : [0,0]                          # Origin of the grid
 width : 2000                            # Width of the grid
 height : 2000                           # Height of the grid
-resolution : 2                          # Resolution of the grid
+resolution : 0.5                        # Resolution of the grid
 
 # TGM parameters
 staticPrior : 0.3                       # If 0, it assumes that all the elements are dynamic
