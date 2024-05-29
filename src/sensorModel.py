@@ -2,6 +2,7 @@ import numpy as np
 from gridMap import gridMap
 from lidarScan import lidarScan
 import time
+from collections import deque
 
 class sensorModel:
     def __init__ (self, origin, width, height, resolution, sensorRange, invModel ,occPrior):
@@ -13,6 +14,7 @@ class sensorModel:
         self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
         self.occPrior = occPrior
+        self.data = np.ones((self.width*self.resolution, self.height*self.resolution)) * self.occPrior
 
     def updateBasedOnPose(self, x_t):
         self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
@@ -22,72 +24,54 @@ class sensorModel:
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
         ang, dist = z_t.angles, z_t.ranges
         # Update measurement orientation with agent's pose
-        ang = ang + x_t[2]
+        np.add(ang, x_t[2], out=ang)
         # Limit measurement distance to sensor range
-        dist[dist>self.sensorRange] = self.sensorRange
+        np.clip(dist, a_min=None, a_max=self.sensorRange, out=dist)
         # Compute detection points on global frame
         ox = x_t[0] + np.cos(ang) * dist
         oy = x_t[1] + np.sin(ang) * dist
         # If ground points are provided, compute them as well
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
-            ang_ground = ang_ground + x_t[2]
-            dist_ground[dist_ground>self.sensorRange] = self.sensorRange
+            np.add(ang, x_t[2], out=ang)
+            np.clip(dist_ground, a_min=None, a_max=self.sensorRange, out=dist_ground)
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
             oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
         # Compute matrix index for ego pose
         ix_t = ((x_t[0:2]-self.origin) * self.resolution).astype(int)
         # Initialize matrix with prior
-        data = np.ones((self.width*self.resolution, self.height*self.resolution)) * self.occPrior
+        self.data.fill(self.occPrior)
         # Mark occupied cells
-        for (x, y, d) in zip(ox, oy, dist):
-            # Compute the matrix index for detection points
-            ix = int(round((x - self.origin[0]) * self.resolution))
-            iy = int(round((y - self.origin[1]) * self.resolution))
-            # If the detection is within the range, mark it as occupied
-            if d<self.sensorRange:
-                try:
-                    data[ix][iy] = self.invModel[1]
-                except:
-                    pass
+        ix = np.round((ox - self.origin[0]) * self.resolution).astype(int)
+        iy = np.round((oy - self.origin[1]) * self.resolution).astype(int)
+        valid = (dist < self.sensorRange) & (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
+        if valid.size > 0:
+            self.data[ix[valid], iy[valid]] = self.invModel[1]
         # Mark free cells along the rays
-        for (x, y, d) in zip(ox, oy, dist):
-            # Compute the matrix index for detection points
-            ix = int(round((x - self.origin[0]) * self.resolution))
-            iy = int(round((y - self.origin[1]) * self.resolution))
-            # Mark as free the cells along the ray
-            points = bresenham((ix_t[0], ix_t[1]), (ix, iy))
-            for point in points:
-                try:
-                    if data[point[0]][point[1]] != self.invModel[1]:
-                        data[point[0]][point[1]] = self.invModel[0]
-                    #else:
-                    #    break # Uncomment this line to stop the ray at the first occupied cell. This causes the map to acumulate static cells behing obstacles that never get removed.
-                except:
-                    pass
+        for i in range(ox.size):
+            points = bresenham((ix_t[0], ix_t[1]), (ix[i], iy[i]))
+            valid_points = (points[:, 0] >= 0) & (points[:, 0] < self.data.shape[0]) & (points[:, 1] >= 0) & (points[:, 1] < self.data.shape[1])
+            points = points[valid_points]
+            self.data[points[:, 0], points[:, 1]] = np.where(self.data[points[:, 0], points[:, 1]] != self.invModel[1], self.invModel[0], self.data[points[:, 0], points[:, 1]])
         # If ground points are provided, mark them as free unless they are occupied
         if z_t_ground is not None:
-            for (x, y) in zip(ox_ground, oy_ground):
-                ix = int(round((x - self.origin[0]) * self.resolution))
-                iy = int(round((y - self.origin[1]) * self.resolution))
-                try:
-                    if data[ix][iy] != self.invModel[1]:
-                        data[ix][iy] = self.invModel[0]
-                except:
-                    pass
+            # Compute the matrix indices for ground points
+            ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
+            iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+
+            # Create a mask for the condition
+            mask = self.data[ix_ground, iy_ground] != self.invModel[1]
+
+            # Apply the mask to update the data array
+            self.data[ix_ground[mask], iy_ground[mask]] = self.invModel[0]
+        # Mark cells in between detections as unknown
         for i in range(ox.size):
-            ix1 = int(round((ox[i] - self.origin[0]) * self.resolution))
-            iy1 = int(round((oy[i] - self.origin[1]) * self.resolution))
-            ix2 = int(round((ox[i-1] - self.origin[0]) * self.resolution))
-            iy2 = int(round((oy[i-1] - self.origin[1]) * self.resolution))
-            points = bresenham((ix1, iy1), (ix2, iy2))
-            for point in points:
-                try:
-                    if data[point[0]][point[1]] == self.invModel[0]:
-                        data[point[0]][point[1]] = self.occPrior
-                except:
-                    pass
-        return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, data)
+            points = bresenham((ix[i], iy[i]), (ix[i-1], iy[i-1]))
+            valid_points = (points[:, 0] >= 0) & (points[:, 0] < self.data.shape[0]) & (points[:, 1] >= 0) & (points[:, 1] < self.data.shape[1])
+            points = points[valid_points]
+            mask = self.data[points[:, 0], points[:, 1]] == self.invModel[0]
+            self.data[points[mask, 0], points[mask, 1]] = self.occPrior
+        return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
 
 def bresenham(start, end):
     # setup initial conditions
@@ -111,24 +95,24 @@ def bresenham(start, end):
     y_step = 1 if y1 < y2 else -1
     # iterate over bounding box generating points between start and end
     y = y1
-    points = []
+    points = deque()
     for x in range(x1, x2 + 1):
-        coord = [y, x] if is_steep else (x, y)
+        coord = (y, x) if is_steep else (x, y)
         points.append(coord)
         error -= abs(dy)
         if error < 0:
             y += y_step
             error += dx
     if swapped:  # reverse the list if the coordinates were swapped
-        points.reverse()
+        points = deque(reversed(points))
     points = np.array(points)
     return points
 
 def main():
     origin = [0,0]
-    width = 150
-    height = 50
-    resolution = 2
+    width = 300
+    height = 100
+    resolution = 0.5
     sensorRange = 50
     invModel = [0.1, 0.9]
     occPrior = 0.5
