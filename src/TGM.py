@@ -5,9 +5,12 @@ from gridMap import gridMap
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
 import time
+from cupyx.scipy.signal import convolve2d as cp_convolve2d
+from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
+import cupy as cp
 
 class TGM:
-    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False):
+    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False, GPU = True):
         assert isinstance(origin[0], int)
         assert isinstance(origin[1], int)
         assert isinstance(width, int)
@@ -46,7 +49,17 @@ class TGM:
 
         self.x_t = []
 
-        self.prevVisibleMask = np.full((self.width, self.height), False)
+        self.prev_x0 = 0
+        self.prev_y0 = 0
+        self.prev_x1 = 0
+        self.prev_y1 = 0
+
+        self.GPU = GPU
+        if self.GPU:
+            self.staticMap = cp.asarray(self.staticMap)
+            self.dynamicMap = cp.asarray(self.dynamicMap)
+            self.weatherMap = cp.asarray(self.weatherMap)
+            self.convShape = cp.asarray(self.convShape)
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
@@ -66,6 +79,9 @@ class TGM:
 
         # Crop the instantaneous map to the overlapping region
         instMap = instGridMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
+
+        if self.GPU:
+            instMap = cp.asarray(instMap)
 
         # Split the instantaneous map into static, dynamic, weather and free maps
         instStaticMap = instMap * self.staticPrior / self.sdwPrior
@@ -106,13 +122,21 @@ class TGM:
         timeUpdate = time.time()
 
         # Apply saturation limits
-        staticMatrix[staticMatrix > self.satHighS] = self.satHighS
-        staticMatrix[staticMatrix < self.satLowS] = self.satLowS
-
-        dynamicMatrix[dynamicMatrix > self.satHighD] = self.satHighD
-        dynamicMatrix[dynamicMatrix < self.satLowD] = self.satLowD
+        if self.GPU:
+            staticMatrix = cp.clip(staticMatrix, self.satLowS, self.satHighS)
+            dynamicMatrix = cp.clip(dynamicMatrix, self.satLowD, self.satHighD)
+        else:
+            staticMatrix[staticMatrix > self.satHighS] = self.satHighS
+            staticMatrix[staticMatrix < self.satLowS] = self.satLowS
+            dynamicMatrix[dynamicMatrix > self.satHighD] = self.satHighD
+            dynamicMatrix[dynamicMatrix < self.satLowD] = self.satLowD
 
         timeSat = time.time()
+
+        # Set the cells that were visible to the prior
+        self.dynamicMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1] = 1 - self.staticMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1] * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
+
+        timeVisible = time.time()
 
         # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
         x0 = overlapOrigin_x - self.origin_x
@@ -120,21 +144,16 @@ class TGM:
         x1 = x0 + overlapWidth
         y1 = y0 + overlapHeight
 
-        # Set the cells that went from visible to invisible to the prior
-        mask = self.prevVisibleMask.copy()
-        mask[x0:x1, y0:y1] = False
-        self.dynamicMap[mask] = (1 - self.staticMap[mask]) * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
-
-        timeVisible = time.time()
-
         # Save the visible cells
         self.staticMap[x0:x1, y0:y1] = staticMatrix
         self.dynamicMap[x0:x1, y0:y1] = dynamicMatrix
         self.weatherMap[x0:x1, y0:y1] = weatherMatrix
 
         # Save the previous visible mask
-        self.prevVisibleMask.fill(False)
-        self.prevVisibleMask[x0:x1, y0:y1] = True
+        self.prev_x0 = x0
+        self.prev_y0 = y0
+        self.prev_x1 = x1
+        self.prev_y1 = y1
 
         timeSave = time.time()
 
@@ -164,8 +183,8 @@ class TGM:
 
         # Compute dynamic prediction
         dynamicStay = dynamicMap * self.D0
-        bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv) * dynamicMap
-        dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv) * (1 - staticMap)
+        bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
+        dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
 
         predDynamicMap = dynamicStay + bounceBack + dynamicMove
 
@@ -175,7 +194,10 @@ class TGM:
         return predStaticMap, predDynamicMap, predWeatherMap
     
     def computeStaticGridMap(self):
-        return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, self.staticMap)
+        if self.GPU:
+            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.staticMap))
+        else:
+            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, self.staticMap)
 
     def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         origin_x = int(origin[0]/self.resolution) if origin is not None else None
@@ -224,6 +246,11 @@ class TGM:
             staticMap = self.staticMap
             dynamicMap = self.dynamicMap
             weatherMap = self.weatherMap
+
+        if self.GPU:
+            staticMap = cp.asnumpy(staticMap)
+            dynamicMap = cp.asnumpy(dynamicMap)
+            weatherMap = cp.asnumpy(weatherMap)
 
         # Plot the map according to the style
         if style == 'combined':
@@ -314,16 +341,24 @@ class TGM:
         elif layer == 'weather':
             return self.weatherMap[x0:x1, y0:y1]
     
-def conv2prior(map, convShape, prior, fftConv = False):
+def conv2prior(map, convShape, prior, fftConv = False, GPU = False):
     # Pad the map with the prior before making the convolution
     sx, sy = convShape.shape
     px = (sx - 1) // 2
     py = (sy - 1) // 2
-    paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
     if fftConv:
-        conv = fftconvolve(paddedMap, convShape, mode='valid')
+        if GPU:
+            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py)), constant_values=prior)
+            conv = cp_fftconvolve(paddedMap, convShape, mode='valid')
+        else:
+            paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
+            conv = fftconvolve(paddedMap, convShape, mode='valid')
     else:
-        conv = convolve2d(paddedMap, convShape, mode='valid')
+        if GPU:
+            conv = cp_convolve2d(paddedMap, convShape, mode='valid')
+        else:
+            paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
+            conv = convolve2d(paddedMap, convShape, mode='valid')
     return conv
 
 if __name__ == '__main__':
