@@ -24,6 +24,8 @@ class TGM:
         self.weatherPrior = weatherPrior
         self.freePrior = 1 - staticPrior - dynamicPrior - weatherPrior
 
+        self.sdwPrior = self.staticPrior + self.dynamicPrior + self.weatherPrior
+
         r = int(maxVelocity / self.resolution)
         shape = disk(r).astype(float)
         self.D0 = 1 / np.sum(shape)
@@ -66,9 +68,9 @@ class TGM:
         instMap = instGridMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
 
         # Split the instantaneous map into static, dynamic, weather and free maps
-        instStaticMap = instMap * self.staticPrior / (self.staticPrior + self.dynamicPrior + self.weatherPrior)
-        instDynamicMap = instMap * self.dynamicPrior / (self.staticPrior + self.dynamicPrior + self.weatherPrior)
-        instWeatherMap = instMap * self.weatherPrior / (self.staticPrior + self.dynamicPrior + self.weatherPrior)
+        instStaticMap = instMap * self.staticPrior / self.sdwPrior
+        instDynamicMap = instMap * self.dynamicPrior / self.sdwPrior
+        instWeatherMap = instMap * self.weatherPrior / self.sdwPrior
         instFreeMap = 1 - instStaticMap - instDynamicMap - instWeatherMap
 
         timeSplit = time.time()
@@ -79,27 +81,29 @@ class TGM:
 
         timePredict = time.time()
 
-        # Compute the normalized maps
+        # Compute the updated maps
         if self.staticPrior != 0:
-            nStatic = instStaticMap * predStaticMap / self.staticPrior
+            staticMatrix = instStaticMap * predStaticMap / self.staticPrior
         else:
-            nStatic = np.zeros_like(instStaticMap)
+            staticMatrix = np.zeros_like(instStaticMap)
         if self.dynamicPrior != 0:
-            nDynamic = instDynamicMap * predDynamicMap / self.dynamicPrior
+            dynamicMatrix = instDynamicMap * predDynamicMap / self.dynamicPrior
         else:
-            nDynamic = np.zeros_like(instDynamicMap)
+            dynamicMatrix = np.zeros_like(instDynamicMap)
         if self.weatherPrior != 0:
-            nWeather = instWeatherMap * predWeatherMap / self.weatherPrior
+            weatherMatrix = instWeatherMap * predWeatherMap / self.weatherPrior
         else:
-            nWeather = np.zeros_like(instWeatherMap)
-        nFree = instFreeMap * predFreeMap / self.freePrior
+            weatherMatrix = np.zeros_like(instWeatherMap)
+        freeMatrix = instFreeMap * predFreeMap / self.freePrior
 
-        total = nStatic + nDynamic + nWeather + nFree
-        staticMatrix = nStatic / total
-        dynamicMatrix = nDynamic / total
-        weatherMatrix = nWeather / total
+        # Normalize the maps
 
-        timeNormal = time.time()
+        total = staticMatrix + dynamicMatrix + weatherMatrix + freeMatrix
+        staticMatrix /= total
+        dynamicMatrix /= total
+        weatherMatrix /= total
+
+        timeUpdate = time.time()
 
         # Apply saturation limits
         staticMatrix[staticMatrix > self.satHighS] = self.satHighS
@@ -123,24 +127,24 @@ class TGM:
 
         timeVisible = time.time()
 
-        # Update the visible cells
+        # Save the visible cells
         self.staticMap[x0:x1, y0:y1] = staticMatrix
         self.dynamicMap[x0:x1, y0:y1] = dynamicMatrix
         self.weatherMap[x0:x1, y0:y1] = weatherMatrix
 
-        # Update the previous visible mask
+        # Save the previous visible mask
         self.prevVisibleMask.fill(False)
         self.prevVisibleMask[x0:x1, y0:y1] = True
 
-        timeUpdate = time.time()
+        timeSave = time.time()
 
         # Print times
         print('Split:    ' + str(timeSplit - timeStart))
         print('Predict:  ' + str(timePredict - timeSplit))
-        print('Normal:   ' + str(timeNormal - timePredict))
-        print('Sat:      ' + str(timeSat - timeNormal))
+        print('Update:   ' + str(timeUpdate - timePredict))
+        print('Sat:      ' + str(timeSat - timeUpdate))
         print('Visible:  ' + str(timeVisible - timeSat))
-        print('Update:   ' + str(timeUpdate - timeVisible))
+        print('Save:     ' + str(timeSave - timeVisible))
         print('Total:    ' + str(time.time() - timeStart))
         print('')
 
