@@ -77,7 +77,11 @@ def run():
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            x_t = lsqnl_matching(z_t, tgm.computeStaticGridMap(), initialGuess, sensorRange)
+            time1 = time.time()
+            slam_map = tgm.computeStaticGridMap(following=True, width=smWidth, height=smHeight)
+            print('Time to compute static grid map: ' + str(time.time() - time1))
+            print("")
+            x_t = lsqnl_matching(z_t, slam_map, initialGuess, sensorRange)
             v_t = x_t - x_prev
         timeSLAM = time.time()
 

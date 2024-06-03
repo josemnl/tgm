@@ -193,11 +193,42 @@ class TGM:
 
         return predStaticMap, predDynamicMap, predWeatherMap
     
-    def computeStaticGridMap(self):
-        if self.GPU:
-            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.staticMap))
+    def computeStaticGridMap(self, following=False, width=0, height=0):
+
+        # If following is True
+        if following:
+            # Compute the origin
+            origin_x = int((self.x_t[0] - width/2) / self.resolution)
+            origin_y = int((self.x_t[1] - height/2) / self.resolution)
+
+            # Convert width and height to grid units
+            width = int(width/self.resolution)
+            height = int(height/self.resolution)
+        
+            # Compute overlaping grid between the instantaneous map and the TGM
+            overlapOrigin_x = max(self.origin_x, origin_x)
+            overlapOrigin_y = max(self.origin_y, origin_y)
+            overlapWidth = min(self.origin_x + self.width, origin_x + width) - overlapOrigin_x
+            overlapHeight = min(self.origin_y + self.height, origin_y + height) - overlapOrigin_y
+            assert overlapWidth > 0 and overlapHeight > 0
+
+            # Crop the static map to the overlapping region
+            staticMap = self.cropMap('static', overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+
         else:
-            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, self.staticMap)
+            # Origin, width and height are the same as the TGM
+            origin_x = self.origin_x
+            origin_y = self.origin_y
+            width = self.width
+            height = self.height
+
+            # Use the full static map
+            staticMap = self.staticMap
+
+        if self.GPU:
+            return gridMap(origin_x, origin_y, width, height, self.resolution, cp.asnumpy(staticMap))
+        else:
+            return gridMap(origin_x, origin_y, width, height, self.resolution, staticMap)
 
     def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         origin_x = int(origin[0]/self.resolution) if origin is not None else None
