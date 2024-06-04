@@ -386,6 +386,7 @@ def conv2prior(map, convShape, prior, fftConv = False, GPU = False):
             conv = fftconvolve(paddedMap, convShape, mode='valid')
     else:
         if GPU:
+            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py)), constant_values=prior)
             conv = cp_convolve2d(paddedMap, convShape, mode='valid')
         else:
             paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
