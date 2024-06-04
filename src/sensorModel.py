@@ -24,17 +24,21 @@ class sensorModel:
         assert isinstance(z_t, lidarScan)
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
         ang, dist = z_t.angles, z_t.ranges
+
         # Update measurement orientation with agent's pose
         np.add(ang, x_t[2], out=ang)
         timePose = time.time()
+
         # Limit measurement distance to sensor range
         np.clip(dist, a_min=None, a_max=self.sensorRange, out=dist)
         timeClip = time.time()
+
         # Compute detection points on global frame
         ox = x_t[0] + np.cos(ang) * dist
         oy = x_t[1] + np.sin(ang) * dist
         timeGlobal = time.time()
-        # If ground points are provided, compute them as well
+
+        # Compute ground points on global frame
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
             np.add(ang, x_t[2], out=ang)
@@ -42,59 +46,86 @@ class sensorModel:
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
             oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
         timeGround = time.time()
+
         # Compute matrix index for ego pose
         ix_t = ((x_t[0:2]-self.origin) * self.resolution).astype(int)
+
         # Initialize matrix with prior
         self.data.fill(self.occPrior)
         timeInit = time.time()
-        # Mark occupied cells
+
+        # Compute matrix indices for detections
         ix = np.round((ox - self.origin[0]) * self.resolution).astype(int)
         iy = np.round((oy - self.origin[1]) * self.resolution).astype(int)
-        valid = (dist < self.sensorRange) & (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
-        if valid.size > 0:
-            self.data[ix[valid], iy[valid]] = self.invModel[1]
-        timeOccupied = time.time()
+
+        # Filter out-of-bounds detections
+        valid = (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
+        ix = ix[valid]
+        iy = iy[valid]
+
         # Mark free cells along the rays
         for i in range(ox.size):
-            points = bresenham((ix_t[0], ix_t[1]), (ix[i], iy[i]))
-            valid_points = (points[:, 0] >= 0) & (points[:, 0] < self.data.shape[0]) & (points[:, 1] >= 0) & (points[:, 1] < self.data.shape[1])
-            points = points[valid_points]
-            self.data[points[:, 0], points[:, 1]] = np.where(self.data[points[:, 0], points[:, 1]] != self.invModel[1], self.invModel[0], self.data[points[:, 0], points[:, 1]])
+            self.insetRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
         timeFree = time.time()
-        # If ground points are provided, mark them as free unless they are occupied
+
+        # If ground points are provided, mark them as free
         if z_t_ground is not None:
             # Compute the matrix indices for ground points
             ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
             iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
-
-            # Create a mask for the condition
-            mask = self.data[ix_ground, iy_ground] != self.invModel[1]
-
-            # Apply the mask to update the data array
-            self.data[ix_ground[mask], iy_ground[mask]] = self.invModel[0]
+            # Mark free cells on the ground
+            self.data[ix_ground, iy_ground] = self.invModel[0]
         timeGroundFree = time.time()
+
         # Mark cells in between detections as unknown
         for i in range(ox.size):
-            points = bresenham((ix[i], iy[i]), (ix[i-1], iy[i-1]))
-            valid_points = (points[:, 0] >= 0) & (points[:, 0] < self.data.shape[0]) & (points[:, 1] >= 0) & (points[:, 1] < self.data.shape[1])
-            points = points[valid_points]
-            mask = self.data[points[:, 0], points[:, 1]] == self.invModel[0]
-            self.data[points[mask, 0], points[mask, 1]] = self.occPrior
+            self.insetRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
         timeUnknown = time.time()
+        
+        # Mark occupied cells
+        if valid.size > 0:
+            self.data[ix, iy] = self.invModel[1]
+        timeOccupied = time.time()
 
         print("Times sensor model:")
-        print("Time to compute pose: " + str(timePose - timeStart))
-        print("Time to clip: " + str(timeClip - timePose))
-        print("Time to compute global: " + str(timeGlobal - timeClip))
-        print("Time to compute ground: " + str(timeGround - timeGlobal))
-        print("Time to initialize: " + str(timeInit - timeGround))
-        print("Time to mark occupied: " + str(timeOccupied - timeInit))
-        print("Time to mark free: " + str(timeFree - timeOccupied))
-        print("Time to mark ground free: " + str(timeGroundFree - timeFree))
-        print("Time to mark unknown: " + str(timeUnknown - timeGroundFree))
+        print("Pose: " + str(timePose - timeStart))
+        print("Clip: " + str(timeClip - timePose))
+        print("Global: " + str(timeGlobal - timeClip))
+        print("Ground: " + str(timeGround - timeGlobal))
+        print("Init: " + str(timeInit - timeGround))
+        print("Free: " + str(timeFree - timeInit))
+        print("Ground Free: " + str(timeGroundFree - timeFree))
+        print("Unknown: " + str(timeUnknown - timeGroundFree))
+        print("Occupied: " + str(timeOccupied - timeUnknown))
+        print("Total: " + str(timeOccupied - timeStart))
         print("")
 
         return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
+
+    def insetRay(self,start,end,value):
+        x1, y1 = start
+        x2, y2 = end
+        dx = x2 - x1
+        dy = y2 - y1
+
+        is_steep = abs(dy) > abs(dx)
+
+        if is_steep:
+            if dy == 0:
+                y_coords = np.array([y1])
+                x_coords = np.linspace(x1, x2, abs(x2 - x1) + 1).astype(int)
+            else:
+                y_coords = np.linspace(y1, y2, abs(y2 - y1) + 1).astype(int)
+                x_coords = np.round(x1 + dx/dy * (y_coords - y1)).astype(int)
+        else:
+            if dx == 0:
+                x_coords = np.array([x1])
+                y_coords = np.linspace(y1, y2, abs(y2 - y1) + 1).astype(int)
+            else:
+                x_coords = np.linspace(x1, x2, abs(x2 - x1) + 1).astype(int)
+                y_coords = np.round(y1 + dy/dx * (x_coords - x1)).astype(int)
+
+        self.data[x_coords, y_coords] = value
 
 def bresenham(start, end):
     # setup initial conditions
