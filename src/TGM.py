@@ -63,6 +63,8 @@ class TGM:
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
+        print(instGridMap.resolution)
+        print(self.resolution)
         assert instGridMap.resolution == self.resolution
 
         timeStart = time.time()
@@ -226,9 +228,9 @@ class TGM:
             staticMap = self.staticMap
 
         if self.GPU:
-            return gridMap(origin_x, origin_y, width, height, self.resolution, cp.asnumpy(staticMap))
+            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, cp.asnumpy(staticMap))
         else:
-            return gridMap(origin_x, origin_y, width, height, self.resolution, staticMap)
+            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, staticMap)
 
     def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         origin_x = int(origin[0]/self.resolution) if origin is not None else None
