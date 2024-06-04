@@ -81,10 +81,13 @@ class sensorModel:
         for i in range(ox.size):
             self.insetRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
         timeUnknown = time.time()
+
+        # Remove points exactly at the sensor limit
+        ix = ix[dist < self.sensorRange]
+        iy = iy[dist < self.sensorRange]
         
         # Mark occupied cells
-        if valid.size > 0:
-            self.data[ix, iy] = self.invModel[1]
+        self.data[ix, iy] = self.invModel[1]
         timeOccupied = time.time()
 
         print("Times sensor model:")
