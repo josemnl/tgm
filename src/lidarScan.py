@@ -9,11 +9,6 @@ class lidarScan:
 
     def computeCartesian(self):
         return np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles)])
-    
-    def removeNoReturn(self, maxRange):
-        angles = self.angles[self.ranges < maxRange]
-        ranges = self.ranges[self.ranges < maxRange]
-        return lidarScan(angles, ranges)
 
     def computeRelativeCartesian(self, relPose):
         angles = self.angles + relPose[2]
@@ -29,14 +24,17 @@ class lidarScan:
         #plt.show()
 
     def removeClosePoints(self, minRange):
-        return lidarScan(self.angles[self.ranges > minRange], self.ranges[self.ranges > minRange])
+        self.angles = self.angles[self.ranges > minRange]
+        self.ranges = self.ranges[self.ranges > minRange]
     
     def removeFarPoints(self, maxRange):
-        return lidarScan(self.angles[self.ranges < maxRange], self.ranges[self.ranges < maxRange])
+        self.angles = self.angles[self.ranges < maxRange]
+        self.ranges = self.ranges[self.ranges < maxRange]
 
     def orderByAngle(self):
         idx = np.argsort(self.angles)
-        return lidarScan(self.angles[idx], self.ranges[idx])
+        self.angles = self.angles[idx]
+        self.ranges = self.ranges[idx]
 
     def voxelGridFilter(self, voxel_size):
         points = self.computeCartesian()
@@ -61,7 +59,8 @@ class lidarScan:
 
         downsampled_points = np.array(downsampled_points)
 
-        return lidarScan(np.arctan2(downsampled_points[:, 1], downsampled_points[:, 0]), np.sqrt(downsampled_points[:, 0]**2 + downsampled_points[:, 1]**2))
+        self.angles = np.arctan2(downsampled_points[:, 1], downsampled_points[:, 0])
+        self.ranges = np.sqrt(downsampled_points[:, 0]**2 + downsampled_points[:, 1]**2)
 
 class lidarScan3D:
     def __init__(self, points3D):
@@ -69,10 +68,10 @@ class lidarScan3D:
         self.numReadings = len(points3D)
 
     def removeGround(self, groundThreshold):
-        return lidarScan3D(self.points3D[self.points3D[:, 2] > groundThreshold])
+        self.points3D = self.points3D[self.points3D[:, 2] > groundThreshold]
     
     def removeSky(self, skyThreshold):
-        return lidarScan3D(self.points3D[self.points3D[:, 2] < skyThreshold])
+        self.points3D = self.points3D[self.points3D[:, 2] < skyThreshold]
     
     def splitByHeight(self, height):
         bottom = lidarScan3D(self.points3D[self.points3D[:, 2] < height])
@@ -80,7 +79,7 @@ class lidarScan3D:
         return bottom, top
     
     def removeClosePoints(self, minRange):
-        return lidarScan3D(self.points3D[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange])
+        self.points3D = self.points3D[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange]
     
     def convertTo2D(self):
         return lidarScan(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2))
