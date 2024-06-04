@@ -50,13 +50,17 @@ def run():
         # Import sensor data
         if is3D:
             z_t_3D = readLidarData3D(logPath, i)
-            # Option with new sensor model
-            #z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).removeClosePoints(minDistance).convertTo2D_new(angRes, maxDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
-            # Option with old sensor model
             if freeUpGroundDetections:
-                z_t_ground_3D, z_t_objects_3D = z_t_3D.removeSky(skyThreshold).splitByHeight(groundThreshold)
-                z_t_ground = z_t_ground_3D.convertTo2D().removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize)
-                z_t = z_t_objects_3D.convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
+                z_t_3D.removeSky(skyThreshold)
+                z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(groundThreshold)
+                z_t_ground = z_t_ground_3D.convertTo2D()
+                z_t_ground.removeFarPoints(maxDistance)
+                #z_t_ground.voxelGridFilter(voxelGridSize) # No filtering for ground points since it's more expensive than dealing with them on the sensor model
+                z_t = z_t_objects_3D.convertTo2D()
+                z_t.removeClosePoints(minDistance)
+                z_t.removeFarPoints(maxDistance)
+                z_t.voxelGridFilter(voxelGridSize)
+                z_t.orderByAngle()
             else:
                 z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
         else:

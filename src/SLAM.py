@@ -7,10 +7,10 @@ from lidarScan import lidarScan
 
 def lsqnl_matching(scan, lsq_map, x0, max_range):
     # Remove the no-return scans from scan
-    lsq_scan = scan.removeNoReturn(max_range)
+    scan.removeFarPoints(max_range)
 
     # Perform the least squares optimization
-    x = least_squares(lsq_fun, x0, max_nfev=500, args=(lsq_scan, lsq_map), method='lm')
+    x = least_squares(lsq_fun, x0, max_nfev=500, args=(scan, lsq_map), method='lm')
     x = x.x
     return x
 

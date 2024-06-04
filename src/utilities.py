@@ -3,6 +3,7 @@ import subprocess
 import os
 from lidarScan import lidarScan, lidarScan3D
 import yaml
+import pandas as pd
 
 def readLidarData(path, i):
     with open(path + "z_" + str(i) + ".csv") as data:
@@ -10,8 +11,8 @@ def readLidarData(path, i):
     return z_t
 
 def readLidarData3D(path, i):
-    with open(path + "z_" + str(i) + ".csv") as data:
-        z_t_3D = lidarScan3D(np.array([line.split(",") for line in data]).astype(float))
+    data = pd.read_csv(path + "z_" + str(i) + ".csv", header=None)
+    z_t_3D = lidarScan3D(data.values.astype(float))
     return z_t_3D
 
 def readPoseData(path, i):
