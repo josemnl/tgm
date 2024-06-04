@@ -200,12 +200,8 @@ class TGM:
         # If following is True
         if following:
             # Compute the origin
-            origin_x = int((self.x_t[0] - width/2) / self.resolution)
-            origin_y = int((self.x_t[1] - height/2) / self.resolution)
-
-            # Convert width and height to grid units
-            width = int(width/self.resolution)
-            height = int(height/self.resolution)
+            origin_x = int((self.x_t[0] / self.resolution) - width/2)
+            origin_y = int((self.x_t[1] / self.resolution) - height/2)
         
             # Compute overlaping grid between the instantaneous map and the TGM
             overlapOrigin_x = max(self.origin_x, origin_x)
