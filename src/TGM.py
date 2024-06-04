@@ -215,10 +215,10 @@ class TGM:
 
         else:
             # Origin, width and height are the same as the TGM
-            origin_x = self.origin_x
-            origin_y = self.origin_y
-            width = self.width
-            height = self.height
+            overlapOrigin_x = self.origin_x
+            overlapOrigin_y = self.origin_y
+            overlapWidth = self.width
+            overlapHeight = self.height
 
             # Use the full static map
             staticMap = self.staticMap
