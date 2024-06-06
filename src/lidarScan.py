@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy as sp
 
 class lidarScan:
     def __init__(self, angles, ranges):
@@ -107,3 +108,26 @@ class lidarScan3D:
         ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
         ax.axis('equal')
         plt.show()
+
+    def radiousOutlierRemoval(self, k, radius):
+        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor
+        # Create a KDTree object with the 3D points
+        tree = sp.spatial.KDTree(self.points3D)
+        # Compute the distance to the k-th nearest neighbor for each point
+        distances, _ = tree.query(self.points3D, k=k+1)
+        k_distance = distances[:, k]
+        # Remove points that are further than the specified radius from their k-th nearest neighbor
+        self.points3D = self.points3D[k_distance < radius]
+
+    def statisticalOutlierRemoval(self, k, std_dev):
+        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor
+        # Create a KDTree object with the 3D points
+        tree = sp.spatial.KDTree(self.points3D)
+        # Compute the distance to the k-th nearest neighbor for each point
+        distances, _ = tree.query(self.points3D, k=k+1)
+        k_distance = distances[:, k]
+        # Compute the mean and standard deviation of the k-th nearest neighbor distances
+        mean = np.mean(k_distance)
+        std = np.std(k_distance)
+        # Remove points that are further than the specified number of standard deviations from the mean
+        self.points3D = self.points3D[k_distance < mean + std_dev * std]

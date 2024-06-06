@@ -63,8 +63,6 @@ class TGM:
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
-        print(instGridMap.resolution)
-        print(self.resolution)
         assert instGridMap.resolution == self.resolution
 
         timeStart = time.time()

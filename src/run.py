@@ -53,6 +53,8 @@ def run():
             if freeUpGroundDetections:
                 z_t_3D.removeSky(skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(groundThreshold)
+                #z_t_objects_3D.radiousOutlierRemoval(3, 1)
+                #z_t_objects_3D.statisticalOutlierRemoval(3, 3)
                 z_t_ground = z_t_ground_3D.convertTo2D()
                 z_t_ground.removeFarPoints(maxDistance)
                 #z_t_ground.voxelGridFilter(voxelGridSize) # No filtering for ground points since it's more expensive than dealing with them on the sensor model
