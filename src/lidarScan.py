@@ -47,16 +47,18 @@ class lidarScan:
         plt.show()
 
     def removeClosePoints(self, minRange):
-        self.angles = self.angles[self.ranges > minRange]
-        self.ranges = self.ranges[self.ranges > minRange]
+        mask = self.ranges > minRange
+        self.angles = self.angles[mask]
+        self.ranges = self.ranges[mask]
         if self.labels is not None:
-            self.labels = self.labels[self.ranges > minRange]
+            self.labels = self.labels[mask]
     
     def removeFarPoints(self, maxRange):
-        self.angles = self.angles[self.ranges < maxRange]
-        self.ranges = self.ranges[self.ranges < maxRange]
+        mask = self.ranges < maxRange
+        self.angles = self.angles[mask]
+        self.ranges = self.ranges[mask]
         if self.labels is not None:
-            self.labels = self.labels[self.ranges < maxRange]
+            self.labels = self.labels[mask]
 
     def orderByAngle(self):
         idx = np.argsort(self.angles)
@@ -102,14 +104,16 @@ class lidarScan3D:
         self.labels = labels
 
     def removeGround(self, groundThreshold):
-        self.points3D = self.points3D[self.points3D[:, 2] > groundThreshold]
+        mask = self.points3D[:, 2] > groundThreshold
+        self.points3D = self.points3D[mask]
         if self.labels is not None:
-            self.labels = self.labels[self.points3D[:, 2] > groundThreshold]
+            self.labels = self.labels[mask]
     
     def removeSky(self, skyThreshold):
-        self.points3D = self.points3D[self.points3D[:, 2] < skyThreshold]
+        mask = self.points3D[:, 2] < skyThreshold
+        self.points3D = self.points3D[mask]
         if self.labels is not None:
-            self.labels = self.labels[self.points3D[:, 2] < skyThreshold]
+            self.labels = self.labels[mask]
     
     def splitByHeight(self, height):
         if self.labels is not None:
@@ -121,9 +125,10 @@ class lidarScan3D:
         return bottom, top
     
     def removeClosePoints(self, minRange):
-        self.points3D = self.points3D[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange]
+        mask = np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange
+        self.points3D = self.points3D[mask]
         if self.labels is not None:
-            self.labels = self.labels[np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) > minRange]
+            self.labels = self.labels[mask]
     
     def convertTo2D(self):
         return lidarScan(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2), self.labels)
