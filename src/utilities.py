@@ -20,6 +20,20 @@ def readPoseData(path, i):
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
     return x_t
 
+def readLidarData3DBin(path, i):
+    rawdata = np.fromfile(path + str(i).zfill(6) + ".bin", dtype=np.float32)
+    data = np.reshape(rawdata, (-1, 4))
+    z_t_3D = lidarScan3D(data)
+    return z_t_3D
+
+def readLidarData3DBinLabels(pathData, pathLabels, i):
+    rawdata = np.fromfile(pathData + str(i).zfill(6) + ".bin", dtype=np.float32)
+    data = np.reshape(rawdata, (-1, 4))
+    rawlabels = np.fromfile(pathLabels + str(i).zfill(6) + ".label", dtype=np.uint32)
+    labels = np.reshape(rawlabels, (-1, 1))
+    z_t_3D = lidarScan3D(data, labels)
+    return z_t_3D
+
 def createVideo(logID, videoPath, removeFrames = True):
     subprocess.call(['ffmpeg', '-framerate', '8', '-i', videoPath + 'frame_%d.png', '-r', '10', '-pix_fmt', 'yuv420p',videoPath + logID + '.mp4'])
     if removeFrames:
@@ -90,3 +104,12 @@ def loadConfig(configPath, configFile):
     freeUpGroundDetections = parameters['freeUpGroundDetections']
 
     return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, saveSvg, videoSection, videoWidth, videoHeight, videoOrigin, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
+
+if __name__ == "__main__":
+    pathData = './snow_velodyne/'
+    pathLabels = './snow_labels/'
+    i = 100
+    z_t_3D = readLidarData3DBinLabels(pathData, pathLabels, i)
+    z_t_3D.plot()
+    #z_t = z_t_3D.convertTo2D()
+    #z_t.plot()
