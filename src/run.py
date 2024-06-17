@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = 'SnowyKitti-00'
+    configFile = 'WADS-11'
 
     # Load parameters
     (
@@ -24,7 +24,8 @@ def run():
 
     # Paths
     #logPath = './logs/' + logID + '/'
-    logPath = './SnowyKITTI/dataset/sequences/' + logID + '/' + 'snow_velodyne/'
+    #logPath = './SnowyKITTI/dataset/sequences/' + logID + '/' + 'snow_velodyne/'
+    logPath = './WADS/' + logID + '/' + 'velodyne/'
     videoPath = './results/' + configFile + '/'
 
     # Create results folder if it does not exist
