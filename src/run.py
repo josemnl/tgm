@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from utilities import readLidarData, readLidarData3D, readPoseData, createVideo, loadConfig
+from utilities import readLidarData, readLidarData3D, readLidarData3DBin, readPoseData, createVideo, loadConfig
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching, plotCostFunction
@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = 'Exp1-2024-03-01-15-10-32-TGM'
+    configFile = 'SnowyKitti-00'
 
     # Load parameters
     (
@@ -23,7 +23,8 @@ def run():
     ) = loadConfig(configPath, configFile)
 
     # Paths
-    logPath = './logs/' + logID + '/'
+    #logPath = './logs/' + logID + '/'
+    logPath = './SnowyKITTI/dataset/sequences/' + logID + '/' + 'snow_velodyne/'
     videoPath = './results/' + configFile + '/'
 
     # Create results folder if it does not exist
@@ -49,7 +50,7 @@ def run():
 
         # Import sensor data
         if is3D:
-            z_t_3D = readLidarData3D(logPath, i)
+            z_t_3D = readLidarData3DBin(logPath, i)
             if freeUpGroundDetections:
                 z_t_3D.removeSky(skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(groundThreshold)
