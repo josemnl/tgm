@@ -22,16 +22,20 @@ def readPoseData(path, i):
 
 def readLidarData3DBin(path, i):
     rawdata = np.fromfile(path + str(i).zfill(6) + ".bin", dtype=np.float32)
+    # Convert raw data to float
+    rawdata = rawdata.astype(float)
     data = np.reshape(rawdata, (-1, 4))
-    z_t_3D = lidarScan3D(data)
+    z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
 def readLidarData3DBinLabels(pathData, pathLabels, i):
     rawdata = np.fromfile(pathData + str(i).zfill(6) + ".bin", dtype=np.float32)
+    # Convert raw data to float
+    rawdata = rawdata.astype(float)
     data = np.reshape(rawdata, (-1, 4))
     rawlabels = np.fromfile(pathLabels + str(i).zfill(6) + ".label", dtype=np.uint32)
     labels = np.reshape(rawlabels, (-1, 1))
-    z_t_3D = lidarScan3D(data, labels)
+    z_t_3D = lidarScan3D(data[:,0:3], labels)
     return z_t_3D
 
 def createVideo(logID, videoPath, removeFrames = True):
@@ -110,6 +114,6 @@ if __name__ == "__main__":
     pathLabels = './snow_labels/'
     i = 100
     z_t_3D = readLidarData3DBinLabels(pathData, pathLabels, i)
-    z_t_3D.plot()
-    #z_t = z_t_3D.convertTo2D()
-    #z_t.plot()
+    #z_t_3D.plot()
+    z_t = z_t_3D.convertTo2D()
+    z_t.plot()
