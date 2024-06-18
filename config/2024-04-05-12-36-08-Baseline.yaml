@@ -1,5 +1,6 @@
 # Log parameters
-logID : '2024-04-05-12-36-08'           # Unique identifier for the log
+lidarPath : './logs/2024-04-05-12-36-08/' # Path to the lidar data
+lidarFormat : 'CSV'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
 initialTimeStep : 1000                    # Initial time step to start the simulation
 simHorizon : 9695                        # If 0, it runs until the end of the log

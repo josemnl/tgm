@@ -1,5 +1,6 @@
 # Log parameters
-logID : '00'                            # Unique identifier for the log
+lidarPath : './SnowyKITTI/dataset/sequences/00/snow_velodyne/'       # Path to the lidar data
+lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
 initialTimeStep : 1                     # Initial time step to start the simulation
 simHorizon : 600                        # If 0, it runs until the end of the log

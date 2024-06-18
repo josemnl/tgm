@@ -10,16 +10,13 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    configFile = 'WADS-11'
+    logID = 'SnowyKitti-00'
 
     # Load parameters as dictionary
-    conf = loadConfigAsDict(configPath, configFile)
+    conf = loadConfigAsDict(configPath, logID)
 
     # Paths
-    #logPath = './logs/' + conf.logID + '/'
-    #logPath = './SnowyKITTI/dataset/sequences/' + conf.logID + '/' + 'snow_velodyne/'
-    logPath = './WADS/' + conf.logID + '/' + 'velodyne/'
-    videoPath = './results/' + configFile + '/'
+    videoPath = './results/' + logID + '/'
 
     # Create results folder if it does not exist
     import os
@@ -44,7 +41,12 @@ def run():
 
         # Import sensor data
         if conf.is3D:
-            z_t_3D = read3DLidarBIN(logPath, i)
+            if conf.lidarFormat == 'CSV':
+                z_t_3D = read3DLidarCSV(conf.lidarPath, i)
+            elif conf.lidarFormat == 'BIN':
+                z_t_3D = read3DLidarBIN(conf.lidarPath, i)
+            else:
+                raise ValueError('Invalid lidar format')
             if conf.freeUpGroundDetections:
                 z_t_3D.removeSky(conf.skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
@@ -61,15 +63,15 @@ def run():
             else:
                 z_t = z_t_3D.removeGround(conf.groundThreshold).removeSky(conf.skyThreshold).convertTo2D().removeClosePoints(conf.minDistance).removeFarPoints(conf.maxDistance).voxelGridFilter(conf.voxelGridSize).orderByAngle()
         else:
-            z_t = read2DLidarCSV(logPath, i)
+            z_t = read2DLidarCSV(conf.lidarPath, i)
         timeData = time.time()
 
         # Compute robot pose with SLAM or get it from log
         if not conf.isSLAM:
-            x_t = readPose(logPath, i)
+            x_t = readPose(conf.lidarPath, i)
         elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
-                x_t = readPose(logPath, i)
+                x_t = readPose(conf.lidarPath, i)
             except:
                 x_t = np.array(conf.startPoseSLAM)
         else:
@@ -129,19 +131,19 @@ def run():
 
     # Save video
     if conf.saveVideo:
-        createVideo(conf.logID, videoPath, removeFrames = conf.removeFrames)
+        createVideo(logID, videoPath, removeFrames = conf.removeFrames)
 
     # Save last frame
-    tgm.plot(fig, saveImg=True, imgName= videoPath + conf.logID)
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID)
 
     # Save static grid map
-    tgm.plot(fig, saveImg=True, imgName= videoPath + conf.logID + '_static', style='static')
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_static', style='static')
 
     # Save dynamic grid map
-    tgm.plot(fig, saveImg=True, imgName= videoPath + conf.logID + '_dynamic', style='dynamic')
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
 
     # Save weather grid map
-    tgm.plot(fig, saveImg=True, imgName= videoPath + conf.logID + '_weather', style='weather')
+    tgm.plot(fig, saveImg=True, imgName= videoPath + logID + '_weather', style='weather')
 
 if __name__ == '__main__':
     run()
