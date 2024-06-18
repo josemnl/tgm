@@ -4,6 +4,7 @@ import os
 from lidarScan import lidarScan, lidarScan3D
 import yaml
 import pandas as pd
+from types import SimpleNamespace
 
 def read2DLidarCSV(path, i):
     with open(path + "z_" + str(i) + ".csv") as data:
@@ -108,6 +109,22 @@ def loadConfig(configPath, configFile):
     freeUpGroundDetections = parameters['freeUpGroundDetections']
 
     return logID, is3D, initialTimeStep, simHorizon, isSLAM, velTracking, numTimeStepsSLAM, startPoseSLAM, saveVideo, removeFrames, saveSvg, videoSection, videoWidth, videoHeight, videoOrigin, style, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv, groundThreshold, skyThreshold, minDistance, maxDistance, voxelGridSize, angRes, smWidth, smHeight, sensorRange, invModel, occPrior, freeUpGroundDetections
+
+def loadConfigAsDict(configPath, configFile):
+    # Import parameters from config file
+    config = yaml.safe_load(open(configPath + configFile + '.yaml'))
+    config = SimpleNamespace(**config)
+    # Convert meters to cells
+    config.width = int(config.width/config.resolution)
+    config.height = int(config.height/config.resolution)
+    config.smWidth = int(config.smWidth/config.resolution)
+    config.smHeight = int(config.smHeight/config.resolution)
+    config.sensorRange = int(config.sensorRange/config.resolution)
+    # Compute occupancy prior
+    config.occPrior = config.staticPrior + config.dynamicPrior + config.weatherPrior
+    # Voxel grid size is the same as the resolution
+    config.voxelGridSize = config.resolution
+    return config
 
 if __name__ == "__main__":
     pathData = './snow_velodyne/'
