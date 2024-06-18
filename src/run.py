@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from utilities import readLidarData, readLidarData3D, readLidarData3DBin, readPoseData, createVideo, loadConfig
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, readPose, createVideo, loadConfig
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching, plotCostFunction
@@ -51,7 +51,7 @@ def run():
 
         # Import sensor data
         if is3D:
-            z_t_3D = readLidarData3DBin(logPath, i)
+            z_t_3D = read3DLidarBIN(logPath, i)
             if freeUpGroundDetections:
                 z_t_3D.removeSky(skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(groundThreshold)
@@ -68,15 +68,15 @@ def run():
             else:
                 z_t = z_t_3D.removeGround(groundThreshold).removeSky(skyThreshold).convertTo2D().removeClosePoints(minDistance).removeFarPoints(maxDistance).voxelGridFilter(voxelGridSize).orderByAngle()
         else:
-            z_t = readLidarData(logPath, i)
+            z_t = read2DLidarCSV(logPath, i)
         timeData = time.time()
 
         # Compute robot pose with SLAM or get it from log
         if not isSLAM:
-            x_t = readPoseData(logPath, i)
+            x_t = readPose(logPath, i)
         elif i <= initialTimeStep + numTimeStepsSLAM:
             try:
-                x_t = readPoseData(logPath, i)
+                x_t = readPose(logPath, i)
             except:
                 x_t = np.array(startPoseSLAM)
         else:

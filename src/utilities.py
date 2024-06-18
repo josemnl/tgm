@@ -5,22 +5,22 @@ from lidarScan import lidarScan, lidarScan3D
 import yaml
 import pandas as pd
 
-def readLidarData(path, i):
+def read2DLidarCSV(path, i):
     with open(path + "z_" + str(i) + ".csv") as data:
         z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
     return z_t
 
-def readLidarData3D(path, i):
+def read3DLidarCSV(path, i):
     data = pd.read_csv(path + "z_" + str(i) + ".csv", header=None)
     z_t_3D = lidarScan3D(data.values.astype(float))
     return z_t_3D
 
-def readPoseData(path, i):
+def readPose(path, i):
     with open(path + "x_" + str(i) + ".csv") as data:
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
     return x_t
 
-def readLidarData3DBin(path, i):
+def read3DLidarBIN(path, i):
     rawdata = np.fromfile(path + str(i).zfill(6) + ".bin", dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
@@ -28,7 +28,7 @@ def readLidarData3DBin(path, i):
     z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
-def readLidarData3DBinLabels(pathData, pathLabels, i):
+def read3DLabledLidarBIN(pathData, pathLabels, i):
     rawdata = np.fromfile(pathData + str(i).zfill(6) + ".bin", dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     pathData = './snow_velodyne/'
     pathLabels = './snow_labels/'
     i = 100
-    z_t_3D = readLidarData3DBinLabels(pathData, pathLabels, i)
+    z_t_3D = read3DLabledLidarBIN(pathData, pathLabels, i)
     #z_t_3D.plot()
     z_t = z_t_3D.convertTo2D()
     z_t.plot()
