@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utilities import readLidarData3D
+from utilities import read3DLidarCSV
 
 def plot_lidar_from_bag(logPath, i):
-    z_t_3D = readLidarData3D(logPath, i)
+    z_t_3D = read3DLidarCSV(logPath, i)
     groundThreshold = -1.5
     skyThreshold = 1
     minDistance = 2
