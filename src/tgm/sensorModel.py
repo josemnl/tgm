@@ -1,6 +1,6 @@
 import numpy as np
-from gridMap import gridMap
-from lidarScan import lidarScan
+from tgm.gridMap import gridMap
+from tgm.lidarScan import lidarScan
 import time
 
 class sensorModel:

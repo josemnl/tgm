@@ -3,7 +3,7 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
-from lidarScan import lidarScan
+from tgm.lidarScan import lidarScan
 
 def lsqnl_matching(scan, lsq_map, x0, max_range):
     # Remove the no-return scans from scan

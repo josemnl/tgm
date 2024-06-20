@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>tgm</name>
+  <version>0.0.1</version>
+  <description>The TGM package for SLAM integration.</description>
+
+  <maintainer email="your_email@example.com">Your Name</maintainer>
+  <license>TODO: License</license>
+
+  <!-- Dependencies -->
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>pcl_conversions</build_depend>
+  <build_depend>pcl_ros</build_depend>
+  <build_depend>sensor_model</build_depend>
+  <build_depend>message_generation</build_depend>
+
+
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>pcl_conversions</exec_depend>
+  <exec_depend>pcl_ros</exec_depend>
+  <exec_depend>sensor_model</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+
+</package>
+

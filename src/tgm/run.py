@@ -9,7 +9,7 @@ from SLAM import lsqnl_matching
 
 def run():
     # PARAMETERS
-    logID = '2024-02-28-15-54-14'
+    logID = 'static'
     is3D = True
     initialTimeStep = 60
     simHorizon = 10000

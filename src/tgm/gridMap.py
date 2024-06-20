@@ -45,7 +45,7 @@ def main():
 
     data = np.zeros((width*resolution, height*resolution))
     data[0][0] = 1
-    data[19][0] = 0.5
+    data[19][1] = 0.5
     
     grid = gridMap(origin, width, height, resolution, data)
     grid.plot()

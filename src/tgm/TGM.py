@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
-from gridMap import gridMap
+from tgm.gridMap import gridMap
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
 
