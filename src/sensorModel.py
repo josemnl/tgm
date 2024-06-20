@@ -41,7 +41,7 @@ class sensorModel:
         # Compute ground points on global frame
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
-            np.add(ang, x_t[2], out=ang)
+            np.add(ang_ground, x_t[2], out=ang_ground)
             np.clip(dist_ground, a_min=None, a_max=self.sensorRange, out=dist_ground)
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
             oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
