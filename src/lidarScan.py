@@ -168,20 +168,20 @@ class lidarScan3D:
         ax.axis('equal')
         plt.show()
 
-    def radiousOutlierRemoval(self, k, radius):
-        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor
+    def ROR(self, k, r):
+        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a specified radius
         # Create a KDTree object with the 3D points
         tree = sp.spatial.KDTree(self.points3D)
         # Compute the distance to the k-th nearest neighbor for each point
         distances, _ = tree.query(self.points3D, k=k+1)
         k_distance = distances[:, k]
         # Remove points that are further than the specified radius from their k-th nearest neighbor
-        self.points3D = self.points3D[k_distance < radius]
-        # Remove labels if they exist
+        self.points3D = self.points3D[k_distance < r]
+        # Remove labels that correspond to removed points
         if self.labels is not None:
-            self.labels = self.labels[k_distance < radius]
+            self.labels = self.labels[k_distance < r]
 
-    def statisticalOutlierRemoval(self, k, std_dev):
+    def SOR(self, k, s):
         # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor
         # Create a KDTree object with the 3D points
         tree = sp.spatial.KDTree(self.points3D)
@@ -192,7 +192,22 @@ class lidarScan3D:
         mean = np.mean(k_distance)
         std = np.std(k_distance)
         # Remove points that are further than the specified number of standard deviations from the mean
-        self.points3D = self.points3D[k_distance < mean + std_dev * std]
-        # Remove labels if they exist
+        self.points3D = self.points3D[k_distance < mean + s * std]
+        # Remove labels that correspond to removed points
         if self.labels is not None:
-            self.labels = self.labels[k_distance < mean + std_dev * std]
+            self.labels = self.labels[k_distance < mean + s * std]
+
+    def DROR(self, k, rho):
+        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a radius proportional to the distance to the origin
+        # Create a KDTree object with the 3D points
+        tree = sp.spatial.KDTree(self.points3D)
+        # Compute the distance to the k-th nearest neighbor for each point
+        distances, _ = tree.query(self.points3D, k=k+1)
+        k_distance = distances[:, k]
+        # Compute the distance to the origin for each point
+        origin_distance = np.linalg.norm(self.points3D, axis=1)
+        # Remove points that are further than a radius (rho * origin_distance) from their k-th nearest neighbor
+        self.points3D = self.points3D[k_distance < rho * origin_distance]
+        # Remove labels that correspond to removed points
+        if self.labels is not None:
+            self.labels = self.labels[k_distance < rho * origin_distance]

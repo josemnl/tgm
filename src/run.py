@@ -10,7 +10,7 @@ from SLAM import lsqnl_matching, plotCostFunction
 def run():
     # Config file
     configPath = './config/'
-    logID = 'SnowyKitti-00'
+    logID = 'WADS-11'
 
     # Load parameters as dictionary
     conf = loadConfigAsDict(configPath, logID)
@@ -50,6 +50,7 @@ def run():
             if conf.freeUpGroundDetections:
                 z_t_3D.removeSky(conf.skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
+                z_t_objects_3D.DROR(5, 0.01)
                 #z_t_objects_3D.radiousOutlierRemoval(3, 1)
                 #z_t_objects_3D.statisticalOutlierRemoval(3, 3)
                 z_t_ground = z_t_ground_3D.convertTo2D()
