@@ -211,3 +211,21 @@ class lidarScan3D:
         # Remove labels that correspond to removed points
         if self.labels is not None:
             self.labels = self.labels[k_distance < rho * origin_distance]
+
+    def DSOR(self, k, s, rho):
+        # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a radius proportional to the distance to the origin
+        # Create a KDTree object with the 3D points
+        tree = sp.spatial.KDTree(self.points3D)
+        # Compute the distance to the k-th nearest neighbor for each point
+        distances, _ = tree.query(self.points3D, k=k+1)
+        k_distance = distances[:, k]
+        # Compute the mean and standard deviation of the k-th nearest neighbor distances
+        mean = np.mean(k_distance)
+        std = np.std(k_distance)
+        # Compute the distance to the origin for each point
+        origin_distance = np.linalg.norm(self.points3D, axis=1)
+        # Remove points that are further than a radius (mean + s * std) * rho * origin_distance from their k-th nearest neighbor
+        self.points3D = self.points3D[k_distance < (mean + s * std) * rho * origin_distance]
+        # Remove labels that correspond to removed points
+        if self.labels is not None:
+            self.labels = self.labels[k_distance < (mean + s * std) * rho * origin_distance]
