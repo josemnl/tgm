@@ -7,6 +7,7 @@ class lidarScan:
         assert len(angles) == len(ranges)
         if labels is not None:
             assert len(angles) == len(labels)
+            assert angles.shape == ranges.shape == labels.shape
         
         self.ranges = ranges
         self.angles = angles
@@ -96,6 +97,19 @@ class lidarScan:
         # Remove labels if they exist
         if self.labels is not None:
             self.labels = None
+
+    def filterOutByLabel(self, label):
+        mask = self.labels != label
+        self.angles = self.angles[mask]
+        self.ranges = self.ranges[mask]
+        self.labels = self.labels[mask]
+
+    def filterInByLabel(self, label):
+        assert self.labels is not None
+        mask = self.labels == label
+        self.angles = self.angles[mask]
+        self.ranges = self.ranges[mask]
+        self.labels = self.labels[mask]
 
 class lidarScan3D:
     def __init__(self, points3D, labels=None):
@@ -229,3 +243,10 @@ class lidarScan3D:
         # Remove labels that correspond to removed points
         if self.labels is not None:
             self.labels = self.labels[k_distance < (mean + s * std) * rho * origin_distance]
+
+
+if __name__ == "__main__":
+    # Create a 3D lidar scan with only one point
+    points3D = np.array([[1, 2, 3]])
+    labels = np.array([0])
+    z_t_3D = lidarScan3D(points3D, labels)
