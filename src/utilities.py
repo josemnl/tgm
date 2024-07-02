@@ -35,7 +35,7 @@ def read3DLabledLidarBIN(pathData, pathLabels, i):
     rawdata = rawdata.astype(float)
     data = np.reshape(rawdata, (-1, 4))
     rawlabels = np.fromfile(pathLabels + str(i).zfill(6) + ".label", dtype=np.uint32)
-    labels = np.reshape(rawlabels, (-1, 1))
+    labels = np.reshape(rawlabels, -1)
     z_t_3D = lidarScan3D(data[:,0:3], labels)
     return z_t_3D
 
@@ -127,8 +127,9 @@ def loadConfigAsDict(configPath, configFile):
     return config
 
 if __name__ == "__main__":
-    pathData = './snow_velodyne/'
-    pathLabels = './snow_labels/'
+    './SnowyKITTI/dataset/sequences/00/snow_velodyne/'
+    pathData = './SnowyKITTI/dataset/sequences/00/snow_velodyne/'
+    pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     i = 100
     z_t_3D = read3DLabledLidarBIN(pathData, pathLabels, i)
     #z_t_3D.plot()
