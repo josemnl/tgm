@@ -3,6 +3,10 @@ import numpy as np
 
 class gridMap:
     def __init__(self, origin_x, origin_y, width, height, resolution, data):
+        """
+        Origin, width, and height are in grid cells
+        Resolution is in meters per grid cell
+        """
         assert isinstance(origin_x, int)
         assert isinstance(origin_y, int)
         assert isinstance(width, int)
@@ -43,6 +47,22 @@ class gridMap:
         x1 = x0 + width
         y1 = y0 + height
         return gridMap(origin_x, origin_y, width, height, self.resolution, self.data[x0:x1, y0:y1])
+    
+    def occupancy(self, x, y):
+        """
+        Get the occupancy of the cell where the point (x, y) is
+        """
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+        assert x >= self.origin_x*self.resolution
+        assert y >= self.origin_y*self.resolution
+        assert x <= (self.origin_x + self.width)*self.resolution
+        assert y <= (self.origin_y + self.height)*self.resolution
+
+        ix = np.round((x - self.origin_x*self.resolution)/self.resolution).astype(int)
+        iy = np.round((y - self.origin_y*self.resolution)/self.resolution).astype(int)
+
+        return self.data[ix][iy]
 
 def main():
     origin_x = 0
