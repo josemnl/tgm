@@ -26,7 +26,7 @@ class sensorModel:
         ang, dist = z_t.angles, z_t.ranges
 
         # Update measurement orientation with agent's pose
-        np.add(ang, x_t[2], out=ang)
+        ang = ang + x_t[2]
         timePose = time.time()
 
         # Limit measurement distance to sensor range
