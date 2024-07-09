@@ -134,7 +134,7 @@ class TGM:
         timeSat = time.time()
 
         # Set the cells that were visible to the prior
-        self.dynamicMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1] = 1 - self.staticMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1] * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
+        self.dynamicMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1] = (1 - self.staticMap[self.prev_x0:self.prev_x1, self.prev_y0:self.prev_y1]) * self.dynamicPrior/(self.dynamicPrior + self.freePrior + self.weatherPrior)
 
         timeVisible = time.time()
 
