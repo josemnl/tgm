@@ -243,8 +243,8 @@ class TGM:
 
         # If section is Following, compute the origin
         if section == 'Following':
-            origin_x = int((self.x_t[0] - width/2) / self.resolution)
-            origin_y = int((self.x_t[1] - height/2) / self.resolution)
+            origin_x = int(self.x_t[0] / self.resolution - width/2)
+            origin_y = int(self.x_t[1] / self.resolution - height/2)
 
         # If section is Constant, assert that the origin is not None and compute origin
         if section == 'Constant':
