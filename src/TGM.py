@@ -157,6 +157,7 @@ class TGM:
 
         timeSave = time.time()
 
+        '''
         # Print times
         print('Split:    ' + str(timeSplit - timeStart))
         print('Predict:  ' + str(timePredict - timeSplit))
@@ -166,6 +167,7 @@ class TGM:
         print('Save:     ' + str(timeSave - timeVisible))
         print('Total:    ' + str(time.time() - timeStart))
         print('')
+        '''
 
     def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:

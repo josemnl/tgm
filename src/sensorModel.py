@@ -90,6 +90,7 @@ class sensorModel:
         self.data[ix, iy] = self.invModel[1]
         timeOccupied = time.time()
 
+        '''
         print("Times sensor model:")
         print("Pose: " + str(timePose - timeStart))
         print("Clip: " + str(timeClip - timePose))
@@ -102,6 +103,7 @@ class sensorModel:
         print("Occupied: " + str(timeOccupied - timeUnknown))
         print("Total: " + str(timeOccupied - timeStart))
         print("")
+        '''
 
         return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
 
