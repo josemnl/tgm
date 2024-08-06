@@ -9,7 +9,7 @@ simHorizon : 600                        # If 0, it runs until the end of the log
 isSLAM : True                           # If True, it computes x_t using SLAM
 velTracking : False                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 0                    # Number of time steps to use ground truth x_t before starting SLAM
-startPoseSLAM : [500, 500, 1.57]        # Initial pose for the SLAM algorithm if x_t is not available
+startPoseSLAM : [500, 500, 1]        # Initial pose for the SLAM algorithm if x_t is not available
 
 # Plotting parameters
 saveVideo : False                       # If True, it saves the video
@@ -30,7 +30,7 @@ resolution : 0.5                        # Resolution of the grid
 # TGM parameters
 staticPrior : 0.3                       # If 0, it assumes that all the elements are dynamic
 dynamicPrior : 0.3                      # If 0, it behaves like a regular grid map
-weatherPrior : 0                        # If 0, it assumes no weather noise
+weatherPrior : 0.01                     # If 0, it assumes no weather noise
 maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
 saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
