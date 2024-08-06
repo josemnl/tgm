@@ -16,7 +16,6 @@ def computeMetrics(z_t, x_t, gM):
 
     # Compute point cloud in global frame
     global_pointCloud = z_t.computeRelativeCartesian(x_t)
-    print(global_pointCloud)
 
     # For each snow point, check the probability of being occupied
     n_occ_cells = 0
@@ -26,7 +25,7 @@ def computeMetrics(z_t, x_t, gM):
         if occ > 0.7:
             n_occ_cells += 1
 
-    return n_occ_cells/z_t.ranges.size
+    return n_occ_cells, z_t.ranges.size
 
 if __name__ == "__main__":
     # Config file
