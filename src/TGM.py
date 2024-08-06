@@ -195,7 +195,7 @@ class TGM:
 
         return predStaticMap, predDynamicMap, predWeatherMap
     
-    def computeStaticGridMap(self, following=False, width=0, height=0):
+    def oneLayer(self, layer, following=False, width=0, height=0):
 
         # If following is True
         if following:
@@ -211,7 +211,7 @@ class TGM:
             assert overlapWidth > 0 and overlapHeight > 0
 
             # Crop the static map to the overlapping region
-            staticMap = self.cropMap('static', overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+            gm = self.cropMap(layer, overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
 
         else:
             # Origin, width and height are the same as the TGM
@@ -220,13 +220,24 @@ class TGM:
             overlapWidth = self.width
             overlapHeight = self.height
 
-            # Use the full static map
-            staticMap = self.staticMap
+            # Use the full layer
+            if layer == 'static':
+                gm = self.staticMap
+            elif layer == 'dynamic':
+                gm = self.dynamicMap
+            elif layer == 'weather':
+                gm = self.weatherMap
 
         if self.GPU:
-            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, cp.asnumpy(staticMap))
+            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, cp.asnumpy(gm))
         else:
-            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, staticMap)
+            return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, gm)
+        
+    def computeStaticDynamicGridMap(self):
+        if self.GPU:
+            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.staticMap + self.dynamicMap))
+        else:
+            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, self.staticMap + self.dynamicMap)
 
     def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         origin_x = int(origin[0]/self.resolution) if origin is not None else None

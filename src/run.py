@@ -2,18 +2,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, readPose, createVideo, loadConfig, loadConfigAsDict
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
 from sensorModel import sensorModel
 from TGM import TGM
-from SLAM import lsqnl_matching, plotCostFunction
+from SLAM import lsqnl_matching
+from metrics import computeMetrics
 
 def run():
     # Config file
     configPath = './config/'
-    logID = 'WADS-11'
+    defConfFile = 'config'
+    logID = 'SnowyKitti-00'
 
-    # Load parameters as dictionary
-    conf = loadConfigAsDict(configPath, logID)
+    # Load parameters
+    conf = loadConfigAsDict(configPath, defConfFile)
+    specificConf = loadConfigAsDict(configPath, logID)
+    conf.__dict__.update(specificConf.__dict__)
 
     # Paths
     videoPath = './results/' + logID + '/'
@@ -44,23 +48,29 @@ def run():
             if conf.lidarFormat == 'CSV':
                 z_t_3D = read3DLidarCSV(conf.lidarPath, i)
             elif conf.lidarFormat == 'BIN':
-                z_t_3D = read3DLidarBIN(conf.lidarPath, i)
+                if conf.isLabeled:
+                    z_t_3D = read3DLabledLidarBIN(conf.lidarPath, conf.labelPath, i)
+                else:
+                    z_t_3D = read3DLidarBIN(conf.lidarPath, i)
             else:
                 raise ValueError('Invalid lidar format')
             if conf.freeUpGroundDetections:
                 z_t_3D.removeSky(conf.skyThreshold)
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
+                z_t_before_filter = z_t_objects_3D.convertTo2D()
+                z_t_before_filter.removeClosePoints(conf.minDistance)
+                z_t_before_filter.removeFarPoints(conf.maxDistance)
                 #z_t_objects_3D.ROR(5, 0.2)
                 #z_t_objects_3D.SOR(5, 3)
                 #z_t_objects_3D.DROR(5, 0.01)
-                z_t_objects_3D.DSOR(5, 2, 0.01)
+                z_t_objects_3D.DSOR(3, 2, 0.1)
                 z_t_ground = z_t_ground_3D.convertTo2D()
                 z_t_ground.removeFarPoints(conf.maxDistance)
                 #z_t_ground.voxelGridFilter(voxelGridSize) # No filtering for ground points since it's more expensive than dealing with them on the sensor model
                 z_t = z_t_objects_3D.convertTo2D()
                 z_t.removeClosePoints(conf.minDistance)
                 z_t.removeFarPoints(conf.maxDistance)
-                z_t.voxelGridFilter(conf.voxelGridSize)
+                #z_t.voxelGridFilter(conf.voxelGridSize)
                 z_t.orderByAngle()
             else:
                 z_t = z_t_3D.removeGround(conf.groundThreshold).removeSky(conf.skyThreshold).convertTo2D().removeClosePoints(conf.minDistance).removeFarPoints(conf.maxDistance).voxelGridFilter(conf.voxelGridSize).orderByAngle()
@@ -82,14 +92,10 @@ def run():
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            slam_map = tgm.computeStaticGridMap(following=True, width=conf.smWidth, height=conf.smHeight)
+            slam_map = tgm.oneLayer('static', following=True, width=conf.smWidth, height=conf.smHeight)
             x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
             v_t = x_t - x_prev
         timeSLAM = time.time()
-
-        # Plot cost function
-        #if i == 303:
-        #    plotCostFunction(z_t, tgm.computeStaticGridMap(), x_t, sensorRange, res=10)
 
         # Save SLAM results
         if conf.isSLAM:
@@ -123,6 +129,19 @@ def run():
         print('Plots:   ' + str(timePlot - timeTGM))
         print('Total:   ' + str(time.time() - timeStart))
         print('')
+
+        # Snow metrics
+        if conf.isLabeled:
+            # Before the filter
+            n_occ_cells, n_snow_points = computeMetrics(z_t_before_filter, x_t, gm)
+            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
+            # Baseline: Instantaneous occupancy map
+            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, gm)
+            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
+            # Our method: Occupancy map from TGM
+            tgm_gm = tgm.computeStaticDynamicGridMap()
+            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm)
+            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
 
     # Save SLAM results
     if conf.isSLAM:
