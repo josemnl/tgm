@@ -4,13 +4,13 @@ import numpy as np
 from utilities import read3DLabledLidarBIN, loadConfigAsDict
 from sensorModel import sensorModel
 
-def computeMetrics(z_t, x_t, gM):
+def computeMetrics(z_t, x_t, gM, label=1):
     assert isinstance(z_t, lidarScan)
     assert isinstance(x_t, np.ndarray)
     assert isinstance(gM, gridMap)
     
     # Keep only the snow points
-    z_t.filterInByLabel(1)
+    z_t.filterInByLabel(label)
 
     #z_t.angles = z_t.angles + x_t[2]
 

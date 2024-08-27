@@ -2,6 +2,9 @@
 lidarPath : './WADS/11/velodyne/'       # Path to the lidar data
 lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
+isLabeled : True                        # Set to True if the point cloud is labelled
+labelPath : './WADS/11/labels/'         # Path to the labels
+snowLabel: 110                          # Label for the snow points
 initialTimeStep : 39498                 # Initial time step to start the simulation
 simHorizon : 600                        # If 0, it runs until the end of the log
 

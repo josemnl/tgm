@@ -63,7 +63,8 @@ def run():
                 #z_t_objects_3D.ROR(5, 0.2)
                 #z_t_objects_3D.SOR(5, 3)
                 #z_t_objects_3D.DROR(5, 0.01)
-                z_t_objects_3D.DSOR(3, 2, 0.1)
+                z_t_objects_3D.DSOR(3, 2, 0.1) # Use this one for SnowyKITTI
+                # z_t_objects_3D.DSOR(5, 2, 0.01) # Use this one for WADS
                 z_t_ground = z_t_ground_3D.convertTo2D()
                 z_t_ground.removeFarPoints(conf.maxDistance)
                 #z_t_ground.voxelGridFilter(voxelGridSize) # No filtering for ground points since it's more expensive than dealing with them on the sensor model
@@ -133,14 +134,14 @@ def run():
         # Snow metrics
         if conf.isLabeled:
             # Before the filter
-            n_occ_cells, n_snow_points = computeMetrics(z_t_before_filter, x_t, gm)
+            n_occ_cells, n_snow_points = computeMetrics(z_t_before_filter, x_t, gm, conf.snowLabel)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
             # Baseline: Instantaneous occupancy map
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, gm)
+            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, gm, conf.snowLabel)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
             # Our method: Occupancy map from TGM
             tgm_gm = tgm.computeStaticDynamicGridMap()
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm)
+            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm, conf.snowLabel)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
 
     # Save SLAM results

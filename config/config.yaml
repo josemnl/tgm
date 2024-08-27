@@ -4,6 +4,7 @@ lidarFormat : 'CSV'                     # Format of the lidar data, 'bin' or 'cs
 is3D : True                             # Set to True if the point cloud is 3D
 isLabeled : False                       # Set to True if the point cloud is labelled
 labelPath : ''                          # Path to the labels
+snowLabel: 1                            # Label for the snow points
 initialTimeStep : 1                     # Initial time step to start the simulation
 simHorizon : 0                          # If 0, it runs until the end of the log
 

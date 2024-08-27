@@ -23,11 +23,11 @@ class lidarScan:
         y = self.ranges * np.sin(angles) + relPose[1]
         return np.column_stack([x, y])
 
-    def plot(self, ax=None):
+    def plot(self, ax=None, byLabel=False):
         if ax is None:
             ax = plt.gca()
         # Plot the lidar scan, marking the points based on their labels
-        if self.labels is not None:
+        if self.labels is not None and byLabel:
             # Compute Cartesian coordinates once
             cartesian_coords = self.computeCartesian()
             

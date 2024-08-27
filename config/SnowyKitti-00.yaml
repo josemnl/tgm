@@ -2,8 +2,9 @@
 lidarPath : './SnowyKITTI/dataset/sequences/00/snow_velodyne/'       # Path to the lidar data
 lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
-isLabeled : True                      # Set to True if the point cloud is labelled
+isLabeled : True                        # Set to True if the point cloud is labelled
 labelPath : './SnowyKITTI/dataset/sequences/00/snow_labels/' # Path to the labels
+snowLabel: 1                            # Label for the snow points
 initialTimeStep : 1                     # Initial time step to start the simulation
 simHorizon : 600                        # If 0, it runs until the end of the log
 
