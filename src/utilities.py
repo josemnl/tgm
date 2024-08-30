@@ -43,7 +43,7 @@ def createVideo(logID, videoPath, removeFrames = True):
     subprocess.call(['ffmpeg', '-framerate', '8', '-i', videoPath + 'frame_%d.png', '-r', '10', '-pix_fmt', 'yuv420p',videoPath + logID + '.mp4'])
     if removeFrames:
         for file in os.listdir(videoPath):
-            if file.endswith('.png'):
+            if file.endswith('.png') and not file.endswith('_map.png'):
                 os.remove(videoPath + file)
 
 def loadConfig(configPath, configFile):

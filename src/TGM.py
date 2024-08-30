@@ -239,7 +239,7 @@ class TGM:
         else:
             return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, self.staticMap + self.dynamicMap)
 
-    def plot(self, fig=None, saveImg=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
+    def plot(self, fig=None, saveMap=False, savePNG=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
         origin_x = int(origin[0]/self.resolution) if origin is not None else None
         origin_y = int(origin[1]/self.resolution) if origin is not None else None
         width = int(width/self.resolution) if width != 0 else 0
@@ -349,11 +349,15 @@ class TGM:
                 y3 = y + (car_length/2-car_width) * np.sin(theta) + car_width/2 * np.cos(theta)
                 plt.fill([x1, x2, x3, x1], [y1, y2, y3, y1], color='white', edgecolor='black')
 
-        # If saveImg is True, save the image
-        if saveImg:
-            imsave(imgName + '.png', I, origin ="lower", cmap='gray')
+        # If saveMap is True, save the image
+        if saveMap:
+            imsave(imgName + '_map.png', I, origin ="lower", cmap='gray')
+        
+        # if savePNG is True, save the plot as PNG
+        if savePNG:
+            plt.savefig(imgName + '.png', format='png')
 
-        # If saveSvg is True, save the plot
+        # If saveSvg is True, save the plot as SVG
         if saveSvg:
             plt.savefig(imgName + '.svg', format='svg', dpi=1200)
         

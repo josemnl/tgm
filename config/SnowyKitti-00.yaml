@@ -17,6 +17,7 @@ startPoseSLAM : [500, 500, 1]        # Initial pose for the SLAM algorithm if x_
 # Plotting parameters
 saveVideo : False                       # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
+saveMap : False                         # If True, it saves the map as a PNG file
 saveSvg : False                         # If True, it saves each frame as a SVG file
 videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
 videoWidth : 100                        # Width of the following window
