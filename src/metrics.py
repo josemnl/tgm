@@ -10,22 +10,55 @@ def computeMetrics(z_t, x_t, gM, label=1):
     assert isinstance(gM, gridMap)
     
     # Keep only the snow points
-    z_t.filterInByLabel(label)
+    z_t_snow = z_t.filterInByLabel(label)
 
     #z_t.angles = z_t.angles + x_t[2]
 
     # Compute point cloud in global frame
-    global_pointCloud = z_t.computeRelativeCartesian(x_t)
+    global_pointCloud = z_t_snow.computeRelativeCartesian(x_t)
 
     # For each snow point, check the probability of being occupied
     n_occ_cells = 0
     for point in global_pointCloud:
         # Get the occupancy of the cell where the point is
         occ = gM.occupancy(point[0], point[1])
-        if occ > 0.7:
+        if occ > 0.1:
             n_occ_cells += 1
 
-    return n_occ_cells, z_t.ranges.size
+    return n_occ_cells, z_t_snow.ranges.size
+
+def IoU(gM1, gM2):
+    assert isinstance(gM1, gridMap)
+    assert isinstance(gM2, gridMap)
+    assert gM1.width == gM2.width
+    assert gM1.height == gM2.height
+    assert gM1.resolution == gM2.resolution
+    print(gM1.origin_x, gM2.origin_x)
+    assert gM1.origin_x == gM2.origin_x
+    assert gM1.origin_y == gM2.origin_y
+
+    # Plot grid maps
+    #gM1.plot()
+    #gM2.plot()
+
+    # Compute max value of gM2
+    max_gM2 = np.max(gM2.data)
+    print('Max value of gM2: ' + str(max_gM2))
+
+    treshold_1 = 0.7
+    treshold_2 = 0.5
+
+    # Compute the intersection
+    intersection = np.logical_and(gM1.data > treshold_1, gM2.data > treshold_2)
+    intersection_sum = np.sum(intersection)
+    print('Intersection: ' + str(intersection_sum))
+
+    # Compute the union
+    union = np.logical_or(gM1.data > treshold_1, gM2.data > treshold_2)
+    union_sum = np.sum(union)
+    print('Union: ' + str(union_sum))
+
+    return intersection_sum/union_sum
 
 if __name__ == "__main__":
     # Config file

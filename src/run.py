@@ -6,7 +6,7 @@ from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabl
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
-from metrics import computeMetrics
+from metrics import computeMetrics, IoU
 
 def run():
     # Config file
@@ -38,7 +38,6 @@ def run():
     n_snow_occ_cells_baseline = []
     n_snow_occ_cells_our_method = []
 
-
     # Initial guess for the velocity
     v_t = [0, 0, 0]
 
@@ -58,29 +57,40 @@ def run():
                     z_t_3D = read3DLidarBIN(conf.lidarPath, i)
             else:
                 raise ValueError('Invalid lidar format')
-            if conf.freeUpGroundDetections:
-                z_t_3D.removeSky(conf.skyThreshold)
-                z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
-                z_t_before_filter = z_t_objects_3D.convertTo2D()
-                z_t_before_filter.removeClosePoints(conf.minDistance)
-                z_t_before_filter.removeFarPoints(conf.maxDistance)
-                #z_t_objects_3D.ROR(5, 0.2)
-                #z_t_objects_3D.SOR(5, 3)
-                #z_t_objects_3D.DROR(5, 0.01)
-                z_t_objects_3D.DSOR(3, 2, 0.08) # Use this one for SnowyKITTI
-                # z_t_objects_3D.DSOR(5, 2, 0.01) # Use this one for WADS
-                z_t_ground = z_t_ground_3D.convertTo2D()
-                z_t_ground.removeFarPoints(conf.maxDistance)
-                #z_t_ground.voxelGridFilter(voxelGridSize) # No filtering for ground points since it's more expensive than dealing with them on the sensor model
-                z_t = z_t_objects_3D.convertTo2D()
-                z_t.removeClosePoints(conf.minDistance)
-                z_t.removeFarPoints(conf.maxDistance)
-                #z_t.voxelGridFilter(conf.voxelGridSize)
-                z_t.orderByAngle()
-            else:
-                z_t = z_t_3D.removeGround(conf.groundThreshold).removeSky(conf.skyThreshold).convertTo2D().removeClosePoints(conf.minDistance).removeFarPoints(conf.maxDistance).voxelGridFilter(conf.voxelGridSize).orderByAngle()
         else:
             z_t = read2DLidarCSV(conf.lidarPath, i)
+
+        # Filter the point cloud
+        if conf.is3D:
+            # Remove close, far and sky points
+            z_t_3D.removeClosePoints(conf.minDistance)
+            z_t_3D.removeFarPoints(conf.maxDistance)
+            z_t_3D.removeSky(conf.skyThreshold)
+
+            # Split ground and objects
+            if conf.freeUpGroundDetections:
+                z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
+                z_t_ground = z_t_ground_3D.convertTo2D()
+            else:
+                z_t_3D.removeGround(conf.groundThreshold)
+                z_t_objects_3D = z_t_3D
+                z_t_ground = None
+            z_t_before_filter = z_t_3D.convertTo2D() # THIS IS TO BE REMOVED
+            
+            # Filter snow points
+            #z_t_objects_3D.ROR(5, 0.2)
+            #z_t_objects_3D.SOR(5, 3)
+            #z_t_objects_3D.DROR(5, 0.01)
+            z_t_objects_3D.DSOR(3, 2, 0.08) # Use this one for SnowyKITTI
+            # z_t_objects_3D.DSOR(5, 2, 0.01) # Use this one for WADS
+            z_t = z_t_objects_3D.convertTo2D()
+
+            # Voxel grid filter
+            #z_t.voxelGridFilter(conf.voxelGridSize)
+
+            # Order by angle
+            z_t.orderByAngle()
+        
         timeData = time.time()
 
         # Compute robot pose with SLAM or get it from log
@@ -151,6 +161,27 @@ def run():
             n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm, conf.snowLabel)
             n_snow_occ_cells_our_method.append(n_occ_cells)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
+
+            # New metric: IoU
+            # Compute grid map from Baseline
+            #snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
+            # Compute grid map from Our method
+            #snow_gm_our_method = tgm.oneLayer('weather', following=True, width=conf.smWidth, height=conf.smHeight)
+            
+
+            # Compute IoU
+            #iou_baseline = IoU(snow_gm_groundTruth, snow_gm_baseline)
+            #iou_our_method = IoU(snow_gm_groundTruth, snow_gm_our_method)
+
+            #print('IoU Baseline: ' + str(iou_baseline))
+            #print('IoU Our method: ' + str(iou_our_method))
+
+            z_t_snow = z_t.filterInByLabel(conf.snowLabel)
+            snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
+            snow_gm_our_method = tgm.oneLayer2('weather', origin_x=snow_gm_baseline.origin_x, origin_y=snow_gm_baseline.origin_y, width=snow_gm_baseline.width, height=snow_gm_baseline.height)
+            IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
+            print('IoU: {:.10f}'.format(IoU_result))
+
 
     # Save SLAM results
     if conf.isSLAM:

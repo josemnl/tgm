@@ -233,6 +233,36 @@ class TGM:
         else:
             return gridMap(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.resolution, gm)
         
+    def oneLayer2(self, layer, origin_x, origin_y, width, height):
+        assert layer in ['static', 'dynamic', 'weather']
+        assert isinstance(origin_x, int)
+        assert isinstance(origin_y, int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        assert origin_x >= self.origin_x
+        assert origin_y >= self.origin_y
+        assert origin_x + width <= self.origin_x + self.width
+        assert origin_y + height <= self.origin_y + self.height
+        x0 = origin_x - self.origin_x
+        y0 = origin_y - self.origin_y
+        x1 = x0 + width
+        y1 = y0 + height
+        if layer == 'static':
+            if self.GPU:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, cp.asnumpy(self.staticMap[x0:x1, y0:y1]))
+            else:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, self.staticMap[x0:x1, y0:y1])
+        elif layer == 'dynamic':
+            if self.GPU:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, cp.asnumpy(self.dynamicMap[x0:x1, y0:y1]))
+            else:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, self.dynamicMap[x0:x1, y0:y1])
+        elif layer == 'weather':
+            if self.GPU:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, cp.asnumpy(self.weatherMap[x0:x1, y0:y1]))
+            else:
+                return gridMap(origin_x, origin_y, width, height, self.resolution, self.weatherMap[x0:x1, y0:y1])
+        
     def computeStaticDynamicGridMap(self):
         if self.GPU:
             return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.staticMap + self.dynamicMap))

@@ -99,17 +99,20 @@ class lidarScan:
             self.labels = None
 
     def filterOutByLabel(self, label):
+        assert self.labels is not None
         mask = self.labels != label
-        self.angles = self.angles[mask]
-        self.ranges = self.ranges[mask]
-        self.labels = self.labels[mask]
+        angles = self.angles[mask]
+        ranges = self.ranges[mask]
+        labels = self.labels[mask]
+        return lidarScan(angles, ranges, labels)
 
     def filterInByLabel(self, label):
         assert self.labels is not None
         mask = self.labels == label
-        self.angles = self.angles[mask]
-        self.ranges = self.ranges[mask]
-        self.labels = self.labels[mask]
+        angles = self.angles[mask]
+        ranges = self.ranges[mask]
+        labels = self.labels[mask]
+        return lidarScan(angles, ranges, labels)
 
 class lidarScan3D:
     def __init__(self, points3D, labels=None):
@@ -143,6 +146,26 @@ class lidarScan3D:
         self.points3D = self.points3D[mask]
         if self.labels is not None:
             self.labels = self.labels[mask]
+    
+    def removeFarPoints(self, maxRange):
+        mask = np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2) < maxRange
+        self.points3D = self.points3D[mask]
+        if self.labels is not None:
+            self.labels = self.labels[mask]
+
+    def filterOutByLabel(self, label):
+        assert self.labels is not None
+        mask = self.labels != label
+        points3D = self.points3D[mask]
+        labels = self.labels[mask]
+        return lidarScan3D(points3D, labels)
+    
+    def filterInByLabel(self, label):
+        assert self.labels is not None
+        mask = self.labels == label
+        points3D = self.points3D[mask]
+        labels = self.labels[mask]
+        return lidarScan3D(points3D, labels)
     
     def convertTo2D(self):
         return lidarScan(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2), self.labels)
