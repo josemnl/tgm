@@ -37,6 +37,7 @@ def run():
     n_snow_occ_cells_original = []
     n_snow_occ_cells_baseline = []
     n_snow_occ_cells_our_method = []
+    IoU_array = []
 
     # Initial guess for the velocity
     v_t = [0, 0, 0]
@@ -81,7 +82,7 @@ def run():
             #z_t_objects_3D.ROR(5, 0.2)
             #z_t_objects_3D.SOR(5, 3)
             #z_t_objects_3D.DROR(5, 0.01)
-            z_t_objects_3D.DSOR(3, 2, 0.08) # Use this one for SnowyKITTI
+            z_t_objects_3D.DSOR(5, 2, 0.08) # Use this one for SnowyKITTI
             # z_t_objects_3D.DSOR(5, 2, 0.01) # Use this one for WADS
             z_t = z_t_objects_3D.convertTo2D()
 
@@ -181,6 +182,7 @@ def run():
             snow_gm_our_method = tgm.oneLayer2('weather', origin_x=snow_gm_baseline.origin_x, origin_y=snow_gm_baseline.origin_y, width=snow_gm_baseline.width, height=snow_gm_baseline.height)
             IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
             print('IoU: {:.10f}'.format(IoU_result))
+            IoU_array.append(IoU_result)
 
 
     # Save SLAM results
@@ -192,6 +194,7 @@ def run():
         np.savetxt(videoPath + 'n_snow_occ_cells_original.csv', n_snow_occ_cells_original, delimiter=',')
         np.savetxt(videoPath + 'n_snow_occ_cells_baseline.csv', n_snow_occ_cells_baseline, delimiter=',')
         np.savetxt(videoPath + 'n_snow_occ_cells_our_method.csv', n_snow_occ_cells_our_method, delimiter=',')
+        np.savetxt(videoPath + 'IoU.csv', IoU_array, delimiter=',')
 
     # Save video
     if conf.saveVideo:

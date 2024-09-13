@@ -58,6 +58,17 @@ def IoU(gM1, gM2):
     union_sum = np.sum(union)
     print('Union: ' + str(union_sum))
 
+    # Compute sum of grid map 1
+    sum_gM1 = np.sum(gM1.data > treshold_1)
+
+    # Compute sum of grid map 2
+    sum_gM2 = np.sum(gM2.data > treshold_2)
+
+    # Print results
+    print('Sum of grid map 1: ' + str(sum_gM1))
+    print('Sum of grid map 2: ' + str(sum_gM2))
+    print('Sum of intersection: ' + str(intersection_sum))
+
     return intersection_sum/union_sum
 
 if __name__ == "__main__":
