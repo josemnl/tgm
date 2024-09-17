@@ -46,6 +46,21 @@ minDistance : 2                         # Minimum distance to consider a point
 maxDistance : 30                        # Maximum distance to consider a point
 angRes : 360                            # Angular resolution of the sensor
 
+# Snow filter parameters
+isROR : False                           # If True, it uses the ROR filter
+ROR_k : 5                               # Number of neighbors to consider in the ROR filter
+ROR_r : 0.5                             # Radius of the ROR filter
+isSOR : False                           # If True, it uses the SOR filter
+SOR_k : 5                               # Number of neighbors to consider in the SOR filter
+SOR_s : 0.5                             # Number of standard deviations to consider in the SOR filter
+isDROR : False                          # If True, it uses the DROR filter
+DROR_k : 5                              # Number of neighbors to consider in the DROR filter
+DROR_rho : 0.5                          # Distance factor of the DROR filter
+isDSOR : False                          # If True, it uses the DSOR filter
+DSOR_k : 5                              # Number of neighbors to consider in the DSOR filter
+DSOR_s : 0.5                            # Number of standard deviations to consider in the DSOR filter
+DSOR_rho : 0.5                          # Distance factor of the DSOR filter
+
 # Inverse Sensor Model parameters
 smWidth : 100                           # Width of the inverse sensor model
 smHeight : 100                          # Height of the inverse sensor model

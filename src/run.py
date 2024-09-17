@@ -78,12 +78,17 @@ def run():
                 z_t_ground = None
             z_t_before_filter = z_t_3D.convertTo2D() # THIS IS TO BE REMOVED
             
-            # Filter snow points
-            #z_t_objects_3D.ROR(5, 0.2)
-            #z_t_objects_3D.SOR(5, 3)
-            #z_t_objects_3D.DROR(5, 0.01)
-            z_t_objects_3D.DSOR(5, 2, 0.08) # Use this one for SnowyKITTI
-            # z_t_objects_3D.DSOR(5, 2, 0.01) # Use this one for WADS
+            # Snow filtering
+            if sum([conf.isROR, conf.isSOR, conf.isDROR, conf.isDSOR]) > 1:
+                print('WARNING: More than one snow filter activated')
+            if conf.isROR:
+                z_t_objects_3D.ROR(conf.ROR_k, conf.ROR_r)
+            if conf.isSOR:
+                z_t_objects_3D.SOR(conf.SOR_k, conf.SOR_s)
+            if conf.isDROR:
+                z_t_objects_3D.DROR(conf.DROR_k, conf.DROR_rho)
+            if conf.isDSOR:
+                z_t_objects_3D.DSOR(conf.DSOR_k, conf.DSOR_s, conf.DSOR_rho)
             z_t = z_t_objects_3D.convertTo2D()
 
             # Voxel grid filter
