@@ -12,7 +12,7 @@ def run():
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'SnowyKitti-00'
+    logID = 'SnowyKitti-00-ROR'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)
