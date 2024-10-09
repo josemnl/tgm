@@ -43,7 +43,7 @@ groundThreshold : -1.5                  # Threshold to consider a point as groun
 skyThreshold : 1                        # Threshold to consider a point as sky
 minDistance : 2                         # Minimum distance to consider a point
 maxDistance : 100                       # Maximum distance to consider a point
-angRes : 360                            # Angular resolution of the sensor
+isVoxelGridFilter : True                # If True, it uses the Voxel Grid filter
 
 # Snow filter parameters
 isROR : False                           # If True, it uses the ROR filter

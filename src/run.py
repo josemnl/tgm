@@ -95,7 +95,8 @@ def run():
             z_t = z_t_objects_3D.convertTo2D()
 
             # Voxel grid filter
-            z_t.voxelGridFilter(conf.voxelGridSize)
+            if conf.isVoxelGridFilter:
+                z_t.voxelGridFilter(conf.voxelGridSize)
 
             # Order by angle
             z_t.orderByAngle()
