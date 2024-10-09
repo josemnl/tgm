@@ -21,8 +21,8 @@ def readPose(path, i):
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
     return x_t
 
-def read3DLidarBIN(path, i):
-    rawdata = np.fromfile(path + str(i).zfill(6) + ".bin", dtype=np.float32)
+def read3DLidarBIN(file):
+    rawdata = np.fromfile(file, dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
     data = np.reshape(rawdata, (-1, 4))
@@ -38,6 +38,9 @@ def read3DLabledLidarBIN(pathData, pathLabels, i):
     labels = np.reshape(rawlabels, -1)
     z_t_3D = lidarScan3D(data[:,0:3], labels)
     return z_t_3D
+
+def listFilesExt(path, ext):
+    return sorted([f for f in os.listdir(path) if f.endswith(ext)])
 
 def createVideo(logID, videoPath, removeFrames = True):
     subprocess.call(['ffmpeg', '-framerate', '8', '-i', videoPath + 'frame_%d.png', '-r', '10', '-pix_fmt', 'yuv420p',videoPath + logID + '.mp4'])

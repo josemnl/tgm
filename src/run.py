@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
@@ -12,7 +12,7 @@ def run():
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'SnowyKitti-00'
+    logID = 'nuscenes'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)
@@ -42,6 +42,9 @@ def run():
     # Initial guess for the velocity
     v_t = [0, 0, 0]
 
+    # List all lidar files
+    lidarFiles = listFilesExt(conf.lidarPath, conf.lidarFormat.lower())
+
     # Main loop
     fig= plt.figure()
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
@@ -55,7 +58,7 @@ def run():
                 if conf.isLabeled:
                     z_t_3D = read3DLabledLidarBIN(conf.lidarPath, conf.labelPath, i)
                 else:
-                    z_t_3D = read3DLidarBIN(conf.lidarPath, i)
+                    z_t_3D = read3DLidarBIN(conf.lidarPath + lidarFiles[i])
             else:
                 raise ValueError('Invalid lidar format')
         else:
@@ -92,7 +95,7 @@ def run():
             z_t = z_t_objects_3D.convertTo2D()
 
             # Voxel grid filter
-            #z_t.voxelGridFilter(conf.voxelGridSize)
+            z_t.voxelGridFilter(conf.voxelGridSize)
 
             # Order by angle
             z_t.orderByAngle()
