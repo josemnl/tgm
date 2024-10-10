@@ -1,0 +1,62 @@
+from nuscenes.nuscenes import NuScenes
+from nuscenes.utils.data_classes import LidarPointCloud
+
+nusc = NuScenes(version='v1.0-mini', dataroot='./nuscenes', verbose=True)
+
+'''
+nusc.list_scenes()
+my_scene = nusc.scene[0]
+
+# Loop through each sample in the scene
+my_sample_token = my_scene['first_sample_token']
+i = 0
+while my_sample_token != '':
+    my_sample = nusc.get('sample', my_sample_token)
+    print(my_sample['timestamp'])
+    i += 1
+    print(i)
+    my_sample_token = my_sample['next']
+
+my_sample_token = my_scene['first_sample_token']
+my_sample = nusc.get('sample', my_sample_token)
+
+#print(my_sample['data'])
+
+# Loop through each sample_data in the scene
+for my_sample_data_token in my_sample['data']:
+    sensor = 'CAM_FRONT'
+    my_sample_data = nusc.get('sample_data', my_sample['data'][sensor])
+    # Check if that sample_data is a keyframe
+    print(my_sample_data['is_key_frame'])
+
+
+'''
+# Get the first scene in the scene table
+# Get the first sample in the scene and from that sample, 
+# get the first sample_data of the lidar sensor
+
+scene = nusc.scene[0]
+sample_token = scene['first_sample_token']
+
+sample = nusc.get('sample', sample_token)
+sample_data_token = sample['data']['LIDAR_TOP']
+i = 1
+
+# Loop through each sample data in the scene
+while sample_data_token != '':
+    sample_data = nusc.get('sample_data', sample_data_token)
+    print(i)
+    i += 1
+    print(sample_data['is_key_frame'])
+    # Get the name of the file
+    filename = sample_data['filename']
+    # Load the Lidar point cloud data
+    lidar_path = nusc.get('sample_data', sample_data_token)['filename']
+    lidar = LidarPointCloud.from_file(lidar_path)
+    # Render the Lidar point cloud
+    lidar.render_height(axes_limit=20)
+    # Print pose
+    ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
+    print(ego_pose['translation'])
+    # Get next sample data token
+    sample_data_token = sample_data['next']
