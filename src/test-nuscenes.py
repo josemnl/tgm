@@ -1,5 +1,17 @@
 from nuscenes.nuscenes import NuScenes
 from nuscenes.utils.data_classes import LidarPointCloud
+from utilities import read3DLidarBIN, loadConfigAsDict
+import matplotlib.pyplot as plt
+
+# Config file
+configPath = './config/'
+defConfFile = 'config'
+logID = 'nuscenes'
+
+# Load parameters
+conf = loadConfigAsDict(configPath, defConfFile)
+specificConf = loadConfigAsDict(configPath, logID)
+conf.__dict__.update(specificConf.__dict__)
 
 nusc = NuScenes(version='v1.0-mini', dataroot='./nuscenes', verbose=True)
 
@@ -52,9 +64,13 @@ while sample_data_token != '':
     filename = sample_data['filename']
     # Load the Lidar point cloud data
     lidar_path = nusc.get('sample_data', sample_data_token)['filename']
-    lidar = LidarPointCloud.from_file(lidar_path)
+    z_t_3D = read3DLidarBIN('./nuscenes/' + lidar_path)
+    z_t = z_t_3D.convertTo2D()
+    z_t.plot()
+    lidar = LidarPointCloud.from_file('./nuscenes/' + lidar_path)
     # Render the Lidar point cloud
-    lidar.render_height(axes_limit=20)
+    #fig, ax = plt.subplots()
+    #lidar.render_height(ax=ax)
     # Print pose
     ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
     print(ego_pose['translation'])
