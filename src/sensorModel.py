@@ -73,6 +73,10 @@ class sensorModel:
             # Compute the matrix indices for ground points
             ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
             iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+            # Filter out-of-bounds ground points
+            valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
+            ix_ground = ix_ground[valid]
+            iy_ground = iy_ground[valid]
             # Mark free cells on the ground
             self.data[ix_ground, iy_ground] = self.invModel[0]
         timeGroundFree = time.time()
