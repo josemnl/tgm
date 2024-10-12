@@ -29,6 +29,14 @@ def read3DLidarBIN(file):
     z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
+def readLidarNuScenes(file):
+    rawdata = np.fromfile(file, dtype=np.float32)
+    # Convert raw data to float
+    rawdata = rawdata.astype(float)
+    data = np.reshape(rawdata, (-1, 5))
+    z_t_3D = lidarScan3D(data[:,0:3])
+    return z_t_3D
+
 def read3DLabledLidarBIN(pathData, pathLabels, i):
     rawdata = np.fromfile(pathData + str(i).zfill(6) + ".bin", dtype=np.float32)
     # Convert raw data to float
