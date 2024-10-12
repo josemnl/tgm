@@ -2,13 +2,24 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
+from utilities import readLidarNuScenes, createVideo, loadConfigAsDict, listFilesExt
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import computeMetrics, IoU
 
+# NuScenes stuff
+from nuscenes.nuscenes import NuScenes
+from scipy.spatial.transform import Rotation
+
 def run():
+    # NuScenes: Load the first scene
+    nusc = NuScenes(version='v1.0-mini', dataroot='./nuscenes', verbose=True)
+    scene = nusc.scene[0]
+    sample_token = scene['first_sample_token']
+    sample = nusc.get('sample', sample_token)
+    sample_data_token = sample['data']['LIDAR_TOP']
+
     # Config file
     configPath = './config/'
     defConfFile = 'config'
@@ -47,22 +58,18 @@ def run():
 
     # Main loop
     fig= plt.figure()
-    for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
+    i = 0
+    while sample_data_token != '':
+        i += 1
         timeStart = time.time()
 
         # Import sensor data
-        if conf.is3D:
-            if conf.lidarFormat == 'CSV':
-                z_t_3D = read3DLidarCSV(conf.lidarPath, i)
-            elif conf.lidarFormat == 'BIN':
-                if conf.isLabeled:
-                    z_t_3D = read3DLabledLidarBIN(conf.lidarPath, conf.labelPath, i)
-                else:
-                    z_t_3D = read3DLidarBIN(conf.lidarPath + lidarFiles[i])
-            else:
-                raise ValueError('Invalid lidar format')
-        else:
-            z_t = read2DLidarCSV(conf.lidarPath, i)
+        sample_data = nusc.get('sample_data', sample_data_token)
+        lidar_path = nusc.get('sample_data', sample_data_token)['filename']
+        z_t_3D = readLidarNuScenes('./nuscenes/' + lidar_path)
+        
+        # Transform the lidar scan to the ego vehicle frame
+        # ...
 
         # Filter the point cloud
         if conf.is3D:
@@ -103,23 +110,16 @@ def run():
         
         timeData = time.time()
 
-        # Compute robot pose with SLAM or get it from log
-        if not conf.isSLAM:
-            x_t = readPose(conf.lidarPath, i)
-        elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
-            try:
-                x_t = readPose(conf.lidarPath, i)
-            except:
-                x_t = np.array(conf.startPoseSLAM)
-        else:
-            x_prev = x_t
-            if conf.velTracking:
-                initialGuess = x_t + v_t
-            else:
-                initialGuess = x_t
-            slam_map = tgm.oneLayer('static', following=True, width=conf.smWidth, height=conf.smHeight)
-            x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
-            v_t = x_t - x_prev
+        # Get pose from log
+        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
+        angle = Rotation.from_quat(ego_pose['rotation']).as_euler('zyx')[0]
+        x_t = np.array([ego_pose['translation'][0], ego_pose['translation'][1], angle])
+
+        # Make the first pose the origin without changing the angle
+        if i == 1:
+            x_t_diff = np.array([x_t[0], x_t[1], 0]) - np.array([50, 50, 0])
+        x_t = x_t - x_t_diff
+        
         timeSLAM = time.time()
 
         # Save SLAM results
@@ -155,44 +155,8 @@ def run():
         print('Total:   ' + str(time.time() - timeStart))
         print('')
 
-        # Snow metrics
-        if conf.isLabeled:
-            # Before the filter
-            gm_before_filter = sM.generateGridMap(z_t_before_filter, x_t)
-            n_occ_cells, n_snow_points = computeMetrics(z_t_before_filter, x_t, gm_before_filter, conf.snowLabel)
-            n_snow_occ_cells_original.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
-            # Baseline: Instantaneous occupancy map
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, gm, conf.snowLabel)
-            n_snow_occ_cells_baseline.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
-            # Our method: Occupancy map from TGM
-            tgm_gm = tgm.computeStaticDynamicGridMap()
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm, conf.snowLabel)
-            n_snow_occ_cells_our_method.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
-
-            # New metric: IoU
-            # Compute grid map from Baseline
-            #snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
-            # Compute grid map from Our method
-            #snow_gm_our_method = tgm.oneLayer('weather', following=True, width=conf.smWidth, height=conf.smHeight)
-            
-
-            # Compute IoU
-            #iou_baseline = IoU(snow_gm_groundTruth, snow_gm_baseline)
-            #iou_our_method = IoU(snow_gm_groundTruth, snow_gm_our_method)
-
-            #print('IoU Baseline: ' + str(iou_baseline))
-            #print('IoU Our method: ' + str(iou_our_method))
-
-            z_t_snow = z_t.filterInByLabel(conf.snowLabel)
-            snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
-            snow_gm_our_method = tgm.oneLayer2('weather', origin_x=snow_gm_baseline.origin_x, origin_y=snow_gm_baseline.origin_y, width=snow_gm_baseline.width, height=snow_gm_baseline.height)
-            IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
-            print('IoU: {:.10f}'.format(IoU_result))
-            IoU_array.append(IoU_result)
-
+        # Update nuScemes' sample data token
+        sample_data_token = sample_data['next']
 
     # Save SLAM results
     if conf.isSLAM:
