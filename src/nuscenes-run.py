@@ -11,6 +11,7 @@ from metrics import computeMetrics, IoU
 # NuScenes stuff
 from nuscenes.nuscenes import NuScenes
 from scipy.spatial.transform import Rotation
+from pyquaternion import Quaternion
 
 def run():
     # NuScenes: Load the first scene
@@ -53,9 +54,6 @@ def run():
     # Initial guess for the velocity
     v_t = [0, 0, 0]
 
-    # List all lidar files
-    lidarFiles = listFilesExt(conf.lidarPath, conf.lidarFormat.lower())
-
     # Main loop
     fig= plt.figure()
     i = 0
@@ -67,9 +65,21 @@ def run():
         sample_data = nusc.get('sample_data', sample_data_token)
         lidar_path = nusc.get('sample_data', sample_data_token)['filename']
         z_t_3D = readLidarNuScenes('./nuscenes/' + lidar_path)
-        
-        # Transform the lidar scan to the ego vehicle frame
-        # ...
+        #pc = LidarPointCloud.from_file('./nuscenes/' + lidar_path)
+
+        # Transform from sensor to ego vehicle
+        calibrated_sensor = nusc.get('calibrated_sensor', sample_data['calibrated_sensor_token'])
+        translation = calibrated_sensor['translation']
+        rotation = calibrated_sensor['rotation']
+        #pc.rotate(Quaternion(rotation).rotation_matrix)
+        #pc.translate(np.array(translation))
+        z_t_3D.rotate(Quaternion(rotation).rotation_matrix)
+        z_t_3D.translate(np.array(translation))
+
+        # Transform from ego vehicle to global (Only the rotation)
+        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
+        #pc.rotate(Quaternion(ego_pose['rotation']).rotation_matrix)
+        z_t_3D.rotate(Quaternion(ego_pose['rotation']).rotation_matrix)
 
         # Filter the point cloud
         if conf.is3D:
@@ -112,7 +122,7 @@ def run():
 
         # Get pose from log
         ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
-        angle = Rotation.from_quat(ego_pose['rotation']).as_euler('zyx')[0]
+        angle = -Rotation.from_quat(ego_pose['rotation']).as_euler('zyx')[2] + np.pi
         x_t = np.array([ego_pose['translation'][0], ego_pose['translation'][1], angle])
 
         # Make the first pose the origin without changing the angle
@@ -129,9 +139,11 @@ def run():
         # Compute instantaneous grid map with inverse sensor model
         sM.updateBasedOnPose(x_t)
         if conf.freeUpGroundDetections:
-            gm = sM.generateGridMap(z_t, x_t, z_t_ground)
+            x_t_prime = np.array([x_t[0], x_t[1], 0])
+            gm = sM.generateGridMap(z_t, x_t_prime, z_t_ground)
         else:
-            gm = sM.generateGridMap(z_t, x_t)
+            x_t_prime = np.array([x_t[0], x_t[1], 0])
+            gm = sM.generateGridMap(z_t, x_t_prime)
         timeSensorModel = time.time()
 
         # Update TGM

@@ -40,7 +40,7 @@ saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
 
 # Filter parameters
-groundThreshold : -1.2                  # Threshold to consider a point as ground
+groundThreshold : 0.5                   # Threshold to consider a point as ground
 skyThreshold : 1                        # Threshold to consider a point as sky
 minDistance : 2                         # Minimum distance to consider a point
 maxDistance : 100                       # Maximum distance to consider a point
