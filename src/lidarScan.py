@@ -202,7 +202,7 @@ class lidarScan3D:
                 ax.scatter(self.points3D[indices, 0], self.points3D[indices, 1], self.points3D[indices, 2], color)
         else:
             ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
-        ax.axis('equal')
+        #ax.axis('equal')
         plt.show()
 
     def ROR(self, k, r):
@@ -267,6 +267,13 @@ class lidarScan3D:
         if self.labels is not None:
             self.labels = self.labels[k_distance < (mean + s * std) * rho * origin_distance]
 
+    def translate(self, translation):
+        # This function translates the 3D points by a specified translation
+        self.points3D += translation
+
+    def rotate(self, rotationMatrix):
+        # This function rotates the 3D points by a specified rotation matrix
+        self.points3D = np.dot(rotationMatrix, self.points3D.T).T
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point
