@@ -87,7 +87,7 @@ def run():
             z_t_3D.removeClosePoints(conf.minDistance)
             z_t_3D.removeFarPoints(conf.maxDistance)
             z_t_3D.removeSky(conf.skyThreshold)
-
+            '''
             # Split ground and objects
             if conf.freeUpGroundDetections:
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
@@ -96,6 +96,10 @@ def run():
                 z_t_3D.removeGround(conf.groundThreshold)
                 z_t_objects_3D = z_t_3D
                 z_t_ground = None
+            '''
+            z_t_ground_3D, z_t_objects_3D = z_t_3D.RANSAC(0.55, 100)
+            z_t_ground = z_t_ground_3D.convertTo2D()
+                
             z_t_before_filter = z_t_3D.convertTo2D() # THIS IS TO BE REMOVED
             
             # Snow filtering

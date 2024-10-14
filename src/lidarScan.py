@@ -275,6 +275,36 @@ class lidarScan3D:
         # This function rotates the 3D points by a specified rotation matrix
         self.points3D = np.dot(rotationMatrix, self.points3D.T).T
 
+    def RANSAC(self, maxDistance, maxIterations):
+        # This function performs RANSAC on the 3D points to find the best plane
+        bestInliers = []
+        bestPlane = None
+        bestError = np.inf
+        for _ in range(maxIterations):
+            # Randomly sample three points
+            indices = np.random.choice(len(self.points3D), 3, replace=False)
+            points = self.points3D[indices]
+            # Compute the plane parameters
+            v1 = points[1] - points[0]
+            v2 = points[2] - points[0]
+            normal = np.cross(v1, v2)
+            normal /= np.linalg.norm(normal)
+            d = -np.dot(normal, points[0])
+            # Compute the distance to the plane for each point
+            distances = np.abs(np.dot(self.points3D, normal) + d)
+            # Compute the inliers
+            inliers = np.where(distances < maxDistance)[0]
+            # Update the best model if the current model is better
+            error = np.sum(distances[inliers])/len(inliers)
+            if error < bestError:
+                bestInliers = inliers
+                bestPlane = (normal, d)
+                bestError = error
+        # Split the pointcloud in two: ground and objects. Ground includes the best inliers and the points below the plane
+        ground = lidarScan3D(self.points3D[bestInliers])
+        objects = lidarScan3D(np.delete(self.points3D, bestInliers, axis=0))
+        return ground, objects
+
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point
     points3D = np.array([[1, 2, 3]])
