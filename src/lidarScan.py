@@ -300,9 +300,16 @@ class lidarScan3D:
                 bestInliers = inliers
                 bestPlane = (normal, d)
                 bestError = error
-        # Split the pointcloud in two: ground and objects. Ground includes the best inliers and the points below the plane
-        ground = lidarScan3D(self.points3D[bestInliers])
-        objects = lidarScan3D(np.delete(self.points3D, bestInliers, axis=0))
+        # Force the normal to point upwards
+        if bestPlane[0][2] < 0:
+            bestPlane = (-bestPlane[0], -bestPlane[1])
+        # Move the plane up by maxDistance
+        bestPlane = (bestPlane[0], bestPlane[1] - maxDistance)
+        # Ground are the points below the plane
+        groundMask = np.where(np.dot(self.points3D, bestPlane[0]) + bestPlane[1] < 0)[0]
+        ground = lidarScan3D(self.points3D[groundMask])
+        objectsMask = np.where(np.dot(self.points3D, bestPlane[0]) + bestPlane[1] >= 0)[0]
+        objects = lidarScan3D(self.points3D[objectsMask])
         return ground, objects
 
 if __name__ == "__main__":

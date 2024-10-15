@@ -87,20 +87,21 @@ def run():
             z_t_3D.removeClosePoints(conf.minDistance)
             z_t_3D.removeFarPoints(conf.maxDistance)
             z_t_3D.removeSky(conf.skyThreshold)
-            '''
+            
             # Split ground and objects
-            if conf.freeUpGroundDetections:
+            if conf.groundFilter == 'RANSAC':
+                z_t_ground_3D, z_t_objects_3D = z_t_3D.RANSAC(conf.ransacDistance, conf.ransacIterations)
+                z_t_ground = z_t_ground_3D.convertTo2D()
+            elif conf.groundFilter == 'Height':
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
+            else:
+                raise ValueError('Invalid ground filter')
+            
+            # Transform to ground detections to 2D if needed
+            if conf.freeUpGroundDetections:
                 z_t_ground = z_t_ground_3D.convertTo2D()
             else:
-                z_t_3D.removeGround(conf.groundThreshold)
-                z_t_objects_3D = z_t_3D
                 z_t_ground = None
-            '''
-            z_t_ground_3D, z_t_objects_3D = z_t_3D.RANSAC(0.55, 100)
-            z_t_ground = z_t_ground_3D.convertTo2D()
-                
-            z_t_before_filter = z_t_3D.convertTo2D() # THIS IS TO BE REMOVED
             
             # Snow filtering
             if sum([conf.isROR, conf.isSOR, conf.isDROR, conf.isDSOR]) > 1:
