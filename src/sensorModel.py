@@ -69,7 +69,7 @@ class sensorModel:
 
         # Mark free cells along the rays
         for i in range(ix.size):
-            self.insetRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
+            self.insertRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
         timeFree = time.time()
 
         # If ground points are provided, mark them as free
@@ -87,7 +87,7 @@ class sensorModel:
 
         # Mark cells in between detections as unknown
         for i in range(ix.size):
-            self.insetRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
+            self.insertRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
         timeUnknown = time.time()
         
         # Mark occupied cells
@@ -111,7 +111,7 @@ class sensorModel:
 
         return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
 
-    def insetRay(self,start,end,value):
+    def insertRay(self,start,end,value):
         x1, y1 = start
         x2, y2 = end
         dx = x2 - x1
