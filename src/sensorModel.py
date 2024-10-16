@@ -29,8 +29,10 @@ class sensorModel:
         ang = ang + x_t[2]
         timePose = time.time()
 
-        # Limit measurement distance to sensor range
-        np.clip(dist, a_min=None, a_max=self.sensorRange, out=dist)
+        # Remove measurements further than sensor range
+        mask = dist < self.sensorRange
+        ang = ang[mask]
+        dist = dist[mask]
         timeClip = time.time()
 
         # Compute detection points on global frame
@@ -42,7 +44,9 @@ class sensorModel:
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
             np.add(ang_ground, x_t[2], out=ang_ground)
-            np.clip(dist_ground, a_min=None, a_max=self.sensorRange, out=dist_ground)
+            mask = dist_ground < self.sensorRange
+            ang_ground = ang_ground[mask]
+            dist_ground = dist_ground[mask]
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
             oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
         timeGround = time.time()
