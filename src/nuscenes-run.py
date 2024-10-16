@@ -132,7 +132,7 @@ def run():
 
         # Make the first pose the origin without changing the angle
         if i == 1:
-            x_t_diff = np.array([x_t[0], x_t[1], 0]) - np.array([50, 50, 0])
+            x_t_diff = np.array([x_t[0] - conf.startPoseNuScenes[0], x_t[1] - conf.startPoseNuScenes[1], 0])
         x_t = x_t - x_t_diff
         
         timeSLAM = time.time()

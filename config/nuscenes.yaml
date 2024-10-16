@@ -8,21 +8,24 @@ snowLabel: 1                            # Label for the snow points
 initialTimeStep : 1                     # Initial time step to start the simulation
 simHorizon : 100                        # If 0, it runs until the end of the log
 
+# NuScenes parameters
+startPoseNuScenes : [500, 500, 0]       # Initial pose for the NuScenes dataset (theta is not used)
+
 # SLAM parameters
 isSLAM : True                           # If True, it computes x_t using SLAM
 velTracking : True                      # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 0                    # Number of time steps to use ground truth x_t before starting SLAM
-startPoseSLAM : [50, 50, 0]        # Initial pose for the SLAM algorithm if x_t is not available
+startPoseSLAM : [50, 50, 0]             # Initial pose for the SLAM algorithm if x_t is not available
 
 # Plotting parameters
 saveVideo : False                       # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveMap : False                         # If True, it saves the map as a PNG file
 saveSvg : False                         # If True, it saves each frame as a SVG file
-videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoSection : 'Following'               # Section of the map to plot: 'Full', 'Following', 'Constant'
 videoWidth : 100                        # Width of the following window
 videoHeight : 100                       # Height of the following window
-videoOrigin : [0,0]                 # Origin of the video
+videoOrigin : [450,450]                 # Origin of the video
 style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters
@@ -40,8 +43,8 @@ saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
 
 # Filter parameters
-groundFilter : 'RANSAC'                 # Ground filter: 'RANSAC', 'Height'
-groundThreshold : 0.5                   # Threshold to consider a point as ground if groundFilter is 'Height'
+groundFilter : 'Height'                 # Ground filter: 'RANSAC', 'Height'
+groundThreshold : 0.7                   # Threshold to consider a point as ground if groundFilter is 'Height'
 skyThreshold : 1                        # Threshold to consider a point as sky (Both for RANSAC and Height filters)
 ransacDistance : 0.55                   # Distance to consider a point in the RANSAC filter
 ransacIterations : 100                  # Number of iterations in the RANSAC filter
@@ -65,8 +68,8 @@ DSOR_s : 2                              # Number of standard deviations to consi
 DSOR_rho : 0.08                         # Distance factor of the DSOR filter
 
 # Inverse Sensor Model parameters
-smWidth : 200                           # Width of the inverse sensor model
-smHeight : 200                          # Height of the inverse sensor model
-sensorRange : 100                       # Maximum range of the sensor
+smWidth : 100                           # Width of the inverse sensor model
+smHeight : 100                          # Height of the inverse sensor model
+sensorRange : 50                       # Maximum range of the sensor
 invModel : [0.01, 0.99]                   # High and low values of the beam inverse sensor model
 freeUpGroundDetections : False          # If True, it frees up the ground detections
