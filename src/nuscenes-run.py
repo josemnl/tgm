@@ -91,17 +91,10 @@ def run():
             # Split ground and objects
             if conf.groundFilter == 'RANSAC':
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.RANSAC(conf.ransacDistance, conf.ransacIterations)
-                z_t_ground = z_t_ground_3D.convertTo2D()
             elif conf.groundFilter == 'Height':
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
             else:
                 raise ValueError('Invalid ground filter')
-            
-            # Transform to ground detections to 2D if needed
-            if conf.freeUpGroundDetections:
-                z_t_ground = z_t_ground_3D.convertTo2D()
-            else:
-                z_t_ground = None
             
             # Snow filtering
             if sum([conf.isROR, conf.isSOR, conf.isDROR, conf.isDSOR]) > 1:
@@ -114,11 +107,19 @@ def run():
                 z_t_objects_3D.DROR(conf.DROR_k, conf.DROR_rho)
             if conf.isDSOR:
                 z_t_objects_3D.DSOR(conf.DSOR_k, conf.DSOR_s, conf.DSOR_rho)
+
+            # Transform detections to 2D
             z_t = z_t_objects_3D.convertTo2D()
+            if conf.freeUpGroundDetections:
+                z_t_ground = z_t_ground_3D.convertTo2D()
+            else:
+                z_t_ground = None
 
             # Voxel grid filter
             if conf.isVoxelGridFilter:
                 z_t.voxelGridFilter(conf.voxelGridSize)
+                if conf.freeUpGroundDetections and conf.rayTraceGround:
+                    z_t_ground.voxelGridFilter(conf.voxelGridSize)
 
             # Order by angle
             z_t.orderByAngle()
@@ -145,7 +146,7 @@ def run():
         sM.updateBasedOnPose(x_t)
         if conf.freeUpGroundDetections:
             x_t_prime = np.array([x_t[0], x_t[1], 0])
-            gm = sM.generateGridMap(z_t, x_t_prime, z_t_ground)
+            gm = sM.generateGridMap(z_t, x_t_prime, z_t_ground, conf.rayTraceGround)
         else:
             x_t_prime = np.array([x_t[0], x_t[1], 0])
             gm = sM.generateGridMap(z_t, x_t_prime)
