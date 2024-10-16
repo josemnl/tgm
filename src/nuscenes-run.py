@@ -117,9 +117,10 @@ def run():
 
             # Voxel grid filter
             if conf.isVoxelGridFilter:
-                z_t.voxelGridFilter(conf.voxelGridSize)
+                # The fast voxel grid filter might break SLAM
+                z_t.fastVoxelGridFilter(conf.voxelGridSize)
                 if conf.freeUpGroundDetections and conf.rayTraceGround:
-                    z_t_ground.voxelGridFilter(conf.voxelGridSize)
+                    z_t_ground.fastVoxelGridFilter(conf.voxelGridSize)
 
             # Order by angle
             z_t.orderByAngle()

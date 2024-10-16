@@ -98,6 +98,24 @@ class lidarScan:
         if self.labels is not None:
             self.labels = None
 
+    def fastVoxelGridFilter(self, voxel_size):
+        # Compute a voxel grid without averaging the points, so that the dictionary is not needed
+        points = self.computeCartesian()
+        grid_indices = np.floor(points / voxel_size).astype(int)
+
+        # remove duplicates
+        unique_indices = np.unique(grid_indices, axis=0)
+
+        # From indices to points
+        downsampled_points = unique_indices * voxel_size
+
+        self.angles = np.arctan2(downsampled_points[:, 1], downsampled_points[:, 0])
+        self.ranges = np.sqrt(downsampled_points[:, 0]**2 + downsampled_points[:, 1]**2)
+
+        # Remove labels if they exist
+        if self.labels is not None:
+            self.labels = None
+
     def filterOutByLabel(self, label):
         assert self.labels is not None
         mask = self.labels != label
