@@ -64,7 +64,7 @@ class sensorModel:
         iy = iy[valid]
 
         # Mark free cells along the rays
-        for i in range(ox.size):
+        for i in range(ix.size):
             self.insetRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
         timeFree = time.time()
 
@@ -82,13 +82,9 @@ class sensorModel:
         timeGroundFree = time.time()
 
         # Mark cells in between detections as unknown
-        for i in range(ox.size):
+        for i in range(ix.size):
             self.insetRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
         timeUnknown = time.time()
-
-        # Remove points exactly at the sensor limit
-        ix = ix[dist < self.sensorRange]
-        iy = iy[dist < self.sensorRange]
         
         # Mark occupied cells
         self.data[ix, iy] = self.invModel[1]
