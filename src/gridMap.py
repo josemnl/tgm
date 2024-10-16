@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 class gridMap:
     def __init__(self, origin_x, origin_y, width, height, resolution, data):
@@ -20,7 +21,7 @@ class gridMap:
         self.resolution = resolution
         self.data = data
 
-    def plot(self):
+    def plot(self, isPause = False):
         """
         Plot the grid map
         """
@@ -28,7 +29,8 @@ class gridMap:
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                    extent=(self.origin_x*self.resolution, (self.origin_x + self.width)*self.resolution,
                            self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
-        plt.show()
+        plt.show(block=isPause)
+        plt.pause(0.0001)
 
     def crop(self, origin_x, origin_y, width, height):
         """
@@ -63,6 +65,15 @@ class gridMap:
         iy = np.round((y - self.origin_y*self.resolution)/self.resolution).astype(int)
 
         return self.data[ix][iy]
+    
+    def saveState(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def loadState(cls, filename):
+        with open(filename, 'rb') as file:
+            return pickle.load(file)
 
 def main():
     origin_x = 0
@@ -76,9 +87,9 @@ def main():
     data[19][0] = 0.5
     
     grid = gridMap(origin_x, origin_y, width, height, resolution, data)
-    grid.plot()
+    grid.plot(isPause=True)
 
-    grid.crop(10, 0, 10, 6).plot()
+    grid.crop(10, 0, 10, 6).plot(isPause=True)
 
 if __name__ == '__main__':
     main()
