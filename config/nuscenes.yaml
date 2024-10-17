@@ -23,8 +23,8 @@ removeFrames : False                    # If True, it removes the frames after s
 saveMap : False                         # If True, it saves the map as a PNG file
 saveSvg : False                         # If True, it saves each frame as a SVG file
 videoSection : 'Following'               # Section of the map to plot: 'Full', 'Following', 'Constant'
-videoWidth : 100                        # Width of the following window
-videoHeight : 100                       # Height of the following window
+videoWidth : 50                        # Width of the following window
+videoHeight : 50                       # Height of the following window
 videoOrigin : [450,450]                 # Origin of the video
 style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
@@ -43,12 +43,12 @@ saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
 
 # Filter parameters
-groundFilter : 'Height'                 # Ground filter: 'RANSAC', 'Height'
-groundThreshold : 0.7                   # Threshold to consider a point as ground if groundFilter is 'Height'
+groundFilter : 'RMF'                    # Ground filter: 'RANSAC', 'Height', 'RMF'
+groundThreshold : 0.5                   # Threshold to consider a point as ground if groundFilter is 'Height'
 skyThreshold : 1                        # Threshold to consider a point as sky (Both for RANSAC and Height filters)
 ransacDistance : 0.55                   # Distance to consider a point in the RANSAC filter
 ransacIterations : 100                  # Number of iterations in the RANSAC filter
-minDistance : 2                         # Minimum distance to consider a point
+minDistance : 3                         # Minimum distance to consider a point
 maxDistance : 100                       # Maximum distance to consider a point
 isVoxelGridFilter : True                # If True, it uses the Voxel Grid filter
 
@@ -68,9 +68,9 @@ DSOR_s : 2                              # Number of standard deviations to consi
 DSOR_rho : 0.08                         # Distance factor of the DSOR filter
 
 # Inverse Sensor Model parameters
-smWidth : 100                           # Width of the inverse sensor model
-smHeight : 100                          # Height of the inverse sensor model
-sensorRange : 50                        # Maximum range of the sensor
+smWidth : 50                           # Width of the inverse sensor model
+smHeight : 50                          # Height of the inverse sensor model
+sensorRange : 25                        # Maximum range of the sensor
 invModel : [0.01, 0.99]                 # High and low values of the beam inverse sensor model
 freeUpGroundDetections : True           # If True, it frees up the ground detections
 rayTraceGround : True                   # If True, it ray traces the ground detections

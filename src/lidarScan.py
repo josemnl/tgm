@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
+from GroundSeg import ground_seg
 
 class lidarScan:
     def __init__(self, angles, ranges, labels=None):
@@ -329,6 +330,11 @@ class lidarScan3D:
         objectsMask = np.where(np.dot(self.points3D, bestPlane[0]) + bestPlane[1] >= 0)[0]
         objects = lidarScan3D(self.points3D[objectsMask])
         return ground, objects
+    
+    def RMF_GroundSeg(self):
+        # This function performs the ground segmentation using the RMF algorithm
+        ground, objects = ground_seg(self.points3D)
+        return lidarScan3D(ground), lidarScan3D(objects)
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point

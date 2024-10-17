@@ -93,6 +93,8 @@ def run():
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.RANSAC(conf.ransacDistance, conf.ransacIterations)
             elif conf.groundFilter == 'Height':
                 z_t_ground_3D, z_t_objects_3D = z_t_3D.splitByHeight(conf.groundThreshold)
+            elif conf.groundFilter == 'RMF':
+                z_t_ground_3D, z_t_objects_3D = z_t_3D.RMF_GroundSeg()
             else:
                 raise ValueError('Invalid ground filter')
             
