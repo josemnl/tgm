@@ -52,9 +52,7 @@ def run():
         
         # Create Sensor Model and TGM
         sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-        '''
         tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv)
-        '''
 
         # Main loop
         fig= plt.figure()
@@ -135,15 +133,22 @@ def run():
             timeSensorModel = time.time()
 
             # Update TGM
-            '''
             tgm.update(gm, x_t)
-            '''
             timeTGM = time.time()
 
             # Save grid map
-            fig.clear()
+            #fig.clear()
             #gm.plot()
-            gm.saveState(scenePath + 'frame_' + str(i) + '.grid')
+            origin_x = gm.origin_x
+            origin_y = gm.origin_y
+            width = gm.width
+            height = gm.height
+            static = tgm.oneLayer2('static',origin_x,origin_y,width,height)
+            dynamic = tgm.oneLayer2('dynamic',origin_x,origin_y,width,height)
+            gm.saveState(scenePath + 'frame_' + str(i) + '_instant.grid')
+            static.saveState(scenePath + 'frame_' + str(i) + '_static.grid')
+            dynamic.saveState(scenePath + 'frame_' + str(i) + '_dynamic.grid')
+
             '''
             tgm.plot(fig, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= scenePath + 'frame_' + str(i-conf.initialTimeStep+1), section = conf.videoSection, width=conf.videoWidth, height=conf.videoHeight, origin=conf.videoOrigin, style=conf.style)
             '''
