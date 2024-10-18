@@ -67,13 +67,18 @@ class gridMap:
         return self.data[ix][iy]
     
     def saveState(self, filename):
+        original_data = self.data
+        self.data = self.data.astype(np.float16)
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
+        self.data = original_data
 
     @classmethod
     def loadState(cls, filename):
         with open(filename, 'rb') as file:
-            return pickle.load(file)
+            obj = pickle.load(file)
+            obj.data = obj.data.astype(np.float64)
+            return obj
 
 def main():
     origin_x = 0
