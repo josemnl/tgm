@@ -13,10 +13,31 @@ import numpy as np
 import math
 import itertools
 import copy
+import pickle
+import os
+import time
 
-def ground_seg(point_cloud, res=1./4., s=0.05):
+CACHE_FILE = 'neighbors_cache.pkl'
+
+def save_cache(cache, cache_file=CACHE_FILE):
+    with open(cache_file, 'wb') as f:
+        pickle.dump(cache, f)
+
+def load_cache(cache_file=CACHE_FILE):
+    if os.path.exists(cache_file):
+        with open(cache_file, 'rb') as f:
+            return pickle.load(f)
+    return {}
+
+def ground_seg(point_cloud, res=1./3., s=0.09):
 
 	num_points = point_cloud.shape[0]
+	
+	# Load the cache
+	time_start = time.time()
+	neighbors_cache = load_cache()
+	print("Time to load cache: ", time.time() - time_start)
+	is_cache = bool(neighbors_cache)
 
 	# generate 2-D grid of the LiDAR cloud
 	max_index = math.sqrt(2.)*(128/3./2.+1.)
@@ -31,6 +52,7 @@ def ground_seg(point_cloud, res=1./4., s=0.05):
 	center_x = int(math.ceil(max_index/res))
 	center_y = int(math.ceil(max_index/res))
 
+	time_start = time.time()
 	for i in range(num_points):
 		point = point_cloud[i,:]
 		x = point[0]
@@ -40,6 +62,7 @@ def ground_seg(point_cloud, res=1./4., s=0.05):
 		if ((math.fabs(x) <= max_index) and (math.fabs(y) <= max_index) and (z <= 3.5)):
 		
 			grid[int(center_x + round(x/res)), int(center_y + round(y/res))].append(i)
+	print("Time to fill grid: ", time.time() - time_start)
 
 	h_G = np.nan*np.empty((grid.shape))
 	
@@ -60,9 +83,10 @@ def ground_seg(point_cloud, res=1./4., s=0.05):
 	circle_inner = [[center_x, center_y]]
 
 	# identify all the points that were labeled as not ground
-	point_cloud_seg = np.empty((0,3))
-	point_cloud_ground = np.empty((0,3))
+	point_cloud_seg_list = []
+	point_cloud_ground_list = []
 
+	time_start = time.time()
 	for i in range(1,int(math.ceil(max_index/res))+1):
 
 		# generate indices at the ith inner circle level
@@ -73,34 +97,49 @@ def ground_seg(point_cloud, res=1./4., s=0.05):
 			y = indices[1]
 
 			# compute h_hat_G: find max h_G of neighbors
-			neigh_indeces = np.array(get_neighbors(x,y,circle_inner))
+			# Use cached neighbors if available
+			if (i, x, y) in neighbors_cache:
+				neigh_indeces = neighbors_cache[(i, x, y)]
+			else:
+				neigh_indeces = np.array(get_neighbors(x,y,circle_inner))				# THIS
+				neighbors_cache[(i, x, y)] = neigh_indeces
 		
 			# compute the min and max z coordinates of each grid cell		
-			points_z = np.ndarray.tolist(point_cloud[grid[x,y],2])
-			H = max(points_z or [np.nan])
-			h = min(points_z or [np.nan])
+			points_z = point_cloud[grid[x, y], 2]
+			H = np.nanmax(points_z) if points_z.size > 0 else np.nan
+			h = np.nanmin(points_z) if points_z.size > 0 else np.nan
 
 			h_hat_G = np.nanmax(h_G[neigh_indeces])	
 
 			if ((not np.isnan(H)) and (not np.isnan(h)) and \
 				(H - h < s) and (H - h_hat_G < s)):
 				grid_seg[x,y] = 1
-				h_G[x,y] = copy.deepcopy(H)
+				h_G[x,y] = H
 				point_locations = grid[x,y]
-				if point_locations != []:
-					point_cloud_ground = np.vstack((point_cloud_ground,point_cloud[point_locations,:]))
+				if point_locations:
+					point_cloud_ground_list.append(point_cloud[point_locations, :])
 			else:
 
-				h_G[x,y] = copy.deepcopy(h_hat_G)
+				h_G[x,y] = h_hat_G
 
 				# add to not ground points
 				point_locations = grid[x,y]
 									
-				if point_locations != []:
-					point_cloud_seg = np.vstack((point_cloud_seg,point_cloud[point_locations,:]))
+				if point_locations:
+					point_cloud_seg_list.append(point_cloud[point_locations, :])
 				
 		# update the inner circle indices
-		circle_inner = copy.deepcopy(circle_curr)
+		circle_inner = circle_curr
+	print("Time to segment ground: ", time.time() - time_start)
+
+	# Convert lists to arrays
+	point_cloud_ground = np.vstack(point_cloud_ground_list) if point_cloud_ground_list else np.empty((0, 3))
+	point_cloud_seg = np.vstack(point_cloud_seg_list) if point_cloud_seg_list else np.empty((0, 3))
+
+	# Save the cache
+	if not is_cache:
+		save_cache(neighbors_cache)
+		print("Cache saved")
 	
 	return point_cloud_ground, point_cloud_seg
 
@@ -121,4 +160,3 @@ def get_neighbors(x,y,circle_inner):
 			neigh_indices.append(indices)
 
 	return neigh_indices
-
