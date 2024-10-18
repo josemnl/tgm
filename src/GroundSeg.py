@@ -17,13 +17,14 @@ import pickle
 import os
 import time
 
-CACHE_FILE = 'neighbors_cache.pkl'
+CACHE_NEIGHBORS = 'neighbors_cache.pkl'
+CACHE_CIRCLE = 'circle_cache.pkl'
 
-def save_cache(cache, cache_file=CACHE_FILE):
+def save_cache(cache, cache_file):
     with open(cache_file, 'wb') as f:
         pickle.dump(cache, f)
 
-def load_cache(cache_file=CACHE_FILE):
+def load_cache(cache_file):
     if os.path.exists(cache_file):
         with open(cache_file, 'rb') as f:
             return pickle.load(f)
@@ -35,9 +36,11 @@ def ground_seg(point_cloud, res=1./3., s=0.09):
 	
 	# Load the cache
 	time_start = time.time()
-	neighbors_cache = load_cache()
+	neighbors_cache = load_cache(CACHE_NEIGHBORS)
 	print("Time to load cache: ", time.time() - time_start)
-	is_cache = bool(neighbors_cache)
+	is_cache_neighbors = bool(neighbors_cache)
+	circle_cache = load_cache(CACHE_CIRCLE)
+	is_cache_circle = bool(circle_cache)
 
 	# generate 2-D grid of the LiDAR cloud
 	max_index = math.sqrt(2.)*(128/3./2.+1.)
@@ -90,7 +93,11 @@ def ground_seg(point_cloud, res=1./3., s=0.09):
 	for i in range(1,int(math.ceil(max_index/res))+1):
 
 		# generate indices at the ith inner circle level
-		circle_curr = generate_circle(i, center_x, center_y)
+		if i in circle_cache:
+			circle_curr = circle_cache[i]
+		else:
+			circle_curr = generate_circle(i, center_x, center_y)
+			circle_cache[i] = circle_curr
 
 		for indices in circle_curr:
 			x = indices[0]
@@ -137,8 +144,11 @@ def ground_seg(point_cloud, res=1./3., s=0.09):
 	point_cloud_seg = np.vstack(point_cloud_seg_list) if point_cloud_seg_list else np.empty((0, 3))
 
 	# Save the cache
-	if not is_cache:
-		save_cache(neighbors_cache)
+	if not is_cache_neighbors:
+		save_cache(neighbors_cache, CACHE_NEIGHBORS)
+		print("Cache saved")
+	if not is_cache_circle:
+		save_cache(circle_cache, CACHE_CIRCLE)
 		print("Cache saved")
 	
 	return point_cloud_ground, point_cloud_seg
