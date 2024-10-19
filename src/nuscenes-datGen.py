@@ -59,6 +59,9 @@ def process_scene(scene, nusc, conf):
         z_t_3D.rotate(Quaternion(rotation).rotation_matrix)
         z_t_3D.translate(np.array(translation))
 
+        # Remove points in box                                  # PLACING THIS HERE IS A HACK
+        z_t_3D.removePointsInBox(conf.box)
+
         # Transform from ego vehicle to global (Only the rotation)
         ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
         z_t_3D.rotate(Quaternion(ego_pose['rotation']).rotation_matrix)

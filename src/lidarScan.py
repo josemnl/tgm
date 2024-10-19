@@ -150,6 +150,14 @@ class lidarScan3D:
         self.points3D = self.points3D[mask]
         if self.labels is not None:
             self.labels = self.labels[mask]
+
+    def removePointsInBox(self, box):
+        x_min = box[0]
+        y_min = box[1]
+        mask = (np.abs(self.points3D[:, 0]) > x_min) | (np.abs(self.points3D[:, 1]) > y_min)
+        self.points3D = self.points3D[mask]
+        if self.labels is not None:
+            self.labels = self.labels[mask]
     
     def splitByHeight(self, height):
         if self.labels is not None:

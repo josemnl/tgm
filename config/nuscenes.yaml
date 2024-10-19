@@ -39,13 +39,14 @@ staticPrior : 0.3                       # If 0, it assumes that all the elements
 dynamicPrior : 0.3                      # If 0, it behaves like a regular grid map
 weatherPrior : 0                        # If 0, it assumes no weather noise
 maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
-saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
+saturationLimits : [0.01, 0.99, 0.01, 0.99]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
 
 # Filter parameters
 groundFilter : 'RMF'                    # Ground filter: 'RANSAC', 'Height', 'RMF'
 groundThreshold : 0.5                   # Threshold to consider a point as ground if groundFilter is 'Height'
 skyThreshold : 1                        # Threshold to consider a point as sky (Both for RANSAC and Height filters)
+box: [5.1, 1.5]                         # Box threshold to consider a point as inside the car
 ransacDistance : 0.55                   # Distance to consider a point in the RANSAC filter
 ransacIterations : 100                  # Number of iterations in the RANSAC filter
 minDistance : 3                         # Minimum distance to consider a point

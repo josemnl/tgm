@@ -76,6 +76,9 @@ def run():
         z_t_3D.rotate(Quaternion(rotation).rotation_matrix)
         z_t_3D.translate(np.array(translation))
 
+        # Remove points in box                                  # PLACING THIS HERE IS A HACK
+        z_t_3D.removePointsInBox(conf.box)
+
         # Transform from ego vehicle to global (Only the rotation)
         ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
         #pc.rotate(Quaternion(ego_pose['rotation']).rotation_matrix)
@@ -126,6 +129,8 @@ def run():
 
             # Order by angle
             z_t.orderByAngle()
+
+        z_t_ground.plot()
         
         timeData = time.time()
 
