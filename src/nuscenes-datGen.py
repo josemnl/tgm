@@ -10,8 +10,7 @@ from gridMap import gridMap
 from SLAM import lsqnl_matching
 from metrics import computeMetrics, IoU
 
-# NuScenes stuff
-from nuscenes.nuscenes import NuScenes
+# Rotations
 from scipy.spatial.transform import Rotation
 from pyquaternion import Quaternion
 
@@ -21,58 +20,8 @@ import concurrent.futures
 # Import json
 import json
 
-# Cache scene data
-def cache_scene_data(scene, nusc):
-    # Get the first sample_data of the lidar sensor
-    sample_token = scene['first_sample_token']
-    sample = nusc.get('sample', sample_token)
-    sample_data_token = sample['data']['LIDAR_TOP']
-
-    scene_name = scene['name']
-
-    lidar_paths = []
-    sensor_rotations = []
-    sensor_translations = []
-    ego_poses = []
-
-    while sample_data_token != '':
-        # Get sample data
-        sample_data = nusc.get('sample_data', sample_data_token)
-
-        # Find lidar path
-        lidar_path = nusc.get('sample_data', sample_data_token)['filename']
-        lidar_paths.append(lidar_path)
-
-        # Get sensor translation and rotation
-        calibrated_sensor = nusc.get('calibrated_sensor', sample_data['calibrated_sensor_token'])
-        sensor_translation = calibrated_sensor['translation']
-        sensor_translations.append(sensor_translation)
-        sensor_rotation = calibrated_sensor['rotation']
-        sensor_rotations.append(sensor_rotation)
-
-        # Get ego pose
-        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
-        ego_poses.append(ego_pose)
-
-        # Update nuScemes' sample data token
-        sample_data_token = sample_data['next']
-
-        # Check if the folder exists
-        if not os.path.exists('./Dataset'):
-            os.makedirs('./Dataset')
-
-        # Check if the scene folder exists
-        if not os.path.exists('./Dataset/' + scene_name):
-            os.makedirs('./Dataset/' + scene_name)
-
-        # Save scene_name, lidar_paths, sensor_rotations, sensor_translations, ego_poses as one json file
-        with open('./Dataset/' + scene_name + '/scene_data.json', 'w') as f:
-            json.dump({'scene_name': scene_name, 'lidar_paths': lidar_paths, 'sensor_rotations': sensor_rotations, 'sensor_translations': sensor_translations, 'ego_poses': ego_poses}, f)
-
-
 # For each scene
-def process_scene(scene, conf):
-    scene_name = scene['name']
+def process_scene(scene_name, conf):
 
     # Load scene data
     with open('./Dataset/' + scene_name + '/scene_data.json', 'r') as f:
@@ -208,8 +157,9 @@ def process_scene(scene, conf):
 
 # Main execution block
 if __name__ == "__main__":
-    # Load NuScenes class
-    nusc = NuScenes(version='v1.0-trainval', dataroot='./nuscenes', verbose=True)
+    # Load scene names
+    with open('./Dataset/scene_names.json', 'r') as f:
+        scene_names = json.load(f)
 
     # Check if the folder exists
     if not os.path.exists('./Dataset'):
@@ -225,16 +175,10 @@ if __name__ == "__main__":
     specificConf = loadConfigAsDict(configPath, logID)
     conf.__dict__.update(specificConf.__dict__)
 
-    # Preprocess scenes
-    for scene in nusc.scene:
-        scene_name = scene['name']
-        if not os.path.exists('./Dataset/' + scene_name + '/scene_data.json'):
-            cache_scene_data(scene, nusc)
-
     # Use ProcessPoolExecutor to parallelize scene processing
     max_workers = 7
     start_time = time.time()
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_scene, scene, conf) for scene in nusc.scene]
+        futures = [executor.submit(process_scene, scene_name, conf) for scene_name in scene_names]
         concurrent.futures.wait(futures)
     print('Total time: ', time.time() - start_time)
