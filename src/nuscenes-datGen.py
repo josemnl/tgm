@@ -18,18 +18,74 @@ from pyquaternion import Quaternion
 # Parallel processing
 import concurrent.futures
 
-# For each scene
-def process_scene(scene, nusc, conf):
-    print('Processing scene: ' + scene['name'])
+# Import json
+import json
+
+# Cache scene data
+def cache_scene_data(scene, nusc):
     # Get the first sample_data of the lidar sensor
     sample_token = scene['first_sample_token']
     sample = nusc.get('sample', sample_token)
     sample_data_token = sample['data']['LIDAR_TOP']
 
-    print('Scene: ' + scene['name'])
+    scene_name = scene['name']
+
+    lidar_paths = []
+    sensor_rotations = []
+    sensor_translations = []
+    ego_poses = []
+
+    while sample_data_token != '':
+        # Get sample data
+        sample_data = nusc.get('sample_data', sample_data_token)
+
+        # Find lidar path
+        lidar_path = nusc.get('sample_data', sample_data_token)['filename']
+        lidar_paths.append(lidar_path)
+
+        # Get sensor translation and rotation
+        calibrated_sensor = nusc.get('calibrated_sensor', sample_data['calibrated_sensor_token'])
+        sensor_translation = calibrated_sensor['translation']
+        sensor_translations.append(sensor_translation)
+        sensor_rotation = calibrated_sensor['rotation']
+        sensor_rotations.append(sensor_rotation)
+
+        # Get ego pose
+        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
+        ego_poses.append(ego_pose)
+
+        # Update nuScemes' sample data token
+        sample_data_token = sample_data['next']
+
+        # Check if the folder exists
+        if not os.path.exists('./Dataset'):
+            os.makedirs('./Dataset')
+
+        # Check if the scene folder exists
+        if not os.path.exists('./Dataset/' + scene_name):
+            os.makedirs('./Dataset/' + scene_name)
+
+        # Save scene_name, lidar_paths, sensor_rotations, sensor_translations, ego_poses as one json file
+        with open('./Dataset/' + scene_name + '/scene_data.json', 'w') as f:
+            json.dump({'scene_name': scene_name, 'lidar_paths': lidar_paths, 'sensor_rotations': sensor_rotations, 'sensor_translations': sensor_translations, 'ego_poses': ego_poses}, f)
+
+
+# For each scene
+def process_scene(scene, conf):
+    scene_name = scene['name']
+
+    # Load scene data
+    with open('./Dataset/' + scene_name + '/scene_data.json', 'r') as f:
+        scene_data = json.load(f)
+        lidar_paths = scene_data['lidar_paths']
+        sensor_rotations = scene_data['sensor_rotations']
+        sensor_translations = scene_data['sensor_translations']
+        ego_poses = scene_data['ego_poses']
+
+    print('Processing scene: ' + scene_name)
 
     # Scene path
-    scenePath = './Dataset/' + scene['name'] + '/'
+    scenePath = './Dataset/' + scene_name + '/'
 
     # Create folder if it does not exist
     if not os.path.exists(scenePath):
@@ -43,27 +99,21 @@ def process_scene(scene, nusc, conf):
     # Main loop
     #fig= plt.figure()
     i = 0
-    while sample_data_token != '':
+    for lidar_path, sensor_rotation, sensor_translation, ego_pose in zip(lidar_paths, sensor_rotations, sensor_translations, ego_poses):
         i += 1
         timeStart = time.time()
 
         # Import sensor data
-        sample_data = nusc.get('sample_data', sample_data_token)
-        lidar_path = nusc.get('sample_data', sample_data_token)['filename']
         z_t_3D = readLidarNuScenes('./nuscenes/' + lidar_path)
 
         # Transform from sensor to ego vehicle
-        calibrated_sensor = nusc.get('calibrated_sensor', sample_data['calibrated_sensor_token'])
-        translation = calibrated_sensor['translation']
-        rotation = calibrated_sensor['rotation']
-        z_t_3D.rotate(Quaternion(rotation).rotation_matrix)
-        z_t_3D.translate(np.array(translation))
+        z_t_3D.rotate(Quaternion(sensor_rotation).rotation_matrix)
+        z_t_3D.translate(np.array(sensor_translation))
 
         # Remove points in box                                  # PLACING THIS HERE IS A HACK
         z_t_3D.removePointsInBox(conf.box)
 
         # Transform from ego vehicle to global (Only the rotation)
-        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
         z_t_3D.rotate(Quaternion(ego_pose['rotation']).rotation_matrix)
 
         # Filter the point cloud
@@ -101,8 +151,7 @@ def process_scene(scene, nusc, conf):
         
         timeData = time.time()
 
-        # Get pose from log
-        ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
+        # Correct pose
         angle = -Rotation.from_quat(ego_pose['rotation']).as_euler('zyx')[2] + np.pi
         x_t = np.array([ego_pose['translation'][0], ego_pose['translation'][1], angle])
 
@@ -157,13 +206,10 @@ def process_scene(scene, nusc, conf):
         print('Total:   ' + str(time.time() - timeStart))
         print('')
 
-        # Update nuScemes' sample data token
-        sample_data_token = sample_data['next']
-
 # Main execution block
 if __name__ == "__main__":
     # Load NuScenes class
-    nusc = NuScenes(version='v1.0-mini', dataroot='./nuscenes', verbose=True)
+    nusc = NuScenes(version='v1.0-trainval', dataroot='./nuscenes', verbose=True)
 
     # Check if the folder exists
     if not os.path.exists('./Dataset'):
@@ -179,10 +225,16 @@ if __name__ == "__main__":
     specificConf = loadConfigAsDict(configPath, logID)
     conf.__dict__.update(specificConf.__dict__)
 
-    # Use ThreadPoolExecutor to parallelize scene processing
-    max_workers = 8
+    # Preprocess scenes
+    for scene in nusc.scene:
+        scene_name = scene['name']
+        if not os.path.exists('./Dataset/' + scene_name + '/scene_data.json'):
+            cache_scene_data(scene, nusc)
+
+    # Use ProcessPoolExecutor to parallelize scene processing
+    max_workers = 7
     start_time = time.time()
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = [executor.submit(process_scene, scene, nusc, conf) for scene in nusc.scene]
+        futures = [executor.submit(process_scene, scene, conf) for scene in nusc.scene]
         concurrent.futures.wait(futures)
     print('Total time: ', time.time() - start_time)
