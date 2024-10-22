@@ -47,6 +47,7 @@ def process_scene(scene_name, conf):
 
     # Main loop
     #fig= plt.figure()
+    print('Hello')
     i = 0
     for lidar_path, sensor_rotation, sensor_translation, ego_pose in zip(lidar_paths, sensor_rotations, sensor_translations, ego_poses):
         i += 1
@@ -176,7 +177,7 @@ if __name__ == "__main__":
     conf.__dict__.update(specificConf.__dict__)
 
     # Use ProcessPoolExecutor to parallelize scene processing
-    max_workers = 7
+    max_workers = 4
     start_time = time.time()
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_scene, scene_name, conf) for scene_name in scene_names]
