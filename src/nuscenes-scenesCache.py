@@ -63,13 +63,13 @@ if __name__ == '__main__':
     # Get all the scene names
     scene_names = [scene['name'] for scene in nusc.scene]
 
-    # Save the scene names as a json file
-    with open('./Dataset/scene_names.json', 'w') as f:
-        json.dump(scene_names, f)
-
     # Check if the folder exists
     if not os.path.exists('./Dataset'):
         os.makedirs('./Dataset')
+
+    # Save the scene names as a json file
+    with open('./Dataset/scene_names.json', 'w') as f:
+        json.dump(scene_names, f)
 
     # Timer
     start = time.time()
