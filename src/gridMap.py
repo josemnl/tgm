@@ -34,7 +34,8 @@ class gridMap:
 
     def crop(self, origin_x, origin_y, width, height):
         """
-        Crop the grid map
+        Crop the grid map to a new grid map with the specified origin and size.
+        Throws an error if the new grid is outside the old one.
         """
         assert isinstance(origin_x, int)
         assert isinstance(origin_y, int)
@@ -50,6 +51,28 @@ class gridMap:
         y1 = y0 + height
         return gridMap(origin_x, origin_y, width, height, self.resolution, self.data[x0:x1, y0:y1])
     
+    def reshape(self, origin_x, origin_y, width, height, fill_value):
+        """
+        Reshape the grid map.
+        If the new grid is partially outside the old one, the new cells are initialized with the fill value.
+        """
+        assert isinstance(origin_x, int)
+        assert isinstance(origin_y, int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        overlap_origin_x, overlap_origin_y, overlap_width, overlap_height = self.computeOverlap(origin_x, origin_y, width, height)
+        new_data = np.full((width, height), fill_value)
+        ix_0 = overlap_origin_x - origin_x
+        iy_0 = overlap_origin_y - origin_y
+        ix_1 = ix_0 + overlap_width
+        iy_1 = iy_0 + overlap_height
+        nx_0 = overlap_origin_x - self.origin_x
+        ny_0 = overlap_origin_y - self.origin_y
+        nx_1 = nx_0 + overlap_width
+        ny_1 = ny_0 + overlap_height
+
+        new_data[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
+
     def occupancy(self, x, y):
         """
         Get the occupancy of the cell where the point (x, y) is
@@ -72,6 +95,31 @@ class gridMap:
         with open(filename, 'wb') as f:
             pickle.dump(self, f)
         self.data = original_data
+
+    def computeOverlap(self, other_origin_x, other_origin_y, other_width, other_height):
+        """
+        Compute the overlap between this grid and another grid.
+        
+        Parameters:
+        other_origin_x (int): Origin x of the other grid.
+        other_origin_y (int): Origin y of the other grid.
+        other_width (int): Width of the other grid.
+        other_height (int): Height of the other grid.
+        
+        Returns:
+        overlap_origin_x, overlap_origin_y, overlap_width, overlap_height
+        """
+        assert isinstance(other_origin_x, int)
+        assert isinstance(other_origin_y, int)
+        assert isinstance(other_width, int)
+        assert isinstance(other_height, int)
+        
+        overlap_origin_x = max(self.origin_x, other_origin_x)
+        overlap_origin_y = max(self.origin_y, other_origin_y)
+        overlap_width = min(self.origin_x + self.width, other_origin_x + other_width) - overlap_origin_x
+        overlap_height = min(self.origin_y + self.height, other_origin_y + other_height) - overlap_origin_y
+        
+        return overlap_origin_x, overlap_origin_y, overlap_width, overlap_height
 
     @classmethod
     def loadState(cls, filename):
