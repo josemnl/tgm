@@ -176,6 +176,15 @@ if __name__ == "__main__":
     specificConf = loadConfigAsDict(configPath, logID)
     conf.__dict__.update(specificConf.__dict__)
 
+    # Find which scenes have already been processed
+    processed_scenes = []
+    for scene_name in scene_names:
+        if os.path.exists('./Dataset/' + scene_name + '/frame_1_instant.grid'):
+            processed_scenes.append(scene_name)
+    
+    # Remove already processed scenes
+    scene_names = list(set(scene_names) - set(processed_scenes))
+
     # Use ProcessPoolExecutor to parallelize scene processing
     max_workers = 4
     start_time = time.time()
