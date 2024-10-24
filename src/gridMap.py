@@ -123,10 +123,10 @@ class gridMap:
         return overlap_origin_x, overlap_origin_y, overlap_width, overlap_height
 
     @classmethod
-    def loadState(cls, filename):
+    def loadState(cls, filename, data_type = np.float64):
         with open(filename, 'rb') as file:
             obj = pickle.load(file)
-            obj.data = obj.data.astype(np.float64)
+            obj.data = obj.data.astype(data_type)
             return obj
 
 def main():
