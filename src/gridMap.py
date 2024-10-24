@@ -72,6 +72,7 @@ class gridMap:
         ny_1 = ny_0 + overlap_height
 
         new_data[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
+        return gridMap(origin_x, origin_y, width, height, self.resolution, new_data)
 
     def occupancy(self, x, y):
         """
