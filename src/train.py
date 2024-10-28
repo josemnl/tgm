@@ -1,8 +1,10 @@
 import torch
 from torch.utils.data import DataLoader
 from dataset import NuScenesDataset
-from models import Model
+from models import Model, FlatCNN
 import matplotlib.pyplot as plt
+import time
+import wandb
 
 def masked_cross_entropy(logits, target, mask):
     """
@@ -43,6 +45,15 @@ def train():
     batchSize = 10
     lr = 1e-3
     epochs = 10
+    modelType = 'FlatCNN'
+
+    # Initialize wandb
+    wandb.init(project="TGM", name=modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
+               config={
+        "batchSize": batchSize,
+        "lr": lr,
+        "epochs": epochs
+    })
 
     # Load dataset
     dataset = NuScenesDataset()
@@ -58,7 +69,10 @@ def train():
     )
 
     # Load model
-    model = Model().to(device)
+    if modelType == 'Model':
+        model = Model().to(device)
+    elif modelType == 'FlatCNN':
+        model = FlatCNN().to(device)
 
     # Load optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -66,6 +80,9 @@ def train():
     # Load loss function
     #loss_function = torch.nn.CrossEntropyLoss()
     loss_function = masked_cross_entropy
+
+    time_prev = time.time()
+    time_start = time_prev
 
     # Train
     for epoch in range(epochs):
@@ -104,7 +121,17 @@ def train():
             optimizer.step()
 
             # Print loss
-            print(f"Epoch {epoch}, Batch {i_batch}, Loss: {loss.item()}")
+            print(f"Epoch {epoch}, Batch {i_batch}/{len(dataloader)}, Loss: {loss.item()}")
+
+            # Log loss
+            wandb.log({"loss": loss.item()})
+
+            # Print time
+            print(f"Time: {time.time() - time_prev}")
+            print("Time per batch: ", (time.time() - time_prev) / batchSize)
+            print("Average time per sample: ", (time.time() - time_start) / ((i_batch + 1) * batchSize))
+            print('')
+            time_prev = time.time()
 
 if __name__ == "__main__":
     train()
