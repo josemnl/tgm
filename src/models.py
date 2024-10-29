@@ -62,9 +62,6 @@ class FlatCNN(nn.Module):
         )
 
     def forward(self, input_static, input_dynamic):
-        # Concatenate the input static and dynamic maps along the channel dimension
-        x = torch.cat((input_static, input_dynamic), dim=1)
-
         # Pass the input through the network
         x = self.nn(x)
 

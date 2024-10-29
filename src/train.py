@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from dataset import NuScenesDataset
 from models import Model, FlatCNN
+from unet_model import UNet
 import matplotlib.pyplot as plt
 import time
 import wandb
@@ -45,7 +46,7 @@ def train():
     batchSize = 10
     lr = 1e-3
     epochs = 10
-    modelType = 'FlatCNN'
+    modelType = 'UNet'
 
     # Initialize wandb
     wandb.init(project="TGM", name=modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
@@ -73,6 +74,8 @@ def train():
         model = Model().to(device)
     elif modelType == 'FlatCNN':
         model = FlatCNN().to(device)
+    elif modelType == 'UNet':
+        model = UNet(2,3).to(device)
 
     # Load optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -101,8 +104,17 @@ def train():
             sample_batched['output_dynamic'] = sample_batched['output_dynamic'].unsqueeze(1)
             sample_batched['output_instant'] = sample_batched['output_instant'].unsqueeze(1)
 
+            # # Concatenate the input static and dynamic maps along the channel dimension
+            input = torch.cat((sample_batched['input_static'], sample_batched['input_dynamic']), dim=1)
+
             # Forward pass
-            output = model(sample_batched['input_static'], sample_batched['input_dynamic'])
+            output = model(input)
+
+            # Apply softmax
+            output = torch.nn.functional.softmax(output, dim=1)
+
+            # Discard the free map
+            output = output[:, 0:2, :, :]
 
             # Concatenate the output static and dynamic maps along the channel dimension
             target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic']), dim=1)
