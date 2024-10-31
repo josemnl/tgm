@@ -61,10 +61,8 @@ class FlatCNN(nn.Module):
             nn.Softmax(dim=1)
         )
 
-    def forward(self, input_static, input_dynamic):
+    def forward(self, x):
         # Pass the input through the network
-        x = self.nn(x)
-
-        # Split the output into the static, dynamic and free maps
-        output = x[:, 0:2, :, :]
+        output = self.nn(x)
+        
         return output

@@ -7,23 +7,6 @@ import matplotlib.pyplot as plt
 import time
 import wandb
 
-def masked_cross_entropy(logits, target, mask):
-    """
-    Calculates the cross-entropy loss with masking.
-
-    Args:
-        logits (torch.Tensor): Predicted logits (unnormalized probabilities) of shape (batch_size, num_classes).
-        target (torch.Tensor): Ground truth labels of shape (batch_size).
-        mask (torch.Tensor): Mask indicating valid positions, of shape (batch_size).
-
-    Returns:
-        torch.Tensor: The masked cross-entropy loss.
-    """
-
-    loss = torch.nn.CrossEntropyLoss(reduction='none')(logits, target)
-    loss = loss * mask
-    return loss.sum() / mask.sum()
-
 def compute_mask(output_instant):
     """
     Computes the mask based on output_instant.
@@ -41,10 +24,40 @@ def compute_mask(output_instant):
     #plt.show()
     return mask
 
+def KLDivLoss(logits, target):
+    # Compute log-softmax of logits for numerical stability
+    log_probs = torch.nn.functional.log_softmax(logits, dim=1)
+
+    # Convert target to probabilities
+    target_probs = torch.nn.functional.softmax(target, dim=1)
+
+    # Compute KL divergence loss
+    loss = torch.nn.functional.kl_div(log_probs, target_probs, reduction='batchmean')
+
+    return loss
+
+def masked_KLDivLoss(logits, target, mask):
+    # Compute log-softmax of logits for numerical stability
+    log_probs = torch.nn.functional.log_softmax(logits, dim=1)
+
+    # Convert target to probabilities
+    target_probs = torch.nn.functional.softmax(target, dim=1)
+
+    # Compute KL divergence loss
+    loss = torch.nn.functional.kl_div(log_probs, target_probs, reduction='none')
+
+    # Apply mask
+    loss = loss * mask
+
+    # Compute mean over batch and spatial dimensions
+    loss = loss.mean()
+
+    return loss
+
 def train():
     # Config
     batchSize = 10
-    lr = 1e-3
+    lr = 1e-5
     epochs = 10
     modelType = 'UNet'
 
@@ -81,8 +94,7 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # Load loss function
-    #loss_function = torch.nn.CrossEntropyLoss()
-    loss_function = masked_cross_entropy
+    loss_function = masked_KLDivLoss
 
     time_prev = time.time()
     time_start = time_prev
@@ -110,26 +122,22 @@ def train():
             # Forward pass
             output = model(input)
 
-            # Apply softmax
-            output = torch.nn.functional.softmax(output, dim=1)
+            # Compute the output free map as 1 - output_static - output_dynamic
+            target_free = 1 - sample_batched['output_static'] - sample_batched['output_dynamic']
 
-            # Discard the free map
-            output = output[:, 0:2, :, :]
+            # Concatenate the output static, dynamic and free maps along the channel dimension
+            target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic'], target_free), dim=1)
+            
+            # Convert target to class labels  -  NEED TO BE REMOVED
+            #target = target.argmax(dim=1)
 
-            # Concatenate the output static and dynamic maps along the channel dimension
-            target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic']), dim=1)
-
-            # Compute loss
             mask = compute_mask(sample_batched['output_instant'])
             loss = loss_function(output, target, mask)
-
-            # Zero gradients
-            optimizer.zero_grad()
+            #loss = loss_function(output, target)
 
             # Backward pass
+            optimizer.zero_grad()
             loss.backward()
-            
-            # Update weights
             optimizer.step()
 
             # Print loss
