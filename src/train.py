@@ -54,12 +54,42 @@ def masked_KLDivLoss(logits, target, mask):
 
     return loss
 
+def loadAndArrangeSample(sample_batched, device):
+    # Move data to device
+    sample_batched['input_static'] = sample_batched['input_static'].to(device)
+    sample_batched['input_dynamic'] = sample_batched['input_dynamic'].to(device)
+    sample_batched['output_static'] = sample_batched['output_static'].to(device)
+    sample_batched['output_dynamic'] = sample_batched['output_dynamic'].to(device)
+    sample_batched['output_instant'] = sample_batched['output_instant'].to(device)
+
+    # Unsqueeze data to add the channel dimension
+    sample_batched['input_static'] = sample_batched['input_static'].unsqueeze(1)
+    sample_batched['input_dynamic'] = sample_batched['input_dynamic'].unsqueeze(1)
+    sample_batched['output_static'] = sample_batched['output_static'].unsqueeze(1)
+    sample_batched['output_dynamic'] = sample_batched['output_dynamic'].unsqueeze(1)
+    sample_batched['output_instant'] = sample_batched['output_instant'].unsqueeze(1)
+
+    # # Concatenate the input static and dynamic maps along the channel dimension
+    input = torch.cat((sample_batched['input_static'], sample_batched['input_dynamic']), dim=1)
+
+    # Compute the output free map as 1 - output_static - output_dynamic
+    target_free = 1 - sample_batched['output_static'] - sample_batched['output_dynamic']
+
+    # Concatenate the output static, dynamic and free maps along the channel dimension
+    target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic'], target_free), dim=1)
+
+    mask = compute_mask(sample_batched['output_instant'])
+
+    return input, target, mask
+
 def train():
     # Config
     batchSize = 10
     lr = 1e-5
     epochs = 10
     modelType = 'UNet'
+    val_periods = 100
+    val_batches = 10
 
     # Initialize wandb
     wandb.init(project="TGM", name=modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
@@ -69,9 +99,11 @@ def train():
         "epochs": epochs
     })
 
-    # Load dataset
-    dataset = NuScenesDataset()
-    dataloader = DataLoader(dataset, batch_size=batchSize, shuffle=True)
+    # Load train and validation datasets
+    train_dataset = NuScenesDataset(mode='train')
+    val_dataset = NuScenesDataset(mode='val')
+    train_dataloader = DataLoader(train_dataset, batch_size=batchSize, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=batchSize, shuffle=True)
 
     # Device
     device = (
@@ -101,39 +133,15 @@ def train():
 
     # Train
     for epoch in range(epochs):
-        for i_batch, sample_batched in enumerate(dataloader):
-            # Move data to device
-            sample_batched['input_static'] = sample_batched['input_static'].to(device)
-            sample_batched['input_dynamic'] = sample_batched['input_dynamic'].to(device)
-            sample_batched['output_static'] = sample_batched['output_static'].to(device)
-            sample_batched['output_dynamic'] = sample_batched['output_dynamic'].to(device)
-            sample_batched['output_instant'] = sample_batched['output_instant'].to(device)
-
-            # Unsqueeze data to add the channel dimension
-            sample_batched['input_static'] = sample_batched['input_static'].unsqueeze(1)
-            sample_batched['input_dynamic'] = sample_batched['input_dynamic'].unsqueeze(1)
-            sample_batched['output_static'] = sample_batched['output_static'].unsqueeze(1)
-            sample_batched['output_dynamic'] = sample_batched['output_dynamic'].unsqueeze(1)
-            sample_batched['output_instant'] = sample_batched['output_instant'].unsqueeze(1)
-
-            # # Concatenate the input static and dynamic maps along the channel dimension
-            input = torch.cat((sample_batched['input_static'], sample_batched['input_dynamic']), dim=1)
+        for i_batch, sample_batched in enumerate(train_dataloader):
+            # Load and arrange sample
+            input, target, mask = loadAndArrangeSample(sample_batched, device)
 
             # Forward pass
             output = model(input)
 
-            # Compute the output free map as 1 - output_static - output_dynamic
-            target_free = 1 - sample_batched['output_static'] - sample_batched['output_dynamic']
-
-            # Concatenate the output static, dynamic and free maps along the channel dimension
-            target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic'], target_free), dim=1)
-            
-            # Convert target to class labels  -  NEED TO BE REMOVED
-            #target = target.argmax(dim=1)
-
-            mask = compute_mask(sample_batched['output_instant'])
+            # Compute loss
             loss = loss_function(output, target, mask)
-            #loss = loss_function(output, target)
 
             # Backward pass
             optimizer.zero_grad()
@@ -141,7 +149,7 @@ def train():
             optimizer.step()
 
             # Print loss
-            print(f"Epoch {epoch}, Batch {i_batch}/{len(dataloader)}, Loss: {loss.item()}")
+            print(f"Epoch {epoch}, Batch {i_batch}/{len(train_dataloader)}, Loss: {loss.item()}")
 
             # Log loss
             wandb.log({"loss": loss.item()})
@@ -149,9 +157,46 @@ def train():
             # Print time
             print(f"Time: {time.time() - time_prev}")
             print("Time per batch: ", (time.time() - time_prev) / batchSize)
-            print("Average time per sample: ", (time.time() - time_start) / ((i_batch + 1) * batchSize))
+            print("Average time per sample: ", (time.time() - time_start) / ((i_batch + 1) * batchSize)) # I NEED TO FIX THIS
             print('')
             time_prev = time.time()
+
+            # Validation
+            if i_batch % val_periods == 0:
+                model.eval()
+                with torch.no_grad():
+                    val_loss_sum = 0
+                    for i_batch_val, sample_batched_val in enumerate(val_dataloader):
+                        if i_batch_val >= val_batches:
+                            break
+                        # Load and arrange sample
+                        input_val, target_val, mask_val = loadAndArrangeSample(sample_batched_val, device)
+
+                        # Forward pass
+                        output_val = model(input_val)
+
+                        # Compute loss
+                        loss_val = loss_function(output_val, target_val, mask_val)
+
+                        # Accumulate loss
+                        val_loss_sum += loss_val.item()
+
+                    # Compute average validation loss
+                    avg_val_loss = val_loss_sum / val_batches
+
+                    # Print average validation loss
+                    print(f"Validation, Average Loss: {avg_val_loss}")
+
+                    # Log average validation loss
+                    wandb.log({"val_loss": avg_val_loss})
+
+                model.train()
+
+    # Save model
+    torch.save(model.state_dict(), modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S") + ".pt")
+
+    # Close wandb
+    wandb.finish()
 
 if __name__ == "__main__":
     train()
