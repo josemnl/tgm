@@ -4,15 +4,24 @@ import torch
 from torch.utils.data import Dataset
 from gridMap import gridMap
 import numpy as np
-
+from splits import train, val, test
 
 class NuScenesDataset(Dataset):
-    def __init__(self, root_dir = './Dataset', transform=None):
+    def __init__(self, root_dir = './Dataset', mode = 'train', transform=None):
+        assert mode in ['train', 'val', 'test']
         self.root_dir = root_dir
         self.transform = transform
 
         # List all the folders in the root directory (each folder is a scene)
-        self.scenes = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
+        #self.scenes = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
+
+        # Load the scenes based on the mode
+        if mode == 'train':
+            self.scenes = train
+        elif mode == 'val':
+            self.scenes = val
+        elif mode == 'test':
+            self.scenes = test
 
         # For each of the folders, list all the files that start with 'frame_'
         self.in_static_grids = []
@@ -80,7 +89,10 @@ class NuScenesDataset(Dataset):
         return sample
     
 if __name__ == "__main__":
-    dataset = NuScenesDataset()
+    dataset = NuScenesDataset(mode='val')
+
+    # Print the number of samples
+    print(len(dataset))
 
     # Load the first sample
     sample = dataset[0]
