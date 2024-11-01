@@ -6,6 +6,8 @@ from unet_model import UNet
 import matplotlib.pyplot as plt
 import time
 import wandb
+import yaml
+from types import SimpleNamespace
 
 def compute_mask(output_instant):
     """
@@ -101,29 +103,29 @@ def plot(input, target, output):
 
     return fig
 
+def loadConfig(filename):
+    with open(filename) as file:
+        config = yaml.safe_load(file)
+    config = SimpleNamespace(**config)
+    return config
+
 def train():
     # Config
-    batchSize = 10
-    lr = 1e-5
-    epochs = 10
-    modelType = 'UNet'
-    val_periods = 100
-    val_batches = 10
-    isAugment = True
+    conf = loadConfig('./trainConfig/train.yaml')
 
     # Initialize wandb
-    wandb.init(project="TGM", name=modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
+    wandb.init(project="TGM", name=conf.modelType + "_batchSize_" + str(conf.batchSize) + "_lr_" + str(conf.lr) + "_epochs_" + str(conf.epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
                config={
-        "batchSize": batchSize,
-        "lr": lr,
-        "epochs": epochs
+        "batchSize": conf.batchSize,
+        "lr": conf.lr,
+        "epochs": conf.epochs
     })
 
     # Load train and validation datasets
-    train_dataset = NuScenesDataset(mode='train', isAugment=isAugment)
+    train_dataset = NuScenesDataset(mode='train', isAugment=conf.isAugment)
     val_dataset = NuScenesDataset(mode='val', isAugment=False)
-    train_dataloader = DataLoader(train_dataset, batch_size=batchSize, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=batchSize, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=conf.batchSize, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=conf.batchSize, shuffle=True)
 
     # Device
     device = (
@@ -135,15 +137,15 @@ def train():
     )
 
     # Load model
-    if modelType == 'Model':
+    if conf.modelType == 'Model':
         model = Model().to(device)
-    elif modelType == 'FlatCNN':
+    elif conf.modelType == 'FlatCNN':
         model = FlatCNN().to(device)
-    elif modelType == 'UNet':
+    elif conf.modelType == 'UNet':
         model = UNet(2,3).to(device)
 
     # Load optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=conf.lr)
 
     # Load loss function
     loss_function = masked_KLDivLoss
@@ -152,7 +154,7 @@ def train():
     time_start = time_prev
 
     # Train
-    for epoch in range(epochs):
+    for epoch in range(conf.epochs):
         for i_batch, sample_batched in enumerate(train_dataloader):
             # Load and arrange sample
             input, target, mask = loadAndArrangeSample(sample_batched, device)
@@ -179,12 +181,12 @@ def train():
             wandb.log({"loss": loss.item()})
 
             # Validation
-            if i_batch % val_periods == 0:
+            if i_batch % conf.val_periods == 0:
                 model.eval()
                 with torch.no_grad():
                     val_loss_sum = 0
                     for i_batch_val, sample_batched_val in enumerate(val_dataloader):
-                        if i_batch_val >= val_batches:
+                        if i_batch_val >= conf.val_batches:
                             break
                         # Load and arrange sample
                         input_val, target_val, mask_val = loadAndArrangeSample(sample_batched_val, device)
@@ -199,7 +201,7 @@ def train():
                         val_loss_sum += loss_val.item()
 
                     # Compute average validation loss
-                    avg_val_loss = val_loss_sum / val_batches
+                    avg_val_loss = val_loss_sum / conf.val_batches
 
                     # Print average validation loss
                     print(f"Validation, Average Loss: {avg_val_loss}")
@@ -213,7 +215,7 @@ def train():
                 model.train()
 
     # Save model
-    torch.save(model.state_dict(), modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S") + ".pt")
+    torch.save(model.state_dict(), conf.modelType + "_batchSize_" + str(conf.batchSize) + "_lr_" + str(conf.lr) + "_epochs_" + str(conf.epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S") + ".pt")
 
     # Close wandb
     wandb.finish()

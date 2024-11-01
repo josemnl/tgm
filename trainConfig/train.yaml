@@ -1,0 +1,7 @@
+batchSize :         10
+lr :                1.0e-5
+epochs :            10
+modelType :         'UNet'
+val_periods :       100
+val_batches :       10
+isAugment :         True
