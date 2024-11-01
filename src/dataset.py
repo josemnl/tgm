@@ -7,10 +7,10 @@ import numpy as np
 from splits import train, val, test
 
 class NuScenesDataset(Dataset):
-    def __init__(self, root_dir = './Dataset', mode = 'train', transform=None):
+    def __init__(self, root_dir = './Dataset', mode = 'train', isAugment = False):
         assert mode in ['train', 'val', 'test']
         self.root_dir = root_dir
-        self.transform = transform
+        self.isAugment = isAugment
 
         # List all the folders in the root directory (each folder is a scene)
         #self.scenes = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
@@ -83,10 +83,64 @@ class NuScenesDataset(Dataset):
         # Create the sample
         sample = {'input_static': in_static_grid, 'input_dynamic': in_dynamic_grid, 'output_static': out_static_grid, 'output_dynamic': out_dynamic_grid, 'output_instant': instant_grid}
 
-        if self.transform:
-            sample = self.transform(sample)
+        if self.isAugment:
+            sample = self.data_augmentation(sample)
 
         return sample
+
+    def horizontal_flip(self, sample):
+        for key in sample:
+            sample[key] = torch.flip(sample[key], [1])
+        return sample
+    
+    def vertical_flip(self, sample):
+        for key in sample:
+            sample[key] = torch.flip(sample[key], [0])
+        return sample
+
+    def diagonal_flip(self, sample):
+        for key in sample:
+            sample[key] = torch.transpose(sample[key], 0, 1)
+        return sample
+
+    def counter_diagonal_flip(self, sample):
+        for key in sample:
+            sample[key] = torch.flip(torch.transpose(sample[key], 0, 1), [0, 1])
+        return sample
+
+    def rotate_90(self, sample):
+        for key in sample:
+            sample[key] = torch.rot90(sample[key], 1, [0, 1])
+        return sample
+
+    def rotate_180(self, sample):
+        for key in sample:
+            sample[key] = torch.rot90(sample[key], 2, [0, 1])
+        return sample
+
+    def rotate_270(self, sample):
+        for key in sample:
+            sample[key] = torch.rot90(sample[key], 3, [0, 1])
+        return sample
+
+    def data_augmentation(self, sample):
+        aug = np.random.randint(8)
+        if aug == 0:
+            return self.horizontal_flip(sample)
+        elif aug == 1:
+            return self.vertical_flip(sample)
+        elif aug == 2:
+            return self.diagonal_flip(sample)
+        elif aug == 3:
+            return self.counter_diagonal_flip(sample)
+        elif aug == 4:
+            return self.rotate_90(sample)
+        elif aug == 5:
+            return self.rotate_180(sample)
+        elif aug == 6:
+            return self.rotate_270(sample)
+        else:
+            return sample
     
 if __name__ == "__main__":
     dataset = NuScenesDataset(mode='val')

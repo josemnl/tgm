@@ -14,14 +14,6 @@ def compute_mask(output_instant):
 
     # Valid cells are those with a value > 0.7 or < 0.4
     mask = (output_instant > 0.7) | (output_instant < 0.4)
-
-    # Plot output_instant
-    #plt.imshow(output_instant[0, 0, :, :].detach().cpu().numpy())
-    #plt.show()
-
-    # Plot the mask
-    #plt.imshow(mask[0, 0, :, :].detach().cpu().numpy())
-    #plt.show()
     return mask
 
 def KLDivLoss(logits, target):
@@ -90,6 +82,7 @@ def train():
     modelType = 'UNet'
     val_periods = 100
     val_batches = 10
+    isAugment = True
 
     # Initialize wandb
     wandb.init(project="TGM", name=modelType + "_batchSize_" + str(batchSize) + "_lr_" + str(lr) + "_epochs_" + str(epochs) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
@@ -100,8 +93,8 @@ def train():
     })
 
     # Load train and validation datasets
-    train_dataset = NuScenesDataset(mode='train')
-    val_dataset = NuScenesDataset(mode='val')
+    train_dataset = NuScenesDataset(mode='train', isAugment=isAugment)
+    val_dataset = NuScenesDataset(mode='val', isAugment=False)
     train_dataloader = DataLoader(train_dataset, batch_size=batchSize, shuffle=True)
     val_dataloader = DataLoader(val_dataset, batch_size=batchSize, shuffle=True)
 
@@ -148,18 +141,15 @@ def train():
             loss.backward()
             optimizer.step()
 
-            # Print loss
+            # Print loss and times
             print(f"Epoch {epoch}, Batch {i_batch}/{len(train_dataloader)}, Loss: {loss.item()}")
+            print(f"Time for this batch: {time.time() - time_prev}")
+            print("Average time per batch: ", (time.time() - time_start) / (epoch * len(train_dataloader) + i_batch + 1))
+            print('')
+            time_prev = time.time()
 
             # Log loss
             wandb.log({"loss": loss.item()})
-
-            # Print time
-            print(f"Time: {time.time() - time_prev}")
-            print("Time per batch: ", (time.time() - time_prev) / batchSize)
-            print("Average time per sample: ", (time.time() - time_start) / ((i_batch + 1) * batchSize)) # I NEED TO FIX THIS
-            print('')
-            time_prev = time.time()
 
             # Validation
             if i_batch % val_periods == 0:
