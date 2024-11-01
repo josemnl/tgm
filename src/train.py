@@ -74,6 +74,33 @@ def loadAndArrangeSample(sample_batched, device):
 
     return input, target, mask
 
+def plot(input, target, output):
+    # Transform output to probabilities
+    output_prob = torch.nn.functional.softmax(output, dim=1)
+    # Compute grayscale as 1 - transpose
+    input_image = 1 - torch.transpose(input, 2, 3)
+    target_image = 1 - torch.transpose(target, 2, 3)
+    output_image = 1 - torch.transpose(output_prob, 2, 3)
+    # Plot input, target and output for the static and dynamic maps
+    fig, axs = plt.subplots(2, 3)
+    axs[0, 0].imshow(input_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 0].set_title('Input Static')
+    axs[1, 0].imshow(input_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 0].set_title('Input Dynamic')
+    axs[0, 1].imshow(target_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 1].set_title('Target Static')
+    axs[1, 1].imshow(target_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 1].set_title('Target Dynamic')
+    axs[0, 2].imshow(output_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 2].set_title('Output Static')
+    axs[1, 2].imshow(output_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 2].set_title('Output Dynamic')
+    # Remove axis
+    for ax in axs.flatten():
+        ax.axis('off')
+
+    return fig
+
 def train():
     # Config
     batchSize = 10
@@ -177,8 +204,11 @@ def train():
                     # Print average validation loss
                     print(f"Validation, Average Loss: {avg_val_loss}")
 
-                    # Log average validation loss
-                    wandb.log({"val_loss": avg_val_loss})
+                    # Plot input, target and output
+                    fig = plot(input, target, output)
+
+                    # Log average validation loss and plot
+                    wandb.log({"val_loss": avg_val_loss, "plot": fig})
 
                 model.train()
 
