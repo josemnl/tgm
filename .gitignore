@@ -11,3 +11,4 @@ DemoDataset
 wandb
 circle_cache.pkl
 neighbors_cache.pkl
+trainRuns

@@ -8,6 +8,7 @@ import time
 import wandb
 import yaml
 from types import SimpleNamespace
+import os
 
 def compute_mask(output_instant):
     """
@@ -113,8 +114,18 @@ def train():
     # Config
     conf = loadConfig('./trainConfig/train.yaml')
 
+    name = conf['modelType'] + "_batchSize_" + str(conf['batchSize']) + "_lr_" + str(conf['lr']) + "_epochs_" + str(conf['epochs']) + "_date_" + time.strftime("%Y%m%d-%H%M%S")
+
+    # Create a folder to save the config and models
+    if not os.path.exists('./trainRuns/' + name):
+        os.makedirs('./trainRuns/' + name)
+
+    # Save config
+    with open('./trainRuns/' + name + '/config.yaml', 'w') as file:
+        yaml.dump(conf, file)
+
     # Initialize wandb
-    wandb.init(project="TGM", name=conf['modelType'] + "_batchSize_" + str(conf['batchSize']) + "_lr_" + str(conf['lr']) + "_epochs_" + str(conf['epochs']) + "_date_" + time.strftime("%Y%m%d-%H%M%S"),
+    wandb.init(project="TGM", name=name,
                config=conf)
 
     # Load train and validation datasets
@@ -209,9 +220,13 @@ def train():
                     wandb.log({"val_loss": avg_val_loss, "plot": fig})
 
                 model.train()
+            
+            # Save checkpoint
+            if i_batch % conf['savePeriods'] == 0:
+                torch.save(model.state_dict(), './trainRuns/' + name + '/checkpoint' + str(epoch) + '_' + str(i_batch) + '.pt')
 
     # Save model
-    torch.save(model.state_dict(), conf['modelType'] + "_batchSize_" + str(conf['batchSize']) + "_lr_" + str(conf['lr']) + "_epochs_" + str(conf['epochs']) + "_date_" + time.strftime("%Y%m%d-%H%M%S") + ".pt")
+    torch.save(model.state_dict(), './trainRuns/' + name + '/model.pt')
 
     # Close wandb
     wandb.finish()

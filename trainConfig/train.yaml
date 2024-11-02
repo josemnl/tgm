@@ -5,3 +5,4 @@ modelType :         'UNet'
 val_periods :       100
 val_batches :       10
 isAugment :         True
+savePeriods :       1000
