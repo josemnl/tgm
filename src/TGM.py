@@ -184,11 +184,17 @@ class TGM:
         predStaticMap = staticMap
 
         # Compute dynamic prediction
-        dynamicStay = dynamicMap * self.D0
-        bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
-        dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
+        if self.dynamicPrior != 0:
+            dynamicStay = dynamicMap * self.D0
+            bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
+            dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
 
-        predDynamicMap = dynamicStay + bounceBack + dynamicMove
+            predDynamicMap = dynamicStay + bounceBack + dynamicMove
+        else:
+            if self.GPU:
+                predDynamicMap = cp.zeros_like(dynamicMap)
+            else:
+                predDynamicMap = np.zeros_like(dynamicMap)
 
         # Compute weather prediction
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
