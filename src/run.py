@@ -12,7 +12,7 @@ def run():
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'nuscenes'
+    logID = 'Exp2-2024-03-15-11-25-54-Baseline'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)
@@ -44,6 +44,15 @@ def run():
 
     # List all lidar files
     lidarFiles = listFilesExt(conf.lidarPath, conf.lidarFormat.lower())
+
+    # Dict to store runtimes. Each key is a type of time, and each value is an array with the time for each frame
+    runtimes = {}
+    runtimes['Data'] = []
+    runtimes['SLAM'] = []
+    runtimes['InvSenM'] = []
+    runtimes['TGM'] = []
+    runtimes['Plots'] = []
+    runtimes['Total'] = []
 
     # Main loop
     fig= plt.figure()
@@ -146,6 +155,14 @@ def run():
         # Print progress
         print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
 
+        # Add times to dict
+        runtimes['Data'].append(timeData - timeStart)
+        runtimes['SLAM'].append(timeSLAM - timeData)
+        runtimes['InvSenM'].append(timeSensorModel - timeSLAM)
+        runtimes['TGM'].append(timeTGM - timeSensorModel)
+        runtimes['Plots'].append(timePlot - timeTGM)
+        runtimes['Total'].append(time.time() - timeStart)
+
         # Print times
         print('Data:    ' + str(timeData - timeStart))
         print('SLAM:    ' + str(timeSLAM - timeData))
@@ -193,6 +210,14 @@ def run():
             print('IoU: {:.10f}'.format(IoU_result))
             IoU_array.append(IoU_result)
 
+    # Save runtimes as csv
+    runtimes['Data'] = np.array(runtimes['Data'])
+    runtimes['SLAM'] = np.array(runtimes['SLAM'])
+    runtimes['InvSenM'] = np.array(runtimes['InvSenM'])
+    runtimes['TGM'] = np.array(runtimes['TGM'])
+    runtimes['Plots'] = np.array(runtimes['Plots'])
+    runtimes['Total'] = np.array(runtimes['Total'])
+    np.savetxt(videoPath + 'runtimes.csv', np.array(list(runtimes.values())).T, delimiter=',', header=','.join(runtimes.keys()), comments='')
 
     # Save SLAM results
     if conf.isSLAM:
