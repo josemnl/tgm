@@ -125,8 +125,8 @@ def train():
         yaml.dump(conf, file)
 
     # Initialize wandb
-    wandb.init(project="TGM", name=name,
-               config=conf)
+    if conf['isWandb']:
+        wandb.init(project="TGM", name=name, config=conf)
 
     # Load train and validation datasets
     train_dataset = NuScenesDataset(mode='train', isAugment=conf['isAugment'])
@@ -155,7 +155,10 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=conf['lr'])
 
     # Load loss function
-    loss_function = masked_KLDivLoss
+    if conf['useMask']:
+        loss_function = masked_KLDivLoss
+    else:
+        loss_function = KLDivLoss
 
     time_prev = time.time()
     time_start = time_prev
@@ -170,7 +173,10 @@ def train():
             output = model(input)
 
             # Compute loss
-            loss = loss_function(output, target, mask)
+            if conf['useMask']:
+                loss = loss_function(output, target, mask)
+            else:
+                loss = loss_function(output, target)
 
             # Backward pass
             optimizer.zero_grad()
@@ -185,7 +191,8 @@ def train():
             time_prev = time.time()
 
             # Log loss
-            wandb.log({"loss": loss.item()})
+            if conf['isWandb']:
+                wandb.log({"loss": loss.item()})
 
             # Validation
             if i_batch % conf['val_periods'] == 0:
@@ -202,7 +209,10 @@ def train():
                         output_val = model(input_val)
 
                         # Compute loss
-                        loss_val = loss_function(output_val, target_val, mask_val)
+                        if conf['useMask']:
+                            loss_val = loss_function(output_val, target_val, mask_val)
+                        else:
+                            loss_val = loss_function(output_val, target_val)
 
                         # Accumulate loss
                         val_loss_sum += loss_val.item()
@@ -217,7 +227,8 @@ def train():
                     fig = plot(input, target, output)
 
                     # Log average validation loss and plot
-                    wandb.log({"val_loss": avg_val_loss, "plot": fig})
+                    if conf['isWandb']:
+                        wandb.log({"val_loss": avg_val_loss, "plot": fig})
 
                 model.train()
             
@@ -229,7 +240,8 @@ def train():
     torch.save(model.state_dict(), './trainRuns/' + name + '/model.pt')
 
     # Close wandb
-    wandb.finish()
+    if conf['isWandb']:
+        wandb.finish()
 
 if __name__ == "__main__":
     train()
