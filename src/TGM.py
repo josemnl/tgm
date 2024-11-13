@@ -8,9 +8,10 @@ import time
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
 from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
 import cupy as cp
+import torch
 
 class TGM:
-    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False, GPU = True):
+    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False, GPU = True, learnedPredictions = False, model = None, NNdevice = 'cuda'):
         assert isinstance(origin[0], int)
         assert isinstance(origin[1], int)
         assert isinstance(width, int)
@@ -60,6 +61,28 @@ class TGM:
             self.dynamicMap = cp.asarray(self.dynamicMap)
             self.weatherMap = cp.asarray(self.weatherMap)
             self.convShape = cp.asarray(self.convShape)
+
+        self.model = model
+        self.NNdevice = NNdevice
+        if learnedPredictions:
+            assert model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNpredict
+        else:
+            self.predict = self.randomPredict
+
+    def switchPredictions(self, learnedPredictions, model = None, NNdevice = None):
+        if NNdevice is not None:
+            self.NNdevice = NNdevice
+        if model is not None:
+            self.model = model
+            self.model.to(self.NNdevice)
+        if learnedPredictions:
+            assert self.model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNpredict
+        else:
+            self.predict = self.randomPredict
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
@@ -169,7 +192,7 @@ class TGM:
         print('')
         '''
 
-    def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
+    def randomPredict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:
             overlapOrigin_x = self.origin_x
             overlapOrigin_y = self.origin_y
@@ -189,6 +212,40 @@ class TGM:
         dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
 
         predDynamicMap = dynamicStay + bounceBack + dynamicMove
+
+        # Compute weather prediction
+        predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        return predStaticMap, predDynamicMap, predWeatherMap
+    
+    def NNpredict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
+        if overlapOrigin_x is None:
+            overlapOrigin_x = self.origin_x
+            overlapOrigin_y = self.origin_y
+            overlapWidth = self.width
+            overlapHeight = self.height
+
+        # Computed cropped maps
+        staticMap = self.cropMap('static',overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+        dynamicMap = self.cropMap('dynamic',overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+        
+        # Compute dynamic and static predictions using the model
+        staticTorch = torch.tensor(staticMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        dynamicTorch = torch.tensor(dynamicMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        input = torch.cat((staticTorch, dynamicTorch), 1).float()
+        output = self.model(input)
+
+        # Transfor logits to probabilities
+        output = torch.nn.functional.softmax(output, dim=1)
+
+        output = output.cpu().detach().numpy()
+        predStaticMap = output[0, 0, :, :]
+        predDynamicMap = output[0, 1, :, :]
+
+        # If GPU, move the predictions to the GPU
+        if self.GPU:
+            predStaticMap = cp.asarray(predStaticMap)
+            predDynamicMap = cp.asarray(predDynamicMap)
 
         # Compute weather prediction
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)

@@ -13,10 +13,14 @@ from nuscenes.nuscenes import NuScenes
 from scipy.spatial.transform import Rotation
 from pyquaternion import Quaternion
 
+# NN stuff
+import torch
+from unet_model import UNet
+
 def run():
     # NuScenes: Load the first scene
-    nusc = NuScenes(version='v1.0-mini', dataroot='./nuscenes', verbose=True)
-    scene = nusc.scene[0]
+    nusc = NuScenes(version='v1.0-trainval', dataroot='./nuscenes', verbose=True)
+    scene = nusc.scene[1]
     sample_token = scene['first_sample_token']
     sample = nusc.get('sample', sample_token)
     sample_data_token = sample['data']['LIDAR_TOP']
@@ -39,9 +43,13 @@ def run():
     if not os.path.exists(videoPath):
         os.makedirs(videoPath)
 
+    # Load NN model
+    model = UNet(2,3)
+    model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241108-173804/model.pt'))
+
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv)
+    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, learnedPredictions= False, model = model)
 
     # Empty arrays for the results
     x_t_SLAM_array = []
@@ -59,6 +67,8 @@ def run():
     i = 0
     while sample_data_token != '':
         i += 1
+        if i == 50:
+            tgm.switchPredictions(True)
         timeStart = time.time()
 
         # Import sensor data
@@ -129,8 +139,6 @@ def run():
 
             # Order by angle
             z_t.orderByAngle()
-
-        z_t_ground.plot()
         
         timeData = time.time()
 
