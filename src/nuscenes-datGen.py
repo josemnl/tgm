@@ -162,6 +162,8 @@ if __name__ == "__main__":
     with open('./Dataset/scene_names.json', 'r') as f:
         scene_names = json.load(f)
 
+    print('Scene names: ', scene_names)
+
     # Check if the folder exists
     if not os.path.exists('./Dataset'):
         os.makedirs('./Dataset')
@@ -185,8 +187,11 @@ if __name__ == "__main__":
     # Remove already processed scenes
     scene_names = list(set(scene_names) - set(processed_scenes))
 
+    # Reorder the scenes
+    scene_names.sort()
+
     # Use ProcessPoolExecutor to parallelize scene processing
-    max_workers = 4
+    max_workers = 7
     start_time = time.time()
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = [executor.submit(process_scene, scene_name, conf) for scene_name in scene_names]
