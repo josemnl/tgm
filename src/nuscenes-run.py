@@ -45,11 +45,15 @@ def run():
 
     # Load NN model
     model = UNet(2,3)
-    model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241108-173804/model.pt'))
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241104-183629/checkpoint3_13000.pt'))    # Masked
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241108-173804/model.pt'))                # Without mask
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241114-115655/checkpoint0_18000.pt'))    # Without sat limit
+    model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241114-161520/checkpoint3_21000.pt'))    # Biased
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241115-185109/model.pt'))                # Masked and biased
 
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, learnedPredictions= False, model = model)
+    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, predictionMode = 'random', model = model)
 
     # Empty arrays for the results
     x_t_SLAM_array = []
@@ -68,7 +72,7 @@ def run():
     while sample_data_token != '':
         i += 1
         if i == 50:
-            tgm.switchPredictions(True)
+            tgm.switchPredictions(predictionMode='NNDynamic')
         timeStart = time.time()
 
         # Import sensor data

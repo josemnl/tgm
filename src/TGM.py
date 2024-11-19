@@ -11,11 +11,12 @@ import cupy as cp
 import torch
 
 class TGM:
-    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False, GPU = True, learnedPredictions = False, model = None, NNdevice = 'cuda'):
+    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv = False, GPU = True, predictionMode = 'random', model = None, NNdevice = 'cuda'):
         assert isinstance(origin[0], int)
         assert isinstance(origin[1], int)
         assert isinstance(width, int)
         assert isinstance(height, int)
+        assert predictionMode in ['random', 'NN', 'NNDynamic']
 
         self.origin_x = origin[0]
         self.origin_y = origin[1]
@@ -64,25 +65,34 @@ class TGM:
 
         self.model = model
         self.NNdevice = NNdevice
-        if learnedPredictions:
+        if predictionMode == 'random':
+            self.predict = self.randomPredict
+        elif predictionMode == 'NN':
             assert model is not None
             self.model.to(self.NNdevice)
             self.predict = self.NNpredict
-        else:
-            self.predict = self.randomPredict
+        elif predictionMode == 'NNDynamic':
+            assert model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicPredict
 
-    def switchPredictions(self, learnedPredictions, model = None, NNdevice = None):
+    def switchPredictions(self, predictionMode, model = None, NNdevice = None):
+        assert predictionMode in ['random', 'NN', 'NNDynamic']
         if NNdevice is not None:
             self.NNdevice = NNdevice
         if model is not None:
             self.model = model
             self.model.to(self.NNdevice)
-        if learnedPredictions:
+        if predictionMode == 'random':
+            self.predict = self.randomPredict
+        elif predictionMode == 'NN':
             assert self.model is not None
             self.model.to(self.NNdevice)
             self.predict = self.NNpredict
-        else:
-            self.predict = self.randomPredict
+        elif predictionMode == 'NNDynamic':
+            assert self.model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicPredict
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
@@ -235,7 +245,22 @@ class TGM:
         input = torch.cat((staticTorch, dynamicTorch), 1).float()
         output = self.model(input)
 
-        # Transfor logits to probabilities
+        '''
+        # Plot each layer of the output in a new figure
+        output = torch.nn.functional.softmax(output, dim=1)
+        output = output.cpu().detach().numpy()
+        for i in range(output.shape[1]):
+            outputPlot = 1 - output[0, i, :, :]
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(outputPlot, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
+                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+            ax.set_title('Layer ' + str(i))
+            plt.show()
+        '''
+
+        # Transform logits to probabilities
         output = torch.nn.functional.softmax(output, dim=1)
 
         output = output.cpu().detach().numpy()
@@ -246,6 +271,59 @@ class TGM:
         if self.GPU:
             predStaticMap = cp.asarray(predStaticMap)
             predDynamicMap = cp.asarray(predDynamicMap)
+
+        # Compute weather prediction
+        predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        return predStaticMap, predDynamicMap, predWeatherMap
+    
+    def NNDynamicPredict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
+        if overlapOrigin_x is None:
+            overlapOrigin_x = self.origin_x
+            overlapOrigin_y = self.origin_y
+            overlapWidth = self.width
+            overlapHeight = self.height
+
+        # Computed cropped maps
+        staticMap = self.cropMap('static',overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+        dynamicMap = self.cropMap('dynamic',overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+        
+        # Compute dynamic and static predictions using the model
+        dynamicTorch = torch.tensor(dynamicMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        staticTorch = torch.tensor(staticMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        input = torch.cat((staticTorch, dynamicTorch), 1).float()
+        output = self.model(input)
+
+        '''
+        # Plot each layer of the output in a new figure
+        output = torch.nn.functional.softmax(output, dim=1)
+        output = output.cpu().detach().numpy()
+        for i in range(output.shape[1]):
+            outputPlot = 1 - output[0, i, :, :]
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            ax.imshow(outputPlot, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
+                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+            ax.set_title('Layer ' + str(i))
+            plt.show()
+        '''
+
+        # Discard the static prediction and keep only dynamic and free
+        output = output[:, 1:, :, :]
+
+        # Transform logits to probabilities
+        output = torch.nn.functional.softmax(output, dim=1)
+
+        # Move the output to the CPU
+        output = output.cpu().detach().numpy()
+        # If GPU, move the output to the GPU
+        if self.GPU:
+            output = cp.asarray(output)
+        
+        # Compute predictions
+        predStaticMap = staticMap
+        predDynamicMap = output[0, 0, :, :] * (1 - staticMap)
 
         # Compute weather prediction
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
