@@ -77,6 +77,37 @@ def masked_KLDivLoss(logits, target, mask):
 
     return loss
 
+def masked_biased_KLDivLoss(logits, target, mask, dynamic_weight=10.0):
+    # Compute log-softmax of logits
+    log_probs = torch.nn.functional.log_softmax(logits, dim=1)
+
+    # Convert target to probabilities
+    target_probs = torch.nn.functional.softmax(target, dim=1)
+
+    # Compute KL divergence loss without reduction
+    loss = torch.nn.functional.kl_div(log_probs, target_probs, reduction='none')
+
+    # Apply mask
+    loss = loss * mask
+
+    # Identify dynamic cells in the target as those with a dynamic probability > 0.5
+    dynamic_cells = target_probs[:, 1, :, :] > 0.5
+
+    # Expand dynamic_cells to match loss dimensions
+    dynamic_cells = dynamic_cells.unsqueeze(1).expand_as(loss)
+
+    # Create a weighting mask
+    weights = torch.ones_like(loss)
+    weights[dynamic_cells] = dynamic_weight
+
+    # Apply weights to the loss
+    loss = loss * weights
+
+    # Compute mean loss
+    loss = loss.mean()
+
+    return loss
+
 def loadAndArrangeSample(sample_batched, device):
     # Move data to device
     sample_batched['input_static'] = sample_batched['input_static'].to(device)
@@ -183,7 +214,7 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=conf['lr'])
 
     # Load loss function
-    assert conf['lossFunction'] in ['KLDivLoss', 'masked_KLDivLoss', 'biased_KLDivLoss']
+    assert conf['lossFunction'] in ['KLDivLoss', 'masked_KLDivLoss', 'biased_KLDivLoss', 'masked_biased_KLDivLoss']
 
     if conf['lossFunction'] == 'KLDivLoss':
         loss_function = KLDivLoss
@@ -191,6 +222,8 @@ def train():
         loss_function = masked_KLDivLoss
     elif conf['lossFunction'] == 'biased_KLDivLoss':
         loss_function = biased_KLDivLoss
+    elif conf['lossFunction'] == 'masked_biased_KLDivLoss':
+        loss_function = masked_biased_KLDivLoss
 
     time_prev = time.time()
     time_start = time_prev
@@ -205,7 +238,7 @@ def train():
             output = model(input)
 
             # Compute loss
-            if conf['lossFunction'] == 'masked_KLDivLoss':
+            if conf['lossFunction'] == 'masked_KLDivLoss' or conf['lossFunction'] == 'masked_biased_KLDivLoss':
                 loss = loss_function(output, target, mask)
             else:
                 loss = loss_function(output, target)
@@ -241,7 +274,7 @@ def train():
                         output_val = model(input_val)
 
                         # Compute loss
-                        if conf['lossFunction'] == 'masked_KLDivLoss':
+                        if conf['lossFunction'] == 'masked_KLDivLoss' or conf['lossFunction'] == 'masked_biased_KLDivLoss':
                             loss_val = loss_function(output_val, target_val, mask_val)
                         else:
                             loss_val = loss_function(output_val, target_val)
