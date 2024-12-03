@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+import cv2
 
 class gridMap:
     def __init__(self, origin_x, origin_y, width, height, resolution, data):
@@ -121,6 +122,47 @@ class gridMap:
         overlap_height = min(self.origin_y + self.height, other_origin_y + other_height) - overlap_origin_y
         
         return overlap_origin_x, overlap_origin_y, overlap_width, overlap_height
+    
+    def drawFilledRectangle(self, x, y, theta, length, width, fill_value):
+        """
+        Draw a filled rectangle in the grid map.
+        
+        Parameters:
+        x (float): x coordinate of the center of the rectangle.
+        y (float): y coordinate of the center of the rectangle.
+        theta (float): angle of the rectangle.
+        length (float): length of the rectangle.
+        width (float): width of the rectangle.
+        fill_value (float): value to fill the rectangle with.
+        """
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+        assert isinstance(theta, float)
+        assert isinstance(length, float)
+        assert isinstance(width, float)
+        assert isinstance(fill_value, float)
+
+        # Swap x and y (for consistency with openCV)
+        x, y = y, x
+        
+        # Compute the corners of the rectangle
+        corners = np.array([[x + length/2, y + width/2],
+                             [x - length/2, y + width/2],
+                             [x - length/2, y - width/2],
+                             [x + length/2, y - width/2]])
+        
+        # Rotate the corners around the center of the rectangle
+        rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
+                                    [np.sin(theta), np.cos(theta)]])
+        rotated_corners = np.dot(rotation_matrix, (corners - np.array([x, y])).T).T + np.array([x, y])
+
+        # Translate the corners to the grid map
+        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.origin_x*self.resolution)/self.resolution
+        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.origin_y*self.resolution)/self.resolution
+        
+        # Draw the rectangle using OpenCV fillPoly
+        points = rotated_corners.reshape((-1, 1, 2)).astype(np.int32)
+        cv2.fillPoly(self.data, [points], fill_value)
 
     @classmethod
     def loadState(cls, filename, data_type = np.float64):
@@ -141,6 +183,7 @@ def main():
     data[19][0] = 0.5
     
     grid = gridMap(origin_x, origin_y, width, height, resolution, data)
+    grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
     grid.plot(isPause=True)
 
     grid.crop(10, 0, 10, 6).plot(isPause=True)
