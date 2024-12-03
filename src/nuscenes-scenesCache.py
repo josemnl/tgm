@@ -20,6 +20,8 @@ def cache_scene_data(scene, nusc):
     sensor_rotations = []
     sensor_translations = []
     ego_poses = []
+    isKeyFrames = []
+    annotations = []
 
     while sample_data_token != '':
         # Get sample data
@@ -40,20 +42,35 @@ def cache_scene_data(scene, nusc):
         ego_pose = nusc.get('ego_pose', sample_data['ego_pose_token'])
         ego_poses.append(ego_pose)
 
+        # Check if frame is a keyframe
+        isKeyFrames.append(sample_data['is_key_frame'])
+
+        # If the frame is a keyframe, get the annotation
+        anns = []
+        if sample_data['is_key_frame']:
+            # Update the sample corresponding to the keyframe
+            sample = nusc.get('sample', sample_data['sample_token'])
+            for ann_token in sample['anns']:
+                ann = nusc.get('sample_annotation', ann_token)
+                # If the category name contains 'vehicle' or 'human', add it to the list
+                if 'vehicle' in ann['category_name'] or 'human' in ann['category_name']:
+                    anns.append(ann)
+        annotations.append(anns)
+
         # Update nuScemes' sample data token
         sample_data_token = sample_data['next']
 
-        # Check if the folder exists
-        if not os.path.exists('./Dataset'):
-            os.makedirs('./Dataset')
+    # Check if the folder exists
+    if not os.path.exists('./Dataset'):
+        os.makedirs('./Dataset')
 
-        # Check if the scene folder exists
-        if not os.path.exists('./Dataset/' + scene_name):
-            os.makedirs('./Dataset/' + scene_name)
+    # Check if the scene folder exists
+    if not os.path.exists('./Dataset/' + scene_name):
+        os.makedirs('./Dataset/' + scene_name)
 
-        # Save scene_name, lidar_paths, sensor_rotations, sensor_translations, ego_poses as one json file
-        with open('./Dataset/' + scene_name + '/scene_data.json', 'w') as f:
-            json.dump({'scene_name': scene_name, 'lidar_paths': lidar_paths, 'sensor_rotations': sensor_rotations, 'sensor_translations': sensor_translations, 'ego_poses': ego_poses}, f)
+    # Save scene_name, lidar_paths, sensor_rotations, sensor_translations, ego_poses, isKeyFrame and annotations as a json file
+    with open('./Dataset/' + scene_name + '/scene_data.json', 'w') as f:
+        json.dump({'scene_name': scene_name, 'lidar_paths': lidar_paths, 'sensor_rotations': sensor_rotations, 'sensor_translations': sensor_translations, 'ego_poses': ego_poses, 'isKeyFrames': isKeyFrames, 'annotations': annotations}, f)
 
 
 if __name__ == '__main__':
