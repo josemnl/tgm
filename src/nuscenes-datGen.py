@@ -7,8 +7,6 @@ from utilities import readLidarNuScenes, createVideo, loadConfigAsDict, listFile
 from sensorModel import sensorModel
 from TGM import TGM
 from gridMap import gridMap
-from SLAM import lsqnl_matching
-from metrics import computeMetrics, IoU
 
 # Rotations
 from scipy.spatial.transform import Rotation
@@ -30,6 +28,8 @@ def process_scene(scene_name, conf):
         sensor_rotations = scene_data['sensor_rotations']
         sensor_translations = scene_data['sensor_translations']
         ego_poses = scene_data['ego_poses']
+        isKeyFrames = scene_data['isKeyFrames']
+        annotations = scene_data['annotations']
 
     print('Processing scene: ' + scene_name)
 
@@ -46,10 +46,8 @@ def process_scene(scene_name, conf):
     tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv)
 
     # Main loop
-    #fig= plt.figure()
-    print('Hello')
     i = 0
-    for lidar_path, sensor_rotation, sensor_translation, ego_pose in zip(lidar_paths, sensor_rotations, sensor_translations, ego_poses):
+    for lidar_path, sensor_rotation, sensor_translation, ego_pose, isKeyFrame, annotation in zip(lidar_paths, sensor_rotations, sensor_translations, ego_poses, isKeyFrames, annotations):
         i += 1
         timeStart = time.time()
 
@@ -126,9 +124,30 @@ def process_scene(scene_name, conf):
         tgm.update(gm, x_t)
         timeTGM = time.time()
 
+        # If it is a keyframe, create a new ground truth dynamic grid map with the annotations
+        if isKeyFrame:
+            # Create an empty grid map with the same size and resolution as gm
+            gm_gt = gridMap(gm.origin_x, gm.origin_y, gm.width, gm.height, gm.resolution, np.zeros((gm.width, gm.height)))
+            for ann in annotation:
+                # Get position, orientation and bounding box
+                position = ann['translation']
+                orientation = ann['rotation']
+                size = ann['size']
+
+                # Compute the orientation as an angle and discard the z component of the position
+                orientation = Rotation.from_quat(orientation).as_euler('zyx')[2] + np.pi
+                position = np.array([position[0], position[1]])
+
+                # Correct position by x_t_diff
+                position = position - np.array([x_t_diff[0], x_t_diff[1]])
+
+                # Draw the bounding box
+                gm_gt.drawFilledRectangle(position[0], position[1], orientation, size[0], size[1], 1.0)
+
+            # Save ground truth grid map
+            gm_gt.saveState(scenePath + 'frame_' + str(i) + '_gt.grid')
+
         # Save grid map
-        #fig.clear()
-        #gm.plot()
         origin_x = gm.origin_x
         origin_y = gm.origin_y
         width = gm.width
@@ -144,6 +163,7 @@ def process_scene(scene_name, conf):
         '''
         timePlot = time.time()
 
+        '''
         # Print progress
         print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
 
@@ -155,6 +175,7 @@ def process_scene(scene_name, conf):
         print('Plots:   ' + str(timePlot - timeTGM))
         print('Total:   ' + str(time.time() - timeStart))
         print('')
+        '''
 
 # Main execution block
 if __name__ == "__main__":
