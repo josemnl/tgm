@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import time
 import wandb
 import yaml
-from types import SimpleNamespace
 import os
 
 def compute_mask(output_instant):
@@ -77,12 +76,14 @@ def masked_KLDivLoss(logits, target, mask):
 
     return loss
 
-def masked_biased_KLDivLoss(logits, target, mask, dynamic_weight=10.0):
+def masked_biased_KLDivLoss(logits, target, mask, dynamic_weight=1.0, static_weight=1.0, free_weight=1.0):
     # Compute log-softmax of logits
     log_probs = torch.nn.functional.log_softmax(logits, dim=1)
 
-    # Convert target to probabilities
-    target_probs = torch.nn.functional.softmax(target, dim=1)
+    # Make sure the target probabilities sum to 1
+    epsilon = 1e-8
+    target_probs = target / (target.sum(dim=1, keepdim=True) + epsilon)
+    target_probs = torch.clamp(target_probs, min=epsilon, max=1.0)
 
     # Compute KL divergence loss without reduction
     loss = torch.nn.functional.kl_div(log_probs, target_probs, reduction='none')
@@ -90,18 +91,10 @@ def masked_biased_KLDivLoss(logits, target, mask, dynamic_weight=10.0):
     # Apply mask
     loss = loss * mask
 
-    # Identify dynamic cells in the target as those with a dynamic probability > 0.5
-    dynamic_cells = target_probs[:, 1, :, :] > 0.5
-
-    # Expand dynamic_cells to match loss dimensions
-    dynamic_cells = dynamic_cells.unsqueeze(1).expand_as(loss)
-
-    # Create a weighting mask
-    weights = torch.ones_like(loss)
-    weights[dynamic_cells] = dynamic_weight
-
-    # Apply weights to the loss
-    loss = loss * weights
+    # Apply dynamic, static and free weights
+    loss[:, 0, :, :] = loss[:, 0, :, :] * static_weight
+    loss[:, 1, :, :] = loss[:, 1, :, :] * dynamic_weight
+    loss[:, 2, :, :] = loss[:, 2, :, :] * free_weight
 
     # Compute mean loss
     loss = loss.mean()
@@ -145,17 +138,17 @@ def plot(input, target, output):
     output_image = 1 - torch.transpose(output_prob, 2, 3)
     # Plot input, target and output for the static and dynamic maps
     fig, axs = plt.subplots(2, 3)
-    axs[0, 0].imshow(input_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 0].imshow(input_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[0, 0].set_title('Input Static')
-    axs[1, 0].imshow(input_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 0].imshow(input_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[1, 0].set_title('Input Dynamic')
-    axs[0, 1].imshow(target_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 1].imshow(target_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[0, 1].set_title('Target Static')
-    axs[1, 1].imshow(target_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 1].imshow(target_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[1, 1].set_title('Target Dynamic')
-    axs[0, 2].imshow(output_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[0, 2].imshow(output_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[0, 2].set_title('Output Static')
-    axs[1, 2].imshow(output_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray')
+    axs[1, 2].imshow(output_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[1, 2].set_title('Output Dynamic')
     # Remove axis
     for ax in axs.flatten():
