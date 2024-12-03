@@ -7,13 +7,10 @@ import numpy as np
 from splits import train, val, test
 
 class NuScenesDataset(Dataset):
-    def __init__(self, root_dir = './Dataset', mode = 'train', isAugment = False):
+    def __init__(self, root_dir = './Dataset', mode = 'train', isAugment = False, isLabeledTraining = False):
         assert mode in ['train', 'val', 'test']
         self.root_dir = root_dir
         self.isAugment = isAugment
-
-        # List all the folders in the root directory (each folder is a scene)
-        #self.scenes = [d for d in os.listdir(self.root_dir) if os.path.isdir(os.path.join(self.root_dir, d))]
 
         # Load the scenes based on the mode
         if mode == 'train':
@@ -29,6 +26,7 @@ class NuScenesDataset(Dataset):
         self.out_static_grids = []
         self.out_dynamic_grids = []
         self.instant_grids = []
+        self.isKeyFrames = []
 
         for scene in self.scenes:
             scene_path = os.path.join(self.root_dir, scene)
@@ -41,7 +39,12 @@ class NuScenesDataset(Dataset):
                 self.in_static_grids.append(os.path.join(scene_path, static_grids[i]))
                 self.in_dynamic_grids.append(os.path.join(scene_path, dynamic_grids[i]))
                 self.out_static_grids.append(os.path.join(scene_path, static_grids[i + 1]))
-                self.out_dynamic_grids.append(os.path.join(scene_path, dynamic_grids[i + 1]))
+                if dynamic_grids[i + 1].replace('_dynamic.grid', '_gt.grid') in os.listdir(scene_path) and isLabeledTraining:
+                    self.out_dynamic_grids.append(os.path.join(scene_path, dynamic_grids[i + 1].replace('_dynamic.grid', '_gt.grid')))
+                    self.isKeyFrames.append(True)
+                else:
+                    self.out_dynamic_grids.append(os.path.join(scene_path, dynamic_grids[i + 1]))
+                    self.isKeyFrames.append(False)
                 self.instant_grids.append(os.path.join(scene_path, instant_grids[i + 1]))
 
     def load_grid(self, path):
@@ -60,6 +63,7 @@ class NuScenesDataset(Dataset):
         out_static_grid = self.load_grid(self.out_static_grids[idx])
         out_dynamic_grid = self.load_grid(self.out_dynamic_grids[idx])
         instant_grid = self.load_grid(self.instant_grids[idx])
+        isKeyFrame = self.isKeyFrames[idx]
 
         # Assert that the input_static and input_dynamic have the same shape
         assert in_static_grid.width == in_dynamic_grid.width
@@ -81,7 +85,12 @@ class NuScenesDataset(Dataset):
         instant_grid = torch.tensor(instant_grid.data)
 
         # Create the sample
-        sample = {'input_static': in_static_grid, 'input_dynamic': in_dynamic_grid, 'output_static': out_static_grid, 'output_dynamic': out_dynamic_grid, 'output_instant': instant_grid}
+        sample = {'input_static': in_static_grid,
+                  'input_dynamic': in_dynamic_grid,
+                  'output_static': out_static_grid,
+                  'output_dynamic': out_dynamic_grid,
+                  'output_instant': instant_grid,
+                  'isKeyFrame': isKeyFrame}
 
         if self.isAugment:
             sample = self.data_augmentation(sample)
@@ -90,37 +99,44 @@ class NuScenesDataset(Dataset):
 
     def horizontal_flip(self, sample):
         for key in sample:
-            sample[key] = torch.flip(sample[key], [1])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.flip(sample[key], [1])
         return sample
     
     def vertical_flip(self, sample):
         for key in sample:
-            sample[key] = torch.flip(sample[key], [0])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.flip(sample[key], [0])
         return sample
 
     def diagonal_flip(self, sample):
         for key in sample:
-            sample[key] = torch.transpose(sample[key], 0, 1)
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.transpose(sample[key], 0, 1)
         return sample
 
     def counter_diagonal_flip(self, sample):
         for key in sample:
-            sample[key] = torch.flip(torch.transpose(sample[key], 0, 1), [0, 1])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.flip(torch.transpose(sample[key], 0, 1), [0, 1])
         return sample
 
     def rotate_90(self, sample):
         for key in sample:
-            sample[key] = torch.rot90(sample[key], 1, [0, 1])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.rot90(sample[key], 1, [0, 1])
         return sample
 
     def rotate_180(self, sample):
         for key in sample:
-            sample[key] = torch.rot90(sample[key], 2, [0, 1])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.rot90(sample[key], 2, [0, 1])
         return sample
 
     def rotate_270(self, sample):
         for key in sample:
-            sample[key] = torch.rot90(sample[key], 3, [0, 1])
+            if isinstance(sample[key], torch.Tensor):
+                sample[key] = torch.rot90(sample[key], 3, [0, 1])
         return sample
 
     def data_augmentation(self, sample):
