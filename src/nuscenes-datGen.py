@@ -135,7 +135,7 @@ def process_scene(scene_name, conf):
                 size = ann['size']
 
                 # Compute the orientation as an angle and discard the z component of the position
-                orientation = Rotation.from_quat(orientation).as_euler('zyx')[2] + np.pi
+                orientation = -Rotation.from_quat(orientation).as_euler('zyx')[2] + np.pi/2
                 position = np.array([position[0], position[1]])
 
                 # Correct position by x_t_diff
@@ -143,6 +143,9 @@ def process_scene(scene_name, conf):
 
                 # Draw the bounding box
                 gm_gt.drawFilledRectangle(position[0], position[1], orientation, size[0], size[1], 1.0)
+            
+            #gm.plot(isPause=True)
+            #gm_gt.plot(isPause=True)
 
             # Save ground truth grid map
             gm_gt.saveState(scenePath + 'frame_' + str(i) + '_gt.grid')

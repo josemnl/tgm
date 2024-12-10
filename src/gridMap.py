@@ -33,6 +33,16 @@ class gridMap:
         plt.show(block=isPause)
         plt.pause(0.0001)
 
+    def savePNG(self, filename):
+        """
+        Save the grid map as a PNG image
+        """
+        I = 1 - np.transpose(self.data)
+        plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                   extent=(self.origin_x*self.resolution, (self.origin_x + self.width)*self.resolution,
+                           self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
+        plt.savefig(filename)
+
     def crop(self, origin_x, origin_y, width, height):
         """
         Crop the grid map to a new grid map with the specified origin and size.
@@ -141,9 +151,6 @@ class gridMap:
         assert isinstance(length, float)
         assert isinstance(width, float)
         assert isinstance(fill_value, float)
-
-        # Swap x and y (for consistency with openCV)
-        x, y = y, x
         
         # Compute the corners of the rectangle
         corners = np.array([[x + length/2, y + width/2],
@@ -159,6 +166,9 @@ class gridMap:
         # Translate the corners to the grid map
         rotated_corners[:, 0] = (rotated_corners[:, 0] - self.origin_x*self.resolution)/self.resolution
         rotated_corners[:, 1] = (rotated_corners[:, 1] - self.origin_y*self.resolution)/self.resolution
+
+        # Swap x and y (for consistency with openCV)
+        rotated_corners[:, 0], rotated_corners[:, 1] = rotated_corners[:, 1], rotated_corners[:, 0].copy()
         
         # Draw the rectangle using OpenCV fillPoly
         points = rotated_corners.reshape((-1, 1, 2)).astype(np.int32)
