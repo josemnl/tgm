@@ -9,13 +9,24 @@ import wandb
 import yaml
 import os
 
-def compute_mask(output_instant):
+def compute_mask(output_instant, isKeyFrame):
     """
     Computes the mask based on output_instant.
     """
 
     # Valid cells are those with a value > 0.7 or < 0.4
     mask = (output_instant > 0.7) | (output_instant < 0.4)
+
+    # Expand to have the same mask for all channels
+    print('mask shape: ', mask.shape)
+    mask = mask.expand(-1, 3, -1, -1).clone()
+    print('mask shape: ', mask.shape)
+
+    # For each sample, if isKeyFrame is True, the dynamic mask is all ones
+    for i in range(mask.shape[0]):
+        if isKeyFrame[i]:
+            mask[i, 1, :, :] = 1
+    
     return mask
 
 def KLDivLoss(logits, target):
@@ -30,7 +41,7 @@ def KLDivLoss(logits, target):
 
     return loss
 
-def biased_KLDivLoss(logits, target, dynamic_weight=10.0):
+def biased_KLDivLoss(logits, target, dynamic_weight=10.0, static_weight=0.0):
     # Compute log-softmax of logits
     log_probs = torch.nn.functional.log_softmax(logits, dim=1)
 
@@ -40,15 +51,18 @@ def biased_KLDivLoss(logits, target, dynamic_weight=10.0):
     # Compute KL divergence loss without reduction
     loss = torch.nn.functional.kl_div(log_probs, target_probs, reduction='none')
 
-    # Identify dynamic cells in the target as those with a dynamic probability > 0.5
+    # Identify dynamic and static cells in the target as those with a probability > 0.5
     dynamic_cells = target_probs[:, 1, :, :] > 0.5
+    static_cells = target_probs[:, 0, :, :] > 0.5
 
-    # Expand dynamic_cells to match loss dimensions
+    # Expand to match loss dimensions
     dynamic_cells = dynamic_cells.unsqueeze(1).expand_as(loss)
+    static_cells = static_cells.unsqueeze(1).expand_as(loss)
 
     # Create a weighting mask
     weights = torch.ones_like(loss)
     weights[dynamic_cells] = dynamic_weight
+    weights[static_cells] = static_weight
 
     # Apply weights to the loss
     loss = loss * weights
@@ -125,19 +139,20 @@ def loadAndArrangeSample(sample_batched, device):
     # Concatenate the output static, dynamic and free maps along the channel dimension
     target = torch.cat((sample_batched['output_static'], sample_batched['output_dynamic'], target_free), dim=1)
 
-    mask = compute_mask(sample_batched['output_instant'])
+    mask = compute_mask(sample_batched['output_instant'], sample_batched['isKeyFrame'])
 
     return input, target, mask
 
-def plot(input, target, output):
+def plot(input, target, output, mask):
     # Transform output to probabilities
     output_prob = torch.nn.functional.softmax(output, dim=1)
     # Compute grayscale as 1 - transpose
     input_image = 1 - torch.transpose(input, 2, 3)
     target_image = 1 - torch.transpose(target, 2, 3)
     output_image = 1 - torch.transpose(output_prob, 2, 3)
-    # Plot input, target and output for the static and dynamic maps
-    fig, axs = plt.subplots(2, 3)
+    mask_image = torch.transpose(mask, 2, 3)
+    # Plot input, target, output and mask for the static and dynamic maps
+    fig, axs = plt.subplots(2, 4)
     axs[0, 0].imshow(input_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[0, 0].set_title('Input Static')
     axs[1, 0].imshow(input_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
@@ -150,6 +165,11 @@ def plot(input, target, output):
     axs[0, 2].set_title('Output Static')
     axs[1, 2].imshow(output_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
     axs[1, 2].set_title('Output Dynamic')
+    axs[0, 3].imshow(mask_image[0, 0, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
+    axs[0, 3].set_title('Mask Static')
+    axs[1, 3].imshow(mask_image[0, 1, :, :].detach().cpu().numpy(), cmap='gray', vmin=0, vmax=1)
+    axs[1, 3].set_title('Mask Dynamic')
+
     # Remove axis
     for ax in axs.flatten():
         ax.axis('off')
@@ -181,7 +201,7 @@ def train():
         wandb.init(project="TGM", name=name, config=conf)
 
     # Load train and validation datasets
-    train_dataset = NuScenesDataset(mode='train', isAugment=conf['isAugment'])
+    train_dataset = NuScenesDataset(mode='train', isAugment=conf['isAugment'], isLabeledTraining=conf['isLabeledTraining'])
     val_dataset = NuScenesDataset(mode='val', isAugment=False)
     train_dataloader = DataLoader(train_dataset, batch_size=conf['batchSize'], shuffle=True)
     val_dataloader = DataLoader(val_dataset, batch_size=conf['batchSize'], shuffle=True)
@@ -281,8 +301,8 @@ def train():
                     # Print average validation loss
                     print(f"Validation, Average Loss: {avg_val_loss}")
 
-                    # Plot input, target and output
-                    fig = plot(input, target, output)
+                    # Plot input, target, output and mask
+                    fig = plot(input, target, output, mask)
 
                     # Log average validation loss and plot
                     if conf['isWandb']:
