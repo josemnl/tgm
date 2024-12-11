@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
+from GroundSeg import ground_seg
 
 class lidarScan:
     def __init__(self, angles, ranges, labels=None):
@@ -98,6 +99,24 @@ class lidarScan:
         if self.labels is not None:
             self.labels = None
 
+    def fastVoxelGridFilter(self, voxel_size):
+        # Compute a voxel grid without averaging the points, so that the dictionary is not needed
+        points = self.computeCartesian()
+        grid_indices = np.floor(points / voxel_size).astype(int)
+
+        # remove duplicates
+        unique_indices = np.unique(grid_indices, axis=0)
+
+        # From indices to points
+        downsampled_points = unique_indices * voxel_size
+
+        self.angles = np.arctan2(downsampled_points[:, 1], downsampled_points[:, 0])
+        self.ranges = np.sqrt(downsampled_points[:, 0]**2 + downsampled_points[:, 1]**2)
+
+        # Remove labels if they exist
+        if self.labels is not None:
+            self.labels = None
+
     def filterOutByLabel(self, label):
         assert self.labels is not None
         mask = self.labels != label
@@ -128,6 +147,14 @@ class lidarScan3D:
     
     def removeSky(self, skyThreshold):
         mask = self.points3D[:, 2] < skyThreshold
+        self.points3D = self.points3D[mask]
+        if self.labels is not None:
+            self.labels = self.labels[mask]
+
+    def removePointsInBox(self, box):
+        x_min = box[0]
+        y_min = box[1]
+        mask = (np.abs(self.points3D[:, 0]) > x_min) | (np.abs(self.points3D[:, 1]) > y_min)
         self.points3D = self.points3D[mask]
         if self.labels is not None:
             self.labels = self.labels[mask]
@@ -202,7 +229,7 @@ class lidarScan3D:
                 ax.scatter(self.points3D[indices, 0], self.points3D[indices, 1], self.points3D[indices, 2], color)
         else:
             ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
-        ax.axis('equal')
+        #ax.axis('equal')
         plt.show()
 
     def ROR(self, k, r):
@@ -267,6 +294,55 @@ class lidarScan3D:
         if self.labels is not None:
             self.labels = self.labels[k_distance < (mean + s * std) * rho * origin_distance]
 
+    def translate(self, translation):
+        # This function translates the 3D points by a specified translation
+        self.points3D += translation
+
+    def rotate(self, rotationMatrix):
+        # This function rotates the 3D points by a specified rotation matrix
+        self.points3D = np.dot(rotationMatrix, self.points3D.T).T
+
+    def RANSAC(self, maxDistance, maxIterations):
+        # This function performs RANSAC on the 3D points to find the best plane
+        bestInliers = []
+        bestPlane = None
+        bestError = np.inf
+        for _ in range(maxIterations):
+            # Randomly sample three points
+            indices = np.random.choice(len(self.points3D), 3, replace=False)
+            points = self.points3D[indices]
+            # Compute the plane parameters
+            v1 = points[1] - points[0]
+            v2 = points[2] - points[0]
+            normal = np.cross(v1, v2)
+            normal /= np.linalg.norm(normal)
+            d = -np.dot(normal, points[0])
+            # Compute the distance to the plane for each point
+            distances = np.abs(np.dot(self.points3D, normal) + d)
+            # Compute the inliers
+            inliers = np.where(distances < maxDistance)[0]
+            # Update the best model if the current model is better
+            error = np.sum(distances[inliers])/len(inliers)
+            if error < bestError:
+                bestInliers = inliers
+                bestPlane = (normal, d)
+                bestError = error
+        # Force the normal to point upwards
+        if bestPlane[0][2] < 0:
+            bestPlane = (-bestPlane[0], -bestPlane[1])
+        # Move the plane up by maxDistance
+        bestPlane = (bestPlane[0], bestPlane[1] - maxDistance)
+        # Ground are the points below the plane
+        groundMask = np.where(np.dot(self.points3D, bestPlane[0]) + bestPlane[1] < 0)[0]
+        ground = lidarScan3D(self.points3D[groundMask])
+        objectsMask = np.where(np.dot(self.points3D, bestPlane[0]) + bestPlane[1] >= 0)[0]
+        objects = lidarScan3D(self.points3D[objectsMask])
+        return ground, objects
+    
+    def RMF_GroundSeg(self):
+        # This function performs the ground segmentation using the RMF algorithm
+        ground, objects = ground_seg(self.points3D)
+        return lidarScan3D(ground), lidarScan3D(objects)
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point
