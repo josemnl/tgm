@@ -12,7 +12,7 @@ def run():
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'Exp2-2024-03-15-11-25-54-Baseline'
+    logID = 'Exp2-TGM-GPU.py'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)
@@ -29,7 +29,7 @@ def run():
 
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv)
+    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     # Empty arrays for the results
     x_t_SLAM_array = []

@@ -32,8 +32,9 @@ staticPrior : 0.5                       # If 0, it assumes that all the elements
 dynamicPrior : 0                        # If 0, it behaves like a regular grid map
 weatherPrior : 0                        # If 0, it assumes no weather noise
 maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
-saturationLimits : [0.05, 0.95, 0, 1]         # Saturation limits for the TGM
+saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
+isGPU : False                           # If True, it uses the GPU to compute the TGM
 
 # Filter parameters
 groundThreshold : -1.5                  # Threshold to consider a point as ground

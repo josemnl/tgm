@@ -2,27 +2,23 @@
 lidarPath : './logs/2024-03-15-11-25-54/' # Path to the lidar data
 lidarFormat : 'CSV'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
-isLabeled : False                       # Set to True if the point cloud is labelled
-labelPath : ''                          # Path to the labels
-snowLabel: 1                            # Label for the snow points
-initialTimeStep : 1                     # Initial time step to start the simulation
-simHorizon : 0                          # If 0, it runs until the end of the log
+initialTimeStep : 350                   # Initial time step to start the simulation
+simHorizon : 600                        # If 0, it runs until the end of the log
 
 # SLAM parameters
 isSLAM : True                           # If True, it computes x_t using SLAM
 velTracking : False                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 1                    # Number of time steps to use ground truth x_t before starting SLAM
-startPoseSLAM : [500, 500, 0]           # Initial pose for the SLAM algorithm if x_t is not available
+startPoseSLAM : [520, 500, 0]           # Initial pose for the SLAM algorithm if x_t is not available
 
 # Plotting parameters
 saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
-saveMap : False                         # If True, it saves the map as a PNG file
-saveSvg : False                         # If True, it saves each frame as a SVG file
+saveSvg : True                          # If True, it saves each frame as a SVG file
 videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
-videoWidth : 100                        # Width of the following window
-videoHeight : 100                       # Height of the following window
-videoOrigin : [500,450]                 # Origin of the video
+videoWidth : 80                         # Width of the following window
+videoHeight : 50                        # Height of the following window
+videoOrigin : [500,475]                 # Origin of the video
 style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters
@@ -44,27 +40,12 @@ isGPU : True                           # If True, it uses the GPU to compute the
 groundThreshold : -1.5                  # Threshold to consider a point as ground
 skyThreshold : 1                        # Threshold to consider a point as sky
 minDistance : 2                         # Minimum distance to consider a point
-maxDistance : 30                        # Maximum distance to consider a point
+maxDistance : 25                        # Maximum distance to consider a point
 isVoxelGridFilter : True                # If True, it uses the Voxel Grid filter
 
-# Snow filter parameters
-isROR : False                           # If True, it uses the ROR filter
-ROR_k : 5                               # Number of neighbors to consider in the ROR filter
-ROR_r : 0.5                             # Radius of the ROR filter
-isSOR : False                           # If True, it uses the SOR filter
-SOR_k : 5                               # Number of neighbors to consider in the SOR filter
-SOR_s : 0.5                             # Number of standard deviations to consider in the SOR filter
-isDROR : False                          # If True, it uses the DROR filter
-DROR_k : 5                              # Number of neighbors to consider in the DROR filter
-DROR_rho : 0.5                          # Distance factor of the DROR filter
-isDSOR : False                          # If True, it uses the DSOR filter
-DSOR_k : 5                              # Number of neighbors to consider in the DSOR filter
-DSOR_s : 0.5                            # Number of standard deviations to consider in the DSOR filter
-DSOR_rho : 0.5                          # Distance factor of the DSOR filter
-
 # Inverse Sensor Model parameters
-smWidth : 100                           # Width of the inverse sensor model
+smWidth : 200                           # Width of the inverse sensor model
 smHeight : 100                          # Height of the inverse sensor model
 sensorRange : 50                        # Maximum range of the sensor
 invModel : [0.1, 0.9]                   # High and low values of the beam inverse sensor model
-freeUpGroundDetections : False          # If True, it frees up the ground detections
+freeUpGroundDetections : True          # If True, it frees up the ground detections

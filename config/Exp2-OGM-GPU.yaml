@@ -19,7 +19,7 @@ videoSection : 'Constant'               # Section of the map to plot: 'Full', 'F
 videoWidth : 80                         # Width of the following window
 videoHeight : 50                        # Height of the following window
 videoOrigin : [500,475]                 # Origin of the video
-style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
+style : 'static'                        # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters
 origin : [0,0]                          # Origin of the grid
@@ -28,12 +28,13 @@ height : 1000                           # Height of the grid
 resolution : 0.25                       # Resolution of the grid
 
 # TGM parameters
-staticPrior : 0.3                       # If 0, it assumes that all the elements are dynamic
-dynamicPrior : 0.3                      # If 0, it behaves like a regular grid map
+staticPrior : 0.5                       # If 0, it assumes that all the elements are dynamic
+dynamicPrior : 0                        # If 0, it behaves like a regular grid map
 weatherPrior : 0                        # If 0, it assumes no weather noise
 maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
-saturationLimits : [0, 0.95, 0.05, 1]   # Saturation limits for the TGM
+saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
+isGPU : True                           # If True, it uses the GPU to compute the TGM
 
 # Filter parameters
 groundThreshold : -1.5                  # Threshold to consider a point as ground
