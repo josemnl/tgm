@@ -19,7 +19,7 @@ class sensorModel:
     def updateBasedOnPose(self, x_t):
         self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
 
-    def generateGridMap(self, z_t, x_t, z_t_ground=None):
+    def generateGridMap(self, z_t, x_t, z_t_ground=None, rayTraceGround = False):
         timeStart = time.time()
         assert isinstance(z_t, lidarScan)
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
@@ -29,8 +29,10 @@ class sensorModel:
         ang = ang + x_t[2]
         timePose = time.time()
 
-        # Limit measurement distance to sensor range
-        np.clip(dist, a_min=None, a_max=self.sensorRange, out=dist)
+        # Remove measurements further than sensor range
+        mask = dist < self.sensorRange
+        ang = ang[mask]
+        dist = dist[mask]
         timeClip = time.time()
 
         # Compute detection points on global frame
@@ -42,7 +44,9 @@ class sensorModel:
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
             np.add(ang_ground, x_t[2], out=ang_ground)
-            np.clip(dist_ground, a_min=None, a_max=self.sensorRange, out=dist_ground)
+            mask = dist_ground < self.sensorRange
+            ang_ground = ang_ground[mask]
+            dist_ground = dist_ground[mask]
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
             oy_ground = x_t[1] + np.sin(ang_ground) * dist_ground
         timeGround = time.time()
@@ -64,31 +68,44 @@ class sensorModel:
         iy = iy[valid]
 
         # Mark free cells along the rays
-        for i in range(ox.size):
-            self.insetRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
+        for i in range(ix.size):
+            self.insertRay((ix_t[0], ix_t[1]), (ix[i], iy[i]), self.invModel[0])
         timeFree = time.time()
 
-        # If ground points are provided, mark them as free
-        if z_t_ground is not None:
+        # If ground points are provided and rayTraceGround is false, mark free cells
+        if z_t_ground is not None and not rayTraceGround:
             # Compute the matrix indices for ground points
             ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
             iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+            # Filter out-of-bounds ground points
+            valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
+            ix_ground = ix_ground[valid]
+            iy_ground = iy_ground[valid]
             # Mark free cells on the ground
             self.data[ix_ground, iy_ground] = self.invModel[0]
         timeGroundFree = time.time()
 
         # Mark cells in between detections as unknown
-        for i in range(ox.size):
-            self.insetRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
+        for i in range(ix.size):
+            self.insertRay((ix[i], iy[i]), (ix[i-1], iy[i-1]), self.occPrior)
         timeUnknown = time.time()
-
-        # Remove points exactly at the sensor limit
-        ix = ix[dist < self.sensorRange]
-        iy = iy[dist < self.sensorRange]
         
         # Mark occupied cells
         self.data[ix, iy] = self.invModel[1]
         timeOccupied = time.time()
+
+        # If ground points are provided and rayTraceGround is true, mark free cells along the rays
+        if z_t_ground is not None and rayTraceGround:
+            # Compute the matrix indices for ground points
+            ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
+            iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+            # Filter out-of-bounds ground points
+            valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
+            ix_ground = ix_ground[valid]
+            iy_ground = iy_ground[valid]
+            # Mark free cells along the rays
+            for i in range(ix_ground.size):
+                self.insertRay((ix_t[0], ix_t[1]), (ix_ground[i], iy_ground[i]), self.invModel[0], self.invModel[1])
 
         '''
         print("Times sensor model:")
@@ -107,7 +124,7 @@ class sensorModel:
 
         return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
 
-    def insetRay(self,start,end,value):
+    def insertRay(self,start,end,value, valueCondition = None):
         x1, y1 = start
         x2, y2 = end
         dx = x2 - x1
@@ -130,7 +147,12 @@ class sensorModel:
                 x_coords = np.linspace(x1, x2, abs(x2 - x1) + 1).astype(int)
                 y_coords = np.round(y1 + dy/dx * (x_coords - x1)).astype(int)
 
-        self.data[x_coords, y_coords] = value
+        if valueCondition is None:
+            self.data[x_coords, y_coords] = value
+        else:
+            # Check if all cells in the ray are different from the valueCondition
+            if np.all(self.data[x_coords, y_coords] != valueCondition):
+                self.data[x_coords, y_coords] = value
 
 def bresenham(start, end):
     # setup initial conditions
