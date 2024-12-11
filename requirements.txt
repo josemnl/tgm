@@ -3,3 +3,4 @@ scipy
 matplotlib
 scikit-image
 #bagpy      # Only needed to convert the bag files to csv on a machine without ROS installed
+opencv-python
