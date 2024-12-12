@@ -8,17 +8,9 @@ from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import computeMetrics, IoU
 
-def run():
-    # Config file
-    configPath = './config/'
-    defConfFile = 'config'
-    logID = 'Exp2-TGM-GPU.py'
-
-    # Load parameters
-    conf = loadConfigAsDict(configPath, defConfFile)
-    specificConf = loadConfigAsDict(configPath, logID)
-    conf.__dict__.update(specificConf.__dict__)
-
+def run(logID, conf):
+    # Print logID
+    print('Running ' + logID)
     # Paths
     videoPath = './results/' + logID + '/'
 
@@ -42,9 +34,6 @@ def run():
     # Initial guess for the velocity
     v_t = [0, 0, 0]
 
-    # List all lidar files
-    lidarFiles = listFilesExt(conf.lidarPath, conf.lidarFormat.lower())
-
     # Dict to store runtimes. Each key is a type of time, and each value is an array with the time for each frame
     runtimes = {}
     runtimes['Data'] = []
@@ -62,16 +51,16 @@ def run():
         # Import sensor data
         if conf.is3D:
             if conf.lidarFormat == 'CSV':
-                z_t_3D = read3DLidarCSV(conf.lidarPath, i)
+                z_t_3D = read3DLidarCSV(conf.lidarPath + "z_" + str(i) + ".csv")
             elif conf.lidarFormat == 'BIN':
                 if conf.isLabeled:
-                    z_t_3D = read3DLabledLidarBIN(conf.lidarPath, conf.labelPath, i)
+                    z_t_3D = read3DLabledLidarBIN(conf.lidarPath + str(i).zfill(6) + ".bin", conf.labelPath + str(i).zfill(6) + ".label")
                 else:
-                    z_t_3D = read3DLidarBIN(conf.lidarPath + lidarFiles[i])
+                    z_t_3D = read3DLidarBIN(conf.lidarPath + str(i).zfill(6) + ".bin")
             else:
                 raise ValueError('Invalid lidar format')
         else:
-            z_t = read2DLidarCSV(conf.lidarPath, i)
+            z_t = read2DLidarCSV(conf.lidarPath + "z_" + str(i) + ".csv")
 
         # Filter the point cloud
         if conf.is3D:
@@ -114,10 +103,10 @@ def run():
 
         # Compute robot pose with SLAM or get it from log
         if not conf.isSLAM:
-            x_t = readPose(conf.lidarPath, i)
+            x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
         elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
-                x_t = readPose(conf.lidarPath, i)
+                x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
             except:
                 x_t = np.array(conf.startPoseSLAM)
         else:
@@ -247,4 +236,14 @@ def run():
     tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
 
 if __name__ == '__main__':
-    run()
+    # Config file
+    configPath = './config/'
+    defConfFile = 'config'
+    logID = 'Exp2-TGM-GPU'
+
+    # Load parameters
+    conf = loadConfigAsDict(configPath, defConfFile)
+    specificConf = loadConfigAsDict(configPath, logID)
+    conf.__dict__.update(specificConf.__dict__)
+
+    run(logID, conf)

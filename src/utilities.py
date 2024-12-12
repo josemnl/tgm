@@ -6,20 +6,20 @@ import yaml
 import pandas as pd
 from types import SimpleNamespace
 
-def read2DLidarCSV(path, i):
-    with open(path + "z_" + str(i) + ".csv") as data:
+def readPose(file):
+    with open(file) as data:
+        x_t = np.array([line.split(",") for line in data]).astype(float)[0]
+    return x_t
+
+def read2DLidarCSV(file):
+    with open(file) as data:
         z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
     return z_t
 
-def read3DLidarCSV(path, i):
-    data = pd.read_csv(path + "z_" + str(i) + ".csv", header=None)
+def read3DLidarCSV(file):
+    data = pd.read_csv(file, header=None)
     z_t_3D = lidarScan3D(data.values.astype(float))
     return z_t_3D
-
-def readPose(path, i):
-    with open(path + "x_" + str(i) + ".csv") as data:
-        x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-    return x_t
 
 def read3DLidarBIN(file):
     rawdata = np.fromfile(file, dtype=np.float32)
@@ -29,12 +29,12 @@ def read3DLidarBIN(file):
     z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
-def read3DLabledLidarBIN(pathData, pathLabels, i):
-    rawdata = np.fromfile(pathData + str(i).zfill(6) + ".bin", dtype=np.float32)
+def read3DLabledLidarBIN(lidarFile, labelFile):
+    rawdata = np.fromfile(lidarFile, dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
     data = np.reshape(rawdata, (-1, 4))
-    rawlabels = np.fromfile(pathLabels + str(i).zfill(6) + ".label", dtype=np.uint32)
+    rawlabels = np.fromfile(labelFile, dtype=np.uint32)
     labels = np.reshape(rawlabels, -1)
     z_t_3D = lidarScan3D(data[:,0:3], labels)
     return z_t_3D
@@ -130,11 +130,10 @@ def loadConfigAsDict(configPath, configFile):
     return config
 
 if __name__ == "__main__":
-    './SnowyKITTI/dataset/sequences/00/snow_velodyne/'
     pathData = './SnowyKITTI/dataset/sequences/00/snow_velodyne/'
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     i = 100
-    z_t_3D = read3DLabledLidarBIN(pathData, pathLabels, i)
+    z_t_3D = read3DLabledLidarBIN(pathData + str(i).zfill(6) + '.bin', pathLabels + str(i).zfill(6) + '.label')
     #z_t_3D.plot()
     z_t = z_t_3D.convertTo2D()
     z_t.plot()

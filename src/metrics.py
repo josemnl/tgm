@@ -74,7 +74,7 @@ def IoU(gM1, gM2):
 if __name__ == "__main__":
     # Config file
     configPath = './config/'
-    logID = 'SnowyKitti-00'
+    logID = 'snowyKitti'
 
     # Load parameters as dictionary
     conf = loadConfigAsDict(configPath, logID)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
-    z_t_3D = read3DLabledLidarBIN(conf.lidarPath, pathLabels, conf.initialTimeStep)
+    z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')
 
     # Create a fake 3D lidar scan with one point
     #points3D = np.array([[10, 2, 0]])
