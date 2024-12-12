@@ -1,12 +1,12 @@
 # Log parameters
-lidarPath : './snowyKITTI/dataset/sequences/00/snow_velodyne/'       # Path to the lidar data
+lidarPath : NAN                         # Path to the lidar data
 lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
 isLabeled : True                        # Set to True if the point cloud is labelled
-labelPath : './snowyKITTI/dataset/sequences/00/snow_labels/' # Path to the labels
+labelPath : NAN                         # Path to the labels
 snowLabel: 1                            # Label for the snow points
 initialTimeStep : 1                     # Initial time step to start the simulation
-simHorizon : 120                        # If 0, it runs until the end of the log
+simHorizon : NAN                        # If 0, it runs until the end of the log
 
 # SLAM parameters
 isSLAM : True                           # If True, it computes x_t using SLAM
@@ -29,7 +29,7 @@ style : 'combined'                      # Style of the plot: 'combined', 'static
 origin : [0,0]                          # Origin of the grid
 width : 1000                            # Width of the grid
 height : 1000                           # Height of the grid
-resolution : 0.125                        # Resolution of the grid
+resolution : 0.125                      # Resolution of the grid
 
 # TGM parameters
 staticPrior : 0.3                       # If 0, it assumes that all the elements are dynamic
@@ -56,7 +56,7 @@ SOR_s : 0.5                             # Number of standard deviations to consi
 isDROR : False                          # If True, it uses the DROR filter
 DROR_k : 5                              # Number of neighbors to consider in the DROR filter
 DROR_rho : 0.5                          # Distance factor of the DROR filter
-isDSOR : True                           # If True, it uses the DSOR filter
+isDSOR : False                           # If True, it uses the DSOR filter
 DSOR_k : 5                              # Number of neighbors to consider in the DSOR filter
 DSOR_s : 2                              # Number of standard deviations to consider in the DSOR filter
 DSOR_rho : 0.08                         # Distance factor of the DSOR filter
