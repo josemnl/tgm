@@ -53,7 +53,7 @@ class TGM:
 
         self.x_t = []
 
-        self.prev_region = (0, 0, 0, 0)
+        self.prev_region = [0, 0, 0, 0]
 
         self.GPU = GPU
         if self.GPU:
@@ -135,7 +135,7 @@ class TGM:
         self.weatherMap.data[x0_new:x1_new, y0_new:y1_new] = weatherMatrix
 
         # Save the previous visible mask
-        self.prev_region = (x0_new, y0_new, x1_new, y1_new)
+        self.prev_region = [x0_new, y0_new, x1_new, y1_new]
 
     def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:
@@ -165,6 +165,30 @@ class TGM:
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
 
         return predStaticMap, predDynamicMap, predWeatherMap
+    
+    def reshape(self, origin_x, origin_y, width, height):
+        '''
+        Update the origin and size of the TGM, reshaping the maps and updating the previous region.
+        '''
+        self.prev_region[0] = self.prev_region[0] + self.origin_x - origin_x
+        self.prev_region[1] = self.prev_region[1] + self.origin_y - origin_y
+        self.prev_region[2] = self.prev_region[2] + self.origin_x - origin_x
+        self.prev_region[3] = self.prev_region[3] + self.origin_y - origin_y
+
+        self.staticMap = self.staticMap.reshape(origin_x, origin_y, width, height, self.staticPrior)
+        self.dynamicMap = self.dynamicMap.reshape(origin_x, origin_y, width, height, self.dynamicPrior)
+        self.weatherMap = self.weatherMap.reshape(origin_x, origin_y, width, height, self.weatherPrior)
+
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.width = width
+        self.height = height
+
+        # Make sure the previous region is within the new map
+        self.prev_region[0] = max(0, self.prev_region[0])
+        self.prev_region[1] = max(0, self.prev_region[1])
+        self.prev_region[2] = min(width, self.prev_region[2])
+        self.prev_region[3] = min(height, self.prev_region[3])
 
     def oneLayer(self, layer, following=False, width=0, height=0):
         if following:
