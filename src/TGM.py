@@ -4,7 +4,6 @@ from matplotlib.image import imsave
 from gridMap import gridMap
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
-import time
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
 from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
 import cupy as cp
@@ -67,8 +66,6 @@ class TGM:
         assert isinstance(instGridMap, gridMap)
         assert instGridMap.resolution == self.resolution
 
-        timeStart = time.time()
-
         # Update ego position (used for visualization purposes only)
         self.x_t = x_t
 
@@ -89,13 +86,9 @@ class TGM:
         instWeatherMap = instMap * self.weatherPrior / self.sdwPrior
         instFreeMap = 1 - instStaticMap - instDynamicMap - instWeatherMap
 
-        timeSplit = time.time()
-
         # Predict based on previous measurements
         predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
         predFreeMap = 1 - predStaticMap - predDynamicMap - predWeatherMap
-
-        timePredict = time.time()
 
         # Compute the updated maps
         if self.staticPrior != 0:
@@ -118,8 +111,6 @@ class TGM:
         dynamicMatrix /= total
         weatherMatrix /= total
 
-        timeUpdate = time.time()
-
         # Apply saturation limits
         if self.GPU:
             staticMatrix = cp.clip(staticMatrix, self.satLowS, self.satHighS)
@@ -128,13 +119,9 @@ class TGM:
             staticMatrix = np.clip(staticMatrix, self.satLowS, self.satHighS)
             dynamicMatrix = np.clip(dynamicMatrix, self.satLowD, self.satHighD)
 
-        timeSat = time.time()
-
         # Set the cells that were visible to the prior
         x0, y0, x1, y1 = self.prev_region
         self.dynamicMap.data[x0:x1, y0:y1] = (1 - self.staticMap.data[x0:x1, y0:y1]) * self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior)
-
-        timeVisible = time.time()
 
         # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
         x0_new = overlapOrigin_x - self.origin_x
@@ -149,20 +136,6 @@ class TGM:
 
         # Save the previous visible mask
         self.prev_region = (x0_new, y0_new, x1_new, y1_new)
-
-        timeSave = time.time()
-
-        '''
-        # Print times
-        print('Split:    ' + str(timeSplit - timeStart))
-        print('Predict:  ' + str(timePredict - timeSplit))
-        print('Update:   ' + str(timeUpdate - timePredict))
-        print('Sat:      ' + str(timeSat - timeUpdate))
-        print('Visible:  ' + str(timeVisible - timeSat))
-        print('Save:     ' + str(timeSave - timeVisible))
-        print('Total:    ' + str(time.time() - timeStart))
-        print('')
-        '''
 
     def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:
