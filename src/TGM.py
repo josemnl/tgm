@@ -166,6 +166,9 @@ class TGM:
 
         return predStaticMap, predDynamicMap, predWeatherMap
     
+    def contains(self, origin_x, origin_y, width, height):
+        return self.staticMap.contains(origin_x, origin_y, width, height)
+    
     def reshape(self, origin_x, origin_y, width, height):
         '''
         Update the origin and size of the TGM, reshaping the maps and updating the previous region.

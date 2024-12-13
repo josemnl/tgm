@@ -38,12 +38,15 @@ class gridMap:
                            self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
         plt.savefig(filename)
 
+    def contains(self, origin_x: int, origin_y: int, width: int, height: int) -> bool:
+        return origin_x >= self.origin_x and origin_y >= self.origin_y and origin_x + width <= self.origin_x + self.width and origin_y + height <= self.origin_y + self.height
+
     def crop(self, origin_x: int, origin_y: int, width: int, height: int) -> 'gridMap':
         """
         Crop the grid map to a new grid map with the specified origin and size.
         Throws an error if the new grid is outside the old one.
         """
-        if origin_x < self.origin_x or origin_y < self.origin_y or origin_x + width > self.origin_x + self.width or origin_y + height > self.origin_y + self.height:
+        if not self.contains(origin_x, origin_y, width, height):
             raise ValueError("New grid is outside the old one")
         x0 = origin_x - self.origin_x
         y0 = origin_y - self.origin_y
