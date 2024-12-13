@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import cv2
+import cupy as cp
 
 class gridMap:
     def __init__(self, origin_x, origin_y, width, height, resolution, data):
@@ -21,6 +22,11 @@ class gridMap:
         self.height = height
         self.resolution = resolution
         self.data = data
+
+    def toCPU(self):
+        if isinstance(self.data, cp.ndarray):
+            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.data))
+        return self
 
     def plot(self, isPause = False):
         """
