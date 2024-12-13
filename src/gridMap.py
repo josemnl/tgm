@@ -57,15 +57,18 @@ class gridMap:
         If the new grid is partially outside the old one, the new cells are initialized with the fill value.
         """
         overlap_origin_x, overlap_origin_y, overlap_width, overlap_height = self.computeOverlap(origin_x, origin_y, width, height)
-        new_data = np.full((width, height), fill_value)
+        if isinstance(self.data, cp.ndarray):
+            new_data = cp.full((width, height), fill_value)
+        else:
+            new_data = np.full((width, height), fill_value)
         ix_0 = overlap_origin_x - origin_x
         iy_0 = overlap_origin_y - origin_y
-        ix_1 = ix_0 + overlap_width
-        iy_1 = iy_0 + overlap_height
+        ix_1 = ix_0 + overlap_width - 1
+        iy_1 = iy_0 + overlap_height - 1
         nx_0 = overlap_origin_x - self.origin_x
         ny_0 = overlap_origin_y - self.origin_y
-        nx_1 = nx_0 + overlap_width
-        ny_1 = ny_0 + overlap_height
+        nx_1 = nx_0 + overlap_width - 1
+        ny_1 = ny_0 + overlap_height - 1
 
         new_data[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
         return gridMap(origin_x, origin_y, width, height, self.resolution, new_data)
