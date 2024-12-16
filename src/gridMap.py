@@ -5,6 +5,23 @@ import cv2
 import cupy as cp
 from typing import Tuple, Union
 
+class frame:
+    def __init__(self, origin_x: int, origin_y: int, width: int, height: int, resolution: float):
+        """
+        Origin, width, and height are in grid cells
+        Resolution is in meters per grid cell
+        """
+        assert isinstance(origin_x, int)
+        assert isinstance(origin_y, int)
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        assert isinstance(resolution, float)
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.width = width
+        self.height = height
+        self.resolution = resolution
+
 class gridMap:
     def __init__(self, origin_x: int, origin_y: int, width: int, height: int, resolution: float, data: Union[np.ndarray, cp.ndarray]):
         """
@@ -18,8 +35,16 @@ class gridMap:
         self.resolution = resolution
         self.data = data
 
+    @property
+    def isGPU(self) -> bool:
+        return isinstance(self.data, cp.ndarray)
+    
+    @property
+    def isBool(self) -> bool:
+        return self.data.dtype == np.bool
+
     def toCPU(self) -> 'gridMap':
-        if isinstance(self.data, cp.ndarray):
+        if self.isGPU:
             return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.data))
         return self
 
@@ -60,7 +85,7 @@ class gridMap:
         If the new grid is partially outside the old one, the new cells are initialized with the fill value.
         """
         overlap_origin_x, overlap_origin_y, overlap_width, overlap_height = self.computeOverlap(origin_x, origin_y, width, height)
-        if isinstance(self.data, cp.ndarray):
+        if self.isGPU:
             new_data = cp.full((width, height), fill_value)
         else:
             new_data = np.full((width, height), fill_value)
