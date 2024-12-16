@@ -2,7 +2,6 @@ import numpy as np
 from gridMap import gridMap
 from lidarScan import lidarScan
 import time
-from collections import deque
 
 class sensorModel:
     def __init__ (self, origin, width, height, resolution, sensorRange, invModel ,occPrior):
@@ -135,17 +134,23 @@ class sensorModel:
         if is_steep:
             if dy == 0:
                 y_coords = np.array([y1])
-                x_coords = np.linspace(x1, x2, abs(x2 - x1) + 1).astype(int)
+                step = 1 if x2 > x1 else -1
+                x_coords = np.arange(x1, x2 + step, step)
             else:
-                y_coords = np.linspace(y1, y2, abs(y2 - y1) + 1).astype(int)
-                x_coords = np.round(x1 + dx/dy * (y_coords - y1)).astype(int)
+                step = 1 if y2 > y1 else -1
+                y_coords = np.arange(y1, y2 + step, step)
+                # Calculate x_coords using integer division to avoid floating points
+                x_coords = np.floor(x1 + (dx * (y_coords - y1) / dy)).astype(int)
         else:
             if dx == 0:
                 x_coords = np.array([x1])
-                y_coords = np.linspace(y1, y2, abs(y2 - y1) + 1).astype(int)
+                step = 1 if y2 > y1 else -1
+                y_coords = np.arange(y1, y2 + step, step)
             else:
-                x_coords = np.linspace(x1, x2, abs(x2 - x1) + 1).astype(int)
-                y_coords = np.round(y1 + dy/dx * (x_coords - x1)).astype(int)
+                step = 1 if x2 > x1 else -1
+                x_coords = np.arange(x1, x2 + step, step)
+                # Calculate y_coords using integer division to avoid floating points
+                y_coords = np.floor(y1 + (dy * (x_coords - x1) / dx)).astype(int)
 
         if valueCondition is None:
             self.data[x_coords, y_coords] = value
@@ -153,41 +158,6 @@ class sensorModel:
             # Check if all cells in the ray are different from the valueCondition
             if np.all(self.data[x_coords, y_coords] != valueCondition):
                 self.data[x_coords, y_coords] = value
-
-def bresenham(start, end):
-    # setup initial conditions
-    x1, y1 = start
-    x2, y2 = end
-    dx = x2 - x1
-    dy = y2 - y1
-    is_steep = abs(dy) > abs(dx)  # determine how steep the line is
-    if is_steep:  # rotate line
-        x1, y1 = y1, x1
-        x2, y2 = y2, x2
-    # swap start and end points if necessary and store swap state
-    swapped = False
-    if x1 > x2:
-        x1, x2 = x2, x1
-        y1, y2 = y2, y1
-        swapped = True
-    dx = x2 - x1  # recalculate differentials
-    dy = y2 - y1  # recalculate differentials
-    error = int(dx / 2.0)  # calculate error
-    y_step = 1 if y1 < y2 else -1
-    # iterate over bounding box generating points between start and end
-    y = y1
-    points = deque()
-    for x in range(x1, x2 + 1):
-        coord = (y, x) if is_steep else (x, y)
-        points.append(coord)
-        error -= abs(dy)
-        if error < 0:
-            y += y_step
-            error += dx
-    if swapped:  # reverse the list if the coordinates were swapped
-        points = deque(reversed(points))
-    points = np.array(points)
-    return points
 
 def main():
     origin = [0,0]
