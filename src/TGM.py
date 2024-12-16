@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
-from gridMap import gridMap
+from gridMap import gridMap, frame
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
@@ -9,73 +9,57 @@ from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
 import cupy as cp
 
 class TGM:
-    def __init__(self, origin, width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv=False, GPU=True):
-        assert isinstance(origin[0], int)
-        assert isinstance(origin[1], int)
-        assert isinstance(width, int)
-        assert isinstance(height, int)
-
-        self.origin_x = origin[0]
-        self.origin_y = origin[1]
-        self.width = width
-        self.height = height
-        self.resolution = resolution
-
+    def __init__(self, tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv=False, isGPU=True):
+        self.frame = tgmFrame
         self.staticPrior = staticPrior
         self.dynamicPrior = dynamicPrior
         self.weatherPrior = weatherPrior
         self.freePrior = 1 - staticPrior - dynamicPrior - weatherPrior
-
         self.sdwPrior = self.staticPrior + self.dynamicPrior + self.weatherPrior
+        self.staticMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * staticPrior)
+        self.dynamicMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * dynamicPrior)
+        self.weatherMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * weatherPrior)
 
-        r = int(maxVelocity / self.resolution)
+        r = int(maxVelocity / self.frame.r)
         shape = disk(r).astype(float)
         self.D0 = 1 / np.sum(shape)
         shape /= np.sum(shape)
         shape[len(shape)//2, len(shape)//2] = 0
         self.convShape = shape
 
-        staticData = np.ones((width, height)) * staticPrior
-        self.staticMap = gridMap(origin[0], origin[1], width, height, resolution, staticData)
-        
-        dynamicData = np.ones((width, height)) * dynamicPrior
-        self.dynamicMap = gridMap(origin[0], origin[1], width, height, resolution, dynamicData)
-        
-        weatherData = np.ones((width, height)) * weatherPrior
-        self.weatherMap = gridMap(origin[0], origin[1], width, height, resolution, weatherData)
-
         self.satLowS = saturationLimits[0]
         self.satHighS = saturationLimits[1]
         self.satLowD = saturationLimits[2]
         self.satHighD = saturationLimits[3]
-
         self.fftConv = fftConv
 
         self.x_t = []
-
         self.prev_region = [0, 0, 0, 0]
 
-        self.GPU = GPU
+        self.GPU = isGPU
         if self.GPU:
             self.staticMap.data = cp.asarray(self.staticMap.data)
             self.dynamicMap.data = cp.asarray(self.dynamicMap.data)
             self.weatherMap.data = cp.asarray(self.weatherMap.data)
             self.convShape = cp.asarray(self.convShape)
 
+    @property
+    def freeMap(self):
+        return gridMap(self.frame, 1 - self.staticMap.data - self.dynamicMap.data - self.weatherMap.data)
+
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
-        assert instGridMap.resolution == self.resolution
+        assert instGridMap.frame.r == self.frame.r
 
         # Update ego position (used for visualization purposes only)
         self.x_t = x_t
 
         # Compute overlaping grid between the instantaneous map and the TGM
-        overlap = self.staticMap.computeOverlap(instGridMap.origin_x, instGridMap.origin_y, instGridMap.width, instGridMap.height)
-        overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight = overlap
-        assert overlapWidth > 0 and overlapHeight > 0
+        overlap = self.staticMap.computeOverlap(instGridMap.frame)
+        assert overlap.w > 0 and overlap.h > 0
 
         # Crop the instantaneous map to the overlapping region
-        instMap = instGridMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
+        instMap = instGridMap.crop(overlap).data
 
         if self.GPU:
             instMap = cp.asarray(instMap)
@@ -87,7 +71,7 @@ class TGM:
         instFreeMap = 1 - instStaticMap - instDynamicMap - instWeatherMap
 
         # Predict based on previous measurements
-        predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
+        predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap.ox, overlap.oy, overlap.w, overlap.h)
         predFreeMap = 1 - predStaticMap - predDynamicMap - predWeatherMap
 
         # Compute the updated maps
@@ -124,10 +108,10 @@ class TGM:
         self.dynamicMap.data[x0:x1, y0:y1] = (1 - self.staticMap.data[x0:x1, y0:y1]) * self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior)
 
         # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
-        x0_new = overlapOrigin_x - self.origin_x
-        y0_new = overlapOrigin_y - self.origin_y
-        x1_new = x0_new + overlapWidth
-        y1_new = y0_new + overlapHeight
+        x0_new = overlap.ox - self.frame.ox
+        y0_new = overlap.oy - self.frame.oy
+        x1_new = x0_new + overlap.w
+        y1_new = y0_new + overlap.h
 
         # Save the visible cells
         self.staticMap.data[x0_new:x1_new, y0_new:y1_new] = staticMatrix
@@ -139,14 +123,13 @@ class TGM:
 
     def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
         if overlapOrigin_x is None:
-            overlapOrigin_x = self.origin_x
-            overlapOrigin_y = self.origin_y
-            overlapWidth = self.width
-            overlapHeight = self.height
+            overlapFrame = self.frame
+
+        overlapFrame = frame(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.frame.r)
 
         # Computed cropped maps
-        staticMap = self.staticMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
-        dynamicMap = self.dynamicMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
+        staticMap = self.staticMap.crop(overlapFrame).data
+        dynamicMap = self.dynamicMap.crop(overlapFrame).data
 
         # Compute static prediction
         predStaticMap = staticMap
@@ -166,77 +149,56 @@ class TGM:
 
         return predStaticMap, predDynamicMap, predWeatherMap
     
-    def contains(self, origin_x, origin_y, width, height):
-        return self.staticMap.contains(origin_x, origin_y, width, height)
+    def contains(self, otherFrame: frame):
+        assert otherFrame.r == self.frame.r
+        return self.staticMap.contains(otherFrame)
     
-    def reshape(self, origin_x, origin_y, width, height):
+    def reshape(self, newFrame: frame):
         '''
         Update the origin and size of the TGM, reshaping the maps and updating the previous region.
         '''
-        self.prev_region[0] = self.prev_region[0] + self.origin_x - origin_x
-        self.prev_region[1] = self.prev_region[1] + self.origin_y - origin_y
-        self.prev_region[2] = self.prev_region[2] + self.origin_x - origin_x
-        self.prev_region[3] = self.prev_region[3] + self.origin_y - origin_y
+        self.prev_region[0] = self.prev_region[0] + self.frame.ox - newFrame.ox
+        self.prev_region[1] = self.prev_region[1] + self.frame.oy - newFrame.oy
+        self.prev_region[2] = self.prev_region[2] + self.frame.ox - newFrame.ox
+        self.prev_region[3] = self.prev_region[3] + self.frame.oy - newFrame.oy
 
-        self.staticMap = self.staticMap.reshape(origin_x, origin_y, width, height, self.staticPrior)
-        self.dynamicMap = self.dynamicMap.reshape(origin_x, origin_y, width, height, self.dynamicPrior)
-        self.weatherMap = self.weatherMap.reshape(origin_x, origin_y, width, height, self.weatherPrior)
+        self.staticMap = self.staticMap.reshape(newFrame, self.staticPrior)
+        self.dynamicMap = self.dynamicMap.reshape(newFrame, self.dynamicPrior)
+        self.weatherMap = self.weatherMap.reshape(newFrame, self.weatherPrior)
 
-        self.origin_x = origin_x
-        self.origin_y = origin_y
-        self.width = width
-        self.height = height
+        self.frame = newFrame
 
         # Make sure the previous region is within the new map
         self.prev_region[0] = max(0, self.prev_region[0])
         self.prev_region[1] = max(0, self.prev_region[1])
-        self.prev_region[2] = min(width, self.prev_region[2])
-        self.prev_region[3] = min(height, self.prev_region[3])
+        self.prev_region[2] = min(newFrame.w, self.prev_region[2])
+        self.prev_region[3] = min(newFrame.h, self.prev_region[3])
 
-    def oneLayer(self, layer, following=False, width=0, height=0):
-        if following:
-            # Compute the origin
-            origin_x = int((self.x_t[0] / self.resolution) - width / 2)
-            origin_y = int((self.x_t[1] / self.resolution) - height / 2)
-            # Compute overlaping grid between the instantaneous map and the TGM
-            overlap = self.staticMap.computeOverlap(origin_x, origin_y, width, height)
-            overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight = overlap
-            assert overlapWidth > 0 and overlapHeight > 0
-
-            gm = self._get_layer_map(layer).crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight)
-        else:
-            gm = self._get_layer_map(layer)
-
-        return gridMap(
-            gm.origin_x,
-            gm.origin_y,
-            gm.width,
-            gm.height,
-            gm.resolution,
-            cp.asnumpy(gm.data) if self.GPU else gm.data
-        )
-
-    def oneLayer2(self, layer, origin_x, origin_y, width, height):
-        return self._get_layer_map(layer).crop(origin_x, origin_y, width, height).toCPU()
+    def oneLayer(self, layer, layerFrame):
+        overlap = self.frame.computeOverlap(layerFrame)
+        return self._get_layer_map(layer).crop(overlap)
+    
+    def maxLayer(self, layer, layerFrame):
+        '''
+        Return a map with ones in the cells where probability of layer is bigger than probability of all the others.
+        '''
+        layers = ['static', 'dynamic', 'weather']
+        layers.remove(layer)
+        overlap = self.frame.computeOverlap(layerFrame)
+        return gridMap(self.frame,
+                       (self._get_layer_map(layer).data > self._get_layer_map(layers[0]).data) &
+                       (self._get_layer_map(layer).data > self._get_layer_map(layers[1]).data) &
+                       (self._get_layer_map(layer).data > self.freeMap.data)).crop(overlap)
 
     def computeStaticDynamicGridMap(self):
         combined_data = self.staticMap.data + self.dynamicMap.data
-        if self.GPU:
-            combined_data = cp.asnumpy(combined_data)
-        return gridMap(
-            self.staticMap.origin_x,
-            self.staticMap.origin_y,
-            self.staticMap.width,
-            self.staticMap.height,
-            self.staticMap.resolution,
-            combined_data
-        )
+        return gridMap(self.frame, combined_data)
     
     def plot(self, fig=None, saveMap=False, savePNG=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
-        origin_x = int(origin[0]/self.resolution) if origin is not None else None
-        origin_y = int(origin[1]/self.resolution) if origin is not None else None
-        width = int(width/self.resolution) if width != 0 else 0
-        height = int(height/self.resolution) if height != 0 else 0
+        origin_x = int(origin[0]/self.frame.r) if origin is not None else None
+        origin_y = int(origin[1]/self.frame.r) if origin is not None else None
+        width = int(width/self.frame.r) if width != 0 else 0
+        height = int(height/self.frame.r) if height != 0 else 0
         # Assert that the style is valid
         assert style in ['combined', 'static', 'dynamic', 'weather']
 
@@ -249,8 +211,8 @@ class TGM:
 
         # If section is Following, compute the origin
         if section == 'Following':
-            origin_x = int(self.x_t[0] / self.resolution - width/2)
-            origin_y = int(self.x_t[1] / self.resolution - height/2)
+            origin_x = int(self.x_t[0] / self.frame.r - width/2)
+            origin_y = int(self.x_t[1] / self.frame.r - height/2)
 
         # If section is Constant, assert that the origin is not None and compute origin
         if section == 'Constant':
@@ -261,21 +223,22 @@ class TGM:
         if section == 'Following' or section == 'Constant':
             assert width != 0 and height != 0
             # Compute overlaping grid
-            overlapOrigin_x = max(self.origin_x, origin_x)
-            overlapOrigin_y = max(self.origin_y, origin_y)
-            overlapWidth = min(self.origin_x + self.width, origin_x + width) - overlapOrigin_x
-            overlapHeight = min(self.origin_y + self.height, origin_y + height) - overlapOrigin_y
+            overlapOrigin_x = max(self.frame.ox, origin_x)
+            overlapOrigin_y = max(self.frame.oy, origin_y)
+            overlapWidth = min(self.frame.ox + self.frame.w, origin_x + width) - overlapOrigin_x
+            overlapHeight = min(self.frame.oy + self.frame.h, origin_y + height) - overlapOrigin_y
             assert overlapWidth > 0 and overlapHeight > 0
             # Crop the maps
-            staticMap = self.staticMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
-            dynamicMap = self.dynamicMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
-            weatherMap = self.weatherMap.crop(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight).data
+            newFrame = frame(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.frame.r)
+            staticMap = self.staticMap.crop(newFrame).data
+            dynamicMap = self.dynamicMap.crop(newFrame).data
+            weatherMap = self.weatherMap.crop(newFrame).data
         # Otherwise, use the full maps
         else:
-            overlapOrigin_x = self.origin_x
-            overlapOrigin_y = self.origin_y
-            overlapWidth = self.width
-            overlapHeight = self.height
+            overlapOrigin_x = self.frame.ox
+            overlapOrigin_y = self.frame.oy
+            overlapWidth = self.frame.w
+            overlapHeight = self.frame.h
             staticMap = self.staticMap.data
             dynamicMap = self.dynamicMap.data
             weatherMap = self.weatherMap.data
@@ -293,26 +256,26 @@ class TGM:
             I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
             ax = fig.add_subplot(1, 1, 1)
             ax.imshow(I, vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
-                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
+                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'static':
             I = 1 - np.transpose(staticMap)
             ax = fig.add_subplot(1, 1, 1)
             ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
-                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
+                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'dynamic':
             I = 1 - np.transpose(dynamicMap)
             ax = fig.add_subplot(1, 1, 1)
             ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
-                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
+                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'weather':
             I = 1 - np.transpose(weatherMap)
             ax = fig.add_subplot(1, 1, 1)
             ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.resolution, (overlapOrigin_x + overlapWidth)*self.resolution,
-                            overlapOrigin_y*self.resolution, (overlapOrigin_y + overlapHeight)*self.resolution))
+                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
+                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
             
         # Plot the ego pose
         if self.x_t is not None and len(self.x_t) != 0:
@@ -399,5 +362,6 @@ if __name__ == '__main__':
     weatherPrior = 0.01
     maxVelocity = 1
     saturationLimits = [0.1, 0.9, 0.1, 0.9]
-    tgm = TGM([origin_x, origin_y], width, height, resolution, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits)
+    tgmFrame = frame(origin_x, origin_y, width, height, resolution)
+    tgm = TGM(tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits)
     tgm.plot()

@@ -16,23 +16,45 @@ class frame:
         assert isinstance(width, int)
         assert isinstance(height, int)
         assert isinstance(resolution, float)
-        self.origin_x = origin_x
-        self.origin_y = origin_y
-        self.width = width
-        self.height = height
-        self.resolution = resolution
+        assert width > 0
+        assert height > 0
+        assert resolution > 0
+        self.ox = origin_x
+        self.oy = origin_y
+        self.w = width
+        self.h = height
+        self.r = resolution
+
+    def contains(self, other: 'frame') -> bool:
+        return self.ox <= other.ox and self.oy <= other.oy and self.ox + self.w >= other.ox + other.w and self.oy + self.h >= other.oy + other.h
+
+    def computeOverlap(self, other: 'frame') -> 'frame':
+        """
+        Compute the overlap between this frame and another frame.
+        """
+        overlap_origin_x = max(self.ox, other.ox)
+        overlap_origin_y = max(self.oy, other.oy)
+        overlap_width = min(self.ox + self.w, other.ox + other.w) - overlap_origin_x
+        overlap_height = min(self.oy + self.h, other.oy + other.h) - overlap_origin_y
+        
+        return frame(overlap_origin_x, overlap_origin_y, overlap_width, overlap_height, self.r)
+
+    @classmethod
+    def frameAroundPose(cls, x: float, y: float, width: int, height: int, resolution: float) -> 'frame':
+        """
+        Create a frame centered around a pose with the specified width and height.
+        """
+        origin_x = int((x / resolution) - width/2)
+        origin_y = int((y / resolution) - height/2)
+        return cls(origin_x, origin_y, width, height, resolution)
 
 class gridMap:
-    def __init__(self, origin_x: int, origin_y: int, width: int, height: int, resolution: float, data: Union[np.ndarray, cp.ndarray]):
+    def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
         """
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
         """
-        self.origin_x = origin_x
-        self.origin_y = origin_y
-        self.width = width
-        self.height = height
-        self.resolution = resolution
+        self.frame = gridFrame
         self.data = data
 
     @property
@@ -45,65 +67,65 @@ class gridMap:
 
     def toCPU(self) -> 'gridMap':
         if self.isGPU:
-            return gridMap(self.origin_x, self.origin_y, self.width, self.height, self.resolution, cp.asnumpy(self.data))
+            return gridMap(self.frame, cp.asnumpy(self.data))
         return self
 
     def plot(self, isPause: bool = False) -> None:
         I = 1 - np.transpose(self.data)
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.origin_x*self.resolution, (self.origin_x + self.width)*self.resolution,
-                           self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
+                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
+                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
         plt.show(block=isPause)
         plt.pause(0.0001)
 
     def savePNG(self, filename: str) -> None:
         I = 1 - np.transpose(self.data)
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.origin_x*self.resolution, (self.origin_x + self.width)*self.resolution,
-                           self.origin_y*self.resolution, (self.origin_y + self.height)*self.resolution))
+                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
+                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
         plt.savefig(filename)
 
-    def contains(self, origin_x: int, origin_y: int, width: int, height: int) -> bool:
-        return origin_x >= self.origin_x and origin_y >= self.origin_y and origin_x + width <= self.origin_x + self.width and origin_y + height <= self.origin_y + self.height
+    def contains(self, frame) -> bool:
+        return self.frame.contains(frame)
 
-    def crop(self, origin_x: int, origin_y: int, width: int, height: int) -> 'gridMap':
+    def crop(self, newFrame: frame) -> 'gridMap':
         """
         Crop the grid map to a new grid map with the specified origin and size.
         Throws an error if the new grid is outside the old one.
         """
-        if not self.contains(origin_x, origin_y, width, height):
+        if not self.contains(newFrame):
             raise ValueError("New grid is outside the old one")
-        x0 = origin_x - self.origin_x
-        y0 = origin_y - self.origin_y
-        x1 = x0 + width
-        y1 = y0 + height
-        return gridMap(origin_x, origin_y, width, height, self.resolution, self.data[x0:x1, y0:y1])
+        x0 = newFrame.ox - self.frame.ox
+        y0 = newFrame.oy - self.frame.oy
+        x1 = x0 + newFrame.w
+        y1 = y0 + newFrame.h
+        return gridMap(newFrame, self.data[x0:x1, y0:y1])
     
-    def reshape(self, origin_x: int, origin_y: int, width: int, height: int, fill_value: float) -> 'gridMap':
+    def reshape(self, newFrame: frame, fill_value: float) -> 'gridMap':
         """
         Reshape the grid map.
         If the new grid is partially outside the old one, the new cells are initialized with the fill value.
         """
-        overlap_origin_x, overlap_origin_y, overlap_width, overlap_height = self.computeOverlap(origin_x, origin_y, width, height)
+        overlap = self.computeOverlap(newFrame)
         if self.isGPU:
-            new_data = cp.full((width, height), fill_value)
+            newData = cp.full((newFrame.w, newFrame.h), fill_value)
         else:
-            new_data = np.full((width, height), fill_value)
-        ix_0 = overlap_origin_x - origin_x
-        iy_0 = overlap_origin_y - origin_y
-        ix_1 = ix_0 + overlap_width - 1
-        iy_1 = iy_0 + overlap_height - 1
-        nx_0 = overlap_origin_x - self.origin_x
-        ny_0 = overlap_origin_y - self.origin_y
-        nx_1 = nx_0 + overlap_width - 1
-        ny_1 = ny_0 + overlap_height - 1
+            newData = np.full((newFrame.w, newFrame.h), fill_value)
+        ix_0 = overlap.ox - newFrame.ox
+        iy_0 = overlap.oy - newFrame.oy
+        ix_1 = ix_0 + overlap.w - 1
+        iy_1 = iy_0 + overlap.h - 1
+        nx_0 = overlap.ox - self.frame.ox
+        ny_0 = overlap.oy - self.frame.oy
+        nx_1 = nx_0 + overlap.w - 1
+        ny_1 = ny_0 + overlap.h - 1
 
-        new_data[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
-        return gridMap(origin_x, origin_y, width, height, self.resolution, new_data)
+        newData[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
+        return gridMap(newFrame, newData)
 
     def occupancy(self, x: float, y: float) -> float:
-        ix = np.round((x - self.origin_x*self.resolution)/self.resolution).astype(int)
-        iy = np.round((y - self.origin_y*self.resolution)/self.resolution).astype(int)
+        ix = np.round((x - self.frame.ox*self.frame.r)/self.frame.r).astype(int)
+        iy = np.round((y - self.frame.oy*self.frame.r)/self.frame.r).astype(int)
         return self.data[ix][iy]
     
     def saveState(self, filename: str) -> None:
@@ -113,16 +135,11 @@ class gridMap:
             pickle.dump(self, f)
         self.data = original_data
 
-    def computeOverlap(self, other_origin_x: int, other_origin_y: int, other_width: int, other_height: int) -> Tuple[int, int, int, int]:
+    def computeOverlap(self, frame: frame) -> 'frame':
         """
         Compute the overlap between this grid and another grid.
         """
-        overlap_origin_x = max(self.origin_x, other_origin_x)
-        overlap_origin_y = max(self.origin_y, other_origin_y)
-        overlap_width = min(self.origin_x + self.width, other_origin_x + other_width) - overlap_origin_x
-        overlap_height = min(self.origin_y + self.height, other_origin_y + other_height) - overlap_origin_y
-        
-        return overlap_origin_x, overlap_origin_y, overlap_width, overlap_height
+        return self.frame.computeOverlap(frame)
     
     def drawFilledRectangle(self, x: float, y: float, theta: float, length: float, width: float, fill_value: float) -> None:
         # Compute the corners of the rectangle
@@ -137,8 +154,8 @@ class gridMap:
         rotated_corners = np.dot(rotation_matrix, (corners - np.array([x, y])).T).T + np.array([x, y])
 
         # Translate the corners to the grid map
-        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.origin_x*self.resolution)/self.resolution
-        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.origin_y*self.resolution)/self.resolution
+        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.frame.ox*self.frame.r)/self.frame.r
+        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.frame.oy*self.frame.r)/self.frame.r
 
         # Swap x and y (for consistency with openCV)
         rotated_corners[:, 0], rotated_corners[:, 1] = rotated_corners[:, 1], rotated_corners[:, 0].copy()
@@ -160,16 +177,19 @@ def main() -> None:
     width = 10*2
     height = 5*2
     resolution = 0.5
+    currentFrame = frame(origin_x, origin_y, width, height, resolution)
 
     data = np.zeros((width, height))
     data[0][0] = 1
     data[19][0] = 0.5
     
-    grid = gridMap(origin_x, origin_y, width, height, resolution, data)
+    grid = gridMap(currentFrame, data)
     grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
     grid.plot(isPause=True)
 
-    grid.crop(10, 0, 10, 6).plot(isPause=True)
+    newFrame = frame(10, 0, 10, 6, 0.5)
+
+    grid.crop(newFrame).plot(isPause=True)
 
 if __name__ == '__main__':
     main()

@@ -30,12 +30,12 @@ def computeMetrics(z_t, x_t, gM, label=1):
 def IoU(gM1, gM2):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
-    assert gM1.width == gM2.width
-    assert gM1.height == gM2.height
-    assert gM1.resolution == gM2.resolution
-    print(gM1.origin_x, gM2.origin_x)
-    assert gM1.origin_x == gM2.origin_x
-    assert gM1.origin_y == gM2.origin_y
+    assert gM1.frame.w == gM2.frame.w
+    assert gM1.frame.h == gM2.frame.h
+    assert gM1.frame.r == gM2.frame.r
+    print(gM1.frame.ox, gM2.frame.ox)
+    assert gM1.frame.ox == gM2.frame.ox
+    assert gM1.frame.oy == gM2.frame.oy
 
     # Plot grid maps
     #gM1.plot()
@@ -46,7 +46,7 @@ def IoU(gM1, gM2):
     print('Max value of gM2: ' + str(max_gM2))
 
     treshold_1 = 0.7
-    treshold_2 = 0.5
+    treshold_2 = 0.3
 
     # Compute the intersection
     intersection = np.logical_and(gM1.data > treshold_1, gM2.data > treshold_2)

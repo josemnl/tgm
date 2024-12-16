@@ -4,8 +4,9 @@ from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 from lidarScan import lidarScan
+from gridMap import gridMap
 
-def lsqnl_matching(scan, lsq_map, x0, max_range):
+def lsqnl_matching(scan, lsq_map: gridMap, x0, max_range):
     # Remove the no-return scans from scan
     scan.removeFarPoints(max_range)
 
@@ -14,13 +15,13 @@ def lsqnl_matching(scan, lsq_map, x0, max_range):
     x = x.x
     return x
 
-def lsq_fun(relPose, lsq_scan, lsq_map):
+def lsq_fun(relPose, lsq_scan, lsq_map: gridMap):
     # Extract grid parameters
-    limit_x = lsq_map.width*lsq_map.resolution
-    limit_y = lsq_map.height*lsq_map.resolution
-    origin_x = lsq_map.origin_x*lsq_map.resolution
-    origin_y = lsq_map.origin_y*lsq_map.resolution
-    cell_length = lsq_map.resolution
+    limit_x = lsq_map.frame.w*lsq_map.frame.r
+    limit_y = lsq_map.frame.h*lsq_map.frame.r
+    origin_x = lsq_map.frame.ox*lsq_map.frame.r
+    origin_y = lsq_map.frame.oy*lsq_map.frame.r
+    cell_length = lsq_map.frame.r
 
     # Create the grid
     x = np.linspace(origin_x, origin_x + limit_x - cell_length, lsq_map.data.shape[0])

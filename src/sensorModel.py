@@ -1,5 +1,5 @@
 import numpy as np
-from gridMap import gridMap
+from gridMap import gridMap, frame
 from lidarScan import lidarScan
 import time
 
@@ -121,7 +121,9 @@ class sensorModel:
         print("")
         '''
 
-        return gridMap(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution, self.data)
+        gridFrame = frame(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution)
+
+        return gridMap(gridFrame, self.data)
 
     def insertRay(self,start,end,value, valueCondition = None):
         x1, y1 = start

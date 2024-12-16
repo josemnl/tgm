@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import os
 
 from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import computeMetrics, IoU
+from gridMap import gridMap, frame
 
 def run(logID, conf):
     # Print logID
@@ -15,13 +17,13 @@ def run(logID, conf):
     videoPath = './results/' + logID + '/'
 
     # Create results folder if it does not exist
-    import os
     if not os.path.exists(videoPath):
         os.makedirs(videoPath)
 
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgm = TGM(conf.origin, conf.width, conf.height, conf.resolution, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+    tgmFrame = frame(conf.origin[0], conf.origin[1], conf.width, conf.height, conf.resolution)
+    tgm = TGM(tgmFrame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     # Empty arrays for the results
     x_t_SLAM_array = []
@@ -115,7 +117,8 @@ def run(logID, conf):
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            slam_map = tgm.oneLayer('static', following=True, width=conf.smWidth, height=conf.smHeight)
+            slamFrame = frame.frameAroundPose(x_t[0], x_t[1], conf.smWidth, conf.smHeight, tgm.frame.r)
+            slam_map = tgm.oneLayer('static', slamFrame).toCPU()
             x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
             v_t = x_t - x_prev
         timeSLAM = time.time()
@@ -131,6 +134,11 @@ def run(logID, conf):
         else:
             gm = sM.generateGridMap(z_t, x_t)
         timeSensorModel = time.time()
+
+        # If gm is partially outside the TGM, resize the TGM
+        if not tgm.contains(gm.frame):
+            newFrame = frame.frameAroundPose(x_t[0], x_t[1], tgm.frame.w, tgm.frame.h, tgm.frame.r)
+            tgm.reshape(newFrame)
 
         # Update TGM
         tgm.update(gm, x_t)
@@ -173,7 +181,7 @@ def run(logID, conf):
             n_snow_occ_cells_baseline.append(n_occ_cells)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
             # Our method: Occupancy map from TGM
-            tgm_gm = tgm.computeStaticDynamicGridMap()
+            tgm_gm = tgm.computeStaticDynamicGridMap().toCPU()
             n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm, conf.snowLabel)
             n_snow_occ_cells_our_method.append(n_occ_cells)
             print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
@@ -194,7 +202,11 @@ def run(logID, conf):
 
             z_t_snow = z_t.filterInByLabel(conf.snowLabel)
             snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
-            snow_gm_our_method = tgm.oneLayer2('weather', origin_x=snow_gm_baseline.origin_x, origin_y=snow_gm_baseline.origin_y, width=snow_gm_baseline.width, height=snow_gm_baseline.height)
+            #snow_gm_our_method = tgm.oneLayer('weather', snow_gm_baseline.frame).toCPU()
+            snow_gm_our_method = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
+            if i == 10:
+                snow_gm_baseline.plot(isPause=True)
+                snow_gm_our_method.plot(isPause=True)
             IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
             print('IoU: {:.10f}'.format(IoU_result))
             IoU_array.append(IoU_result)
