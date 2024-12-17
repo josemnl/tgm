@@ -48,8 +48,11 @@ def run():
     #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241104-183629/checkpoint3_13000.pt'))    # Masked
     #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241108-173804/model.pt'))                # Without mask
     #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241114-115655/checkpoint0_18000.pt'))    # Without sat limit
-    model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241114-161520/checkpoint3_21000.pt'))    # Biased
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241114-161520/checkpoint3_21000.pt'))    # Biased
     #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241115-185109/model.pt'))                # Masked and biased
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241119-163322/model.pt'))                # NAN - Masked and biased, without softmax the target
+    #model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241125-161602/checkpoint3_17000.pt'))     # Masked and biased, without softmax the target
+    model.load_state_dict(torch.load('./trainRuns/UNet_batchSize_10_lr_1e-05_epochs_10_date_20241204-104234/checkpoint2_15000.pt'))     # Masked and biased, without softmax the target
 
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
@@ -71,8 +74,8 @@ def run():
     i = 0
     while sample_data_token != '':
         i += 1
-        if i == 50:
-            tgm.switchPredictions(predictionMode='NNDynamic')
+        if i == 1:
+            tgm.switchPredictions(predictionMode='NNDynamicMask')
         timeStart = time.time()
 
         # Import sensor data
