@@ -56,7 +56,6 @@ class TGM:
 
         # Compute overlaping grid between the instantaneous map and the TGM
         overlap = self.staticMap.computeOverlap(instGridMap.frame)
-        assert overlap.w > 0 and overlap.h > 0
 
         # Crop the instantaneous map to the overlapping region
         instMap = instGridMap.crop(overlap).data
@@ -71,7 +70,7 @@ class TGM:
         instFreeMap = 1 - instStaticMap - instDynamicMap - instWeatherMap
 
         # Predict based on previous measurements
-        predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap.ox, overlap.oy, overlap.w, overlap.h)
+        predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap)
         predFreeMap = 1 - predStaticMap - predDynamicMap - predWeatherMap
 
         # Compute the updated maps
@@ -121,15 +120,14 @@ class TGM:
         # Save the previous visible mask
         self.prev_region = [x0_new, y0_new, x1_new, y1_new]
 
-    def predict(self, overlapOrigin_x=None, overlapOrigin_y=None, overlapWidth=None, overlapHeight=None):
-        if overlapOrigin_x is None:
-            overlapFrame = self.frame
-
-        overlapFrame = frame(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.frame.r)
-
-        # Computed cropped maps
-        staticMap = self.staticMap.crop(overlapFrame).data
-        dynamicMap = self.dynamicMap.crop(overlapFrame).data
+    def predict(self, predictFrame=None):
+        # Crop the maps if necessary
+        if predictFrame is None:
+            staticMap = self.staticMap.data
+            dynamicMap = self.dynamicMap.data
+        else:
+            staticMap = self.staticMap.crop(predictFrame).data
+            dynamicMap = self.dynamicMap.crop(predictFrame).data
 
         # Compute static prediction
         predStaticMap = staticMap
@@ -139,7 +137,6 @@ class TGM:
             dynamicStay = dynamicMap * self.D0
             bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
             dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
-
             predDynamicMap = dynamicStay + bounceBack + dynamicMove
         else:
             predDynamicMap = cp.zeros_like(dynamicMap) if self.GPU else np.zeros_like(dynamicMap)
@@ -194,89 +191,35 @@ class TGM:
         combined_data = self.staticMap.data + self.dynamicMap.data
         return gridMap(self.frame, combined_data)
     
-    def plot(self, fig=None, saveMap=False, savePNG=False, saveSvg=False, imgName='', section = 'Full', width = 0, height = 0, origin = None, style='combined', egoStyle='rectangle'):
-        origin_x = int(origin[0]/self.frame.r) if origin is not None else None
-        origin_y = int(origin[1]/self.frame.r) if origin is not None else None
-        width = int(width/self.frame.r) if width != 0 else 0
-        height = int(height/self.frame.r) if height != 0 else 0
-        # Assert that the style is valid
+    def plot(self, fig=None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
         assert style in ['combined', 'static', 'dynamic', 'weather']
-
-        # Assert that the egoStyle is valid
         assert egoStyle in ['none', 'dot', 'rectangle']
-
-        # If fig is None, create a new figure
+        if frame is None:
+            frame = self.frame
         if fig is None:
             fig = plt.figure()
-
-        # If section is Following, compute the origin
-        if section == 'Following':
-            origin_x = int(self.x_t[0] / self.frame.r - width/2)
-            origin_y = int(self.x_t[1] / self.frame.r - height/2)
-
-        # If section is Constant, assert that the origin is not None and compute origin
-        if section == 'Constant':
-            assert origin_x is not None
-            assert origin_y is not None
-
-        # If section is Following or Constant, compute the overlaping grid and crop the maps
-        if section == 'Following' or section == 'Constant':
-            assert width != 0 and height != 0
-            # Compute overlaping grid
-            overlapOrigin_x = max(self.frame.ox, origin_x)
-            overlapOrigin_y = max(self.frame.oy, origin_y)
-            overlapWidth = min(self.frame.ox + self.frame.w, origin_x + width) - overlapOrigin_x
-            overlapHeight = min(self.frame.oy + self.frame.h, origin_y + height) - overlapOrigin_y
-            assert overlapWidth > 0 and overlapHeight > 0
-            # Crop the maps
-            newFrame = frame(overlapOrigin_x, overlapOrigin_y, overlapWidth, overlapHeight, self.frame.r)
-            staticMap = self.staticMap.crop(newFrame).data
-            dynamicMap = self.dynamicMap.crop(newFrame).data
-            weatherMap = self.weatherMap.crop(newFrame).data
-        # Otherwise, use the full maps
-        else:
-            overlapOrigin_x = self.frame.ox
-            overlapOrigin_y = self.frame.oy
-            overlapWidth = self.frame.w
-            overlapHeight = self.frame.h
-            staticMap = self.staticMap.data
-            dynamicMap = self.dynamicMap.data
-            weatherMap = self.weatherMap.data
-
-        if self.GPU:
-            staticMap = cp.asnumpy(staticMap)
-            dynamicMap = cp.asnumpy(dynamicMap)
-            weatherMap = cp.asnumpy(weatherMap)
+        overlap = self.frame.computeOverlap(frame)
+        staticMap = self.staticMap.crop(overlap).toCPU().data
+        dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
+        weatherMap = self.weatherMap.crop(overlap).toCPU().data
 
         # Plot the map according to the style
         if style == 'combined':
-            I = np.zeros((overlapHeight, overlapWidth, 3))
+            I = np.zeros((overlap.h, overlap.w, 3))
             I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
             I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/np.square(1-weatherMap))
             I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
-            ax = fig.add_subplot(1, 1, 1)
-            ax.imshow(I, vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
-                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'static':
             I = 1 - np.transpose(staticMap)
-            ax = fig.add_subplot(1, 1, 1)
-            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
-                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'dynamic':
             I = 1 - np.transpose(dynamicMap)
-            ax = fig.add_subplot(1, 1, 1)
-            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
-                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
         elif style == 'weather':
             I = 1 - np.transpose(weatherMap)
-            ax = fig.add_subplot(1, 1, 1)
-            ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                    extent=(overlapOrigin_x*self.frame.r, (overlapOrigin_x + overlapWidth)*self.frame.r,
-                            overlapOrigin_y*self.frame.r, (overlapOrigin_y + overlapHeight)*self.frame.r))
-            
+        ax = fig.add_subplot(1, 1, 1)
+        ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
+                extent=(overlap.ox*self.frame.r, (overlap.ox + overlap.w)*self.frame.r,
+                        overlap.oy*self.frame.r, (overlap.oy + overlap.h)*self.frame.r))
+
         # Plot the ego pose
         if self.x_t is not None and len(self.x_t) != 0:
             if egoStyle == 'dot':
@@ -305,15 +248,10 @@ class TGM:
                 y3 = y + (car_length/2-car_width) * np.sin(theta) + car_width/2 * np.cos(theta)
                 plt.fill([x1, x2, x3, x1], [y1, y2, y3, y1], color='white', edgecolor='black')
 
-        # If saveMap is True, save the image
         if saveMap:
             imsave(imgName + '_map.png', I, origin ="lower", cmap='gray')
-        
-        # if savePNG is True, save the plot as PNG
         if savePNG:
             plt.savefig(imgName + '.png', format='png')
-
-        # If saveSvg is True, save the plot as SVG
         if saveSvg:
             plt.savefig(imgName + '.svg', format='svg', dpi=1200)
         

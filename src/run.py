@@ -146,7 +146,14 @@ def run(logID, conf):
 
         # Plot maps
         fig.clear()
-        tgm.plot(fig, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), section = conf.videoSection, width=conf.videoWidth, height=conf.videoHeight, origin=conf.videoOrigin, style=conf.style)
+        # Compute the frame for the plot
+        if conf.videoSection == 'Full':
+            plotFrame = tgm.frame
+        elif conf.videoSection == 'Following':
+            plotFrame = frame.frameAroundPose(x_t[0], x_t[1], conf.videoWidth / tgm.frame.r, conf.videoHeight / tgm.frame.r, tgm.frame.r)
+        elif conf.videoSection == 'Constant':
+            plotFrame = frame(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), tgm.frame.r)
+        tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
         timePlot = time.time()
 
         # Print progress
