@@ -27,10 +27,11 @@ def run(logID, conf):
 
     # Empty arrays for the results
     x_t_SLAM_array = []
-    n_occ_cells_array = []
-    n_snow_occ_cells_original = []
-    n_snow_occ_cells_baseline = []
-    n_snow_occ_cells_our_method = []
+    nWrongSnowGrids_original_array = []
+    nWrongSnowGrids_baseline_array = []
+    nWrongSnowGrids_tgm_array = []
+    Intersection_array = []
+    Union_array = []
     IoU_array = []
 
     # Initial guess for the velocity
@@ -79,7 +80,7 @@ def run(logID, conf):
                 z_t_3D.removeGround(conf.groundThreshold)
                 z_t_objects_3D = z_t_3D
                 z_t_ground = None
-            z_t_before_filter = z_t_3D.convertTo2D() # THIS IS TO BE REMOVED
+            z_t_before_filter = z_t_objects_3D.convertTo2D() # THIS IS TO BE REMOVED
             
             # Snow filtering
             if sum([conf.isROR, conf.isSOR, conf.isDROR, conf.isDSOR]) > 1:
@@ -150,7 +151,7 @@ def run(logID, conf):
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
         elif conf.videoSection == 'Following':
-            plotFrame = frame.frameAroundPose(x_t[0], x_t[1], conf.videoWidth / tgm.frame.r, conf.videoHeight / tgm.frame.r, tgm.frame.r)
+            plotFrame = frame.frameAroundPose(x_t[0], x_t[1], int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), tgm.frame.r)
         elif conf.videoSection == 'Constant':
             plotFrame = frame(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), tgm.frame.r)
         tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
@@ -168,54 +169,47 @@ def run(logID, conf):
         runtimes['Total'].append(time.time() - timeStart)
 
         # Print times
+        print('')
         print('Data:    ' + str(timeData - timeStart))
         print('SLAM:    ' + str(timeSLAM - timeData))
         print('InvSenM: ' + str(timeSensorModel - timeSLAM))
         print('TGM:     ' + str(timeTGM - timeSensorModel))
         print('Plots:   ' + str(timePlot - timeTGM))
         print('Total:   ' + str(time.time() - timeStart))
-        print('')
 
         # Snow metrics
         if conf.isLabeled:
-            # Before the filter
-            gm_before_filter = sM.generateGridMap(z_t_before_filter, x_t)
-            n_occ_cells, n_snow_points = computeMetrics(z_t_before_filter, x_t, gm_before_filter, conf.snowLabel)
-            n_snow_occ_cells_original.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
-            # Baseline: Instantaneous occupancy map
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, gm, conf.snowLabel)
-            n_snow_occ_cells_baseline.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
-            # Our method: Occupancy map from TGM
-            tgm_gm = tgm.computeStaticDynamicGridMap().toCPU()
-            n_occ_cells, n_snow_points = computeMetrics(z_t, x_t, tgm_gm, conf.snowLabel)
-            n_snow_occ_cells_our_method.append(n_occ_cells)
-            print('Occupied cells: ' + str(n_occ_cells) + ' / ' + str(n_snow_points))
+            '''SNOW METRICS'''
+            # Compute the number of wrong snow grids before filter
+            z_t_snow_before_filter = z_t_before_filter.filterInByLabel(conf.snowLabel)
+            snow_grid_map_before_filter = sM.generateGridMap(z_t_snow_before_filter, x_t).toBool(conf.occPrior)
+            nWrongSnowGrids_original = np.sum(snow_grid_map_before_filter.data)
 
-            # New metric: IoU
-            # Compute grid map from Baseline
-            #snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
-            # Compute grid map from Our method
-            #snow_gm_our_method = tgm.oneLayer('weather', following=True, width=conf.smWidth, height=conf.smHeight)
-            
+            # Compute the number of wrong snow grids after filter
+            z_t_snow = z_t.filterInByLabel(conf.snowLabel)
+            snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t).toBool(conf.occPrior)
+            nWrongSnowGrids_baseline = np.sum(snow_gm_baseline.data)
 
             # Compute IoU
-            #iou_baseline = IoU(snow_gm_groundTruth, snow_gm_baseline)
-            #iou_our_method = IoU(snow_gm_groundTruth, snow_gm_our_method)
-
-            #print('IoU Baseline: ' + str(iou_baseline))
-            #print('IoU Our method: ' + str(iou_our_method))
-
-            z_t_snow = z_t.filterInByLabel(conf.snowLabel)
-            snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t)
-            #snow_gm_our_method = tgm.oneLayer('weather', snow_gm_baseline.frame).toCPU()
             snow_gm_our_method = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
-            if i == 10:
-                snow_gm_baseline.plot(isPause=True)
-                snow_gm_our_method.plot(isPause=True)
-            IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
+            intersection, union, IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
+
+            # Compute the number of wrong snow grids with our method
+            nWrongSnowGrids_tgm = nWrongSnowGrids_baseline - intersection
+
+            print('')
+            print('Snow metrics:')
+            print('Total snow grids before filter: ' + str(nWrongSnowGrids_original))
+            print('Total snow grids baseline: ' + str(nWrongSnowGrids_baseline))
+            print('Total snow grids our method: ' + str(nWrongSnowGrids_tgm))
             print('IoU: {:.10f}'.format(IoU_result))
+
+            # Append results to arrays
+            nWrongSnowGrids_original_array.append(nWrongSnowGrids_original)
+            nWrongSnowGrids_baseline_array.append(nWrongSnowGrids_baseline)
+            nWrongSnowGrids_tgm_array.append(nWrongSnowGrids_tgm)
+            Intersection_array.append(intersection)
+            Union_array.append(union)
             IoU_array.append(IoU_result)
 
     # Save runtimes as csv
@@ -233,9 +227,11 @@ def run(logID, conf):
 
     # Save snow metrics
     if conf.isLabeled:
-        np.savetxt(videoPath + 'n_snow_occ_cells_original.csv', n_snow_occ_cells_original, delimiter=',')
-        np.savetxt(videoPath + 'n_snow_occ_cells_baseline.csv', n_snow_occ_cells_baseline, delimiter=',')
-        np.savetxt(videoPath + 'n_snow_occ_cells_our_method.csv', n_snow_occ_cells_our_method, delimiter=',')
+        np.savetxt(videoPath + 'nWrongSnowGrids_original.csv', nWrongSnowGrids_original_array, delimiter=',')
+        np.savetxt(videoPath + 'nWrongSnowGrids_baseline.csv', nWrongSnowGrids_baseline_array, delimiter=',')
+        np.savetxt(videoPath + 'nWrongSnowGrids_tgm.csv', nWrongSnowGrids_tgm_array, delimiter=',')
+        np.savetxt(videoPath + 'Intersection.csv', Intersection_array, delimiter=',')
+        np.savetxt(videoPath + 'Union.csv', Union_array, delimiter=',')
         np.savetxt(videoPath + 'IoU.csv', IoU_array, delimiter=',')
 
     # Save video

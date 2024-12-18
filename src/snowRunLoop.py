@@ -28,18 +28,23 @@ def snowRunLoop():
         for filter in ['ROR', 'SOR', 'DROR']:
             if filter == 'ROR':
                 conf.isROR = True
+                conf.isSOR = False
+                conf.isDROR = False
             elif filter == 'SOR':
+                conf.isROR = False
                 conf.isSOR = True
+                conf.isDROR = False
             elif filter == 'DROR':
+                conf.isROR = False
+                conf.isSOR = False
                 conf.isDROR = True
 
             # Update the logID
+            print('Running simulation ' + str(i) + ' with filter ' + filter)
             logID = 'SnowyKitti-' + str(i).zfill(2) + '-' + filter
 
             # Run the simulation
             run(logID, conf)
-        
-
 
 if __name__ == '__main__':
     snowRunLoop()

@@ -175,17 +175,18 @@ class TGM:
         overlap = self.frame.computeOverlap(layerFrame)
         return self._get_layer_map(layer).crop(overlap)
     
-    def maxLayer(self, layer, layerFrame):
+    def maxLayer(self, layer, layerFrame = None):
         '''
         Return a map with ones in the cells where probability of layer is bigger than probability of all the others.
         '''
         layers = ['static', 'dynamic', 'weather']
         layers.remove(layer)
-        overlap = self.frame.computeOverlap(layerFrame)
+        if layerFrame is None:
+            layerFrame = self.frame
         return gridMap(self.frame,
                        (self._get_layer_map(layer).data > self._get_layer_map(layers[0]).data) &
                        (self._get_layer_map(layer).data > self._get_layer_map(layers[1]).data) &
-                       (self._get_layer_map(layer).data > self.freeMap.data)).crop(overlap)
+                       (self._get_layer_map(layer).data > self.freeMap.data)).crop(layerFrame)
 
     def computeStaticDynamicGridMap(self):
         combined_data = self.staticMap.data + self.dynamicMap.data

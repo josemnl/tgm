@@ -63,12 +63,15 @@ class gridMap:
     
     @property
     def isBool(self) -> bool:
-        return self.data.dtype == np.bool
+        return self.data.dtype == bool
 
     def toCPU(self) -> 'gridMap':
         if self.isGPU:
             return gridMap(self.frame, cp.asnumpy(self.data))
         return self
+    
+    def toBool(self, threshold: float) -> 'gridMap':
+        return gridMap(self.frame, self.data > threshold)
 
     def plot(self, isPause: bool = False) -> None:
         I = 1 - np.transpose(self.data)

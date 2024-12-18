@@ -27,49 +27,33 @@ def computeMetrics(z_t, x_t, gM, label=1):
 
     return n_occ_cells, z_t_snow.ranges.size
 
-def IoU(gM1, gM2):
+def IoU(gM1, gM2, verbose=False):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
     assert gM1.frame.w == gM2.frame.w
     assert gM1.frame.h == gM2.frame.h
     assert gM1.frame.r == gM2.frame.r
-    print(gM1.frame.ox, gM2.frame.ox)
     assert gM1.frame.ox == gM2.frame.ox
     assert gM1.frame.oy == gM2.frame.oy
-
-    # Plot grid maps
-    #gM1.plot()
-    #gM2.plot()
-
-    # Compute max value of gM2
-    max_gM2 = np.max(gM2.data)
-    print('Max value of gM2: ' + str(max_gM2))
-
-    treshold_1 = 0.7
-    treshold_2 = 0.3
+    assert gM1.frame.r == gM2.frame.r
+    assert gM1.isBool
+    assert gM2.isBool
 
     # Compute the intersection
-    intersection = np.logical_and(gM1.data > treshold_1, gM2.data > treshold_2)
+    intersection = np.logical_and(gM1.data, gM2.data)
     intersection_sum = np.sum(intersection)
-    print('Intersection: ' + str(intersection_sum))
 
     # Compute the union
-    union = np.logical_or(gM1.data > treshold_1, gM2.data > treshold_2)
+    union = np.logical_or(gM1.data, gM2.data)
     union_sum = np.sum(union)
-    print('Union: ' + str(union_sum))
+    if verbose:
+        print('')
+        print('IoU metrics:')
+        print('Intersection: ' + str(intersection_sum))
+        print('Union: ' + str(union_sum))
+        print('Sum of intersection: ' + str(intersection_sum))
 
-    # Compute sum of grid map 1
-    sum_gM1 = np.sum(gM1.data > treshold_1)
-
-    # Compute sum of grid map 2
-    sum_gM2 = np.sum(gM2.data > treshold_2)
-
-    # Print results
-    print('Sum of grid map 1: ' + str(sum_gM1))
-    print('Sum of grid map 2: ' + str(sum_gM2))
-    print('Sum of intersection: ' + str(intersection_sum))
-
-    return intersection_sum/union_sum
+    return intersection_sum, union_sum, intersection_sum/union_sum
 
 if __name__ == "__main__":
     # Config file
