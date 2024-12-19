@@ -5,3 +5,16 @@ snowyKITTI
 WADS
 .vscode
 nuscenes
+nuscenesDEMO
+Dataset
+DemoDataset
+wandb
+circle_cache.pkl
+neighbors_cache.pkl
+trainRuns
+Dataset0
+Dataset1
+Dataset2
+Dataset3
+Dataset4
+

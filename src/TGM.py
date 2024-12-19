@@ -7,9 +7,10 @@ from scipy.signal import convolve2d, fftconvolve
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
 from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
 import cupy as cp
+import torch
 
 class TGM:
-    def __init__(self, tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv=False, isGPU=True):
+    def __init__(self, tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv=False, isGPU=True, predictionMode = 'random', model = None, NNdevice = 'cuda'):
         self.frame = tgmFrame
         self.staticPrior = staticPrior
         self.dynamicPrior = dynamicPrior
@@ -43,9 +44,50 @@ class TGM:
             self.weatherMap.data = cp.asarray(self.weatherMap.data)
             self.convShape = cp.asarray(self.convShape)
 
+        self.model = model
+        self.NNdevice = NNdevice
+        if predictionMode == 'random':
+            self.predict = self.randomPredict
+        elif predictionMode == 'NN':
+            assert model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNpredict
+        elif predictionMode == 'NNDynamic':
+            assert model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicPredict
+        elif predictionMode == 'NNDynamicMask':
+            assert model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicMaskPredict
+        self.predictionMode = predictionMode
+
     @property
     def freeMap(self):
         return gridMap(self.frame, 1 - self.staticMap.data - self.dynamicMap.data - self.weatherMap.data)
+    
+    def switchPredictions(self, predictionMode, model = None, NNdevice = None):
+        assert predictionMode in ['random', 'NN', 'NNDynamic', 'NNDynamicMask']
+        if NNdevice is not None:
+            self.NNdevice = NNdevice
+        if model is not None:
+            self.model = model
+            self.model.to(self.NNdevice)
+        if predictionMode == 'random':
+            self.predict = self.randomPredict
+        elif predictionMode == 'NN':
+            assert self.model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNpredict
+        elif predictionMode == 'NNDynamic':
+            assert self.model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicPredict
+        elif predictionMode == 'NNDynamicMask':
+            assert self.model is not None
+            self.model.to(self.NNdevice)
+            self.predict = self.NNDynamicMaskPredict
+        self.predictionMode = predictionMode
 
     def update(self, instGridMap, x_t):
         assert isinstance(instGridMap, gridMap)
@@ -69,8 +111,14 @@ class TGM:
         instWeatherMap = instMap * self.weatherPrior / self.sdwPrior
         instFreeMap = 1 - instStaticMap - instDynamicMap - instWeatherMap
 
+        # Compute mask of the visible region based on the values of the instantaneous map (values equal to the sdwPrior)
+        mask = (instMap == self.sdwPrior)
+
         # Predict based on previous measurements
-        predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap)
+        if self.predictionMode == 'NNDynamicMask':
+            predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap, mask)
+        else:
+            predStaticMap, predDynamicMap, predWeatherMap = self.predict(overlap)
         predFreeMap = 1 - predStaticMap - predDynamicMap - predWeatherMap
 
         # Compute the updated maps
@@ -120,7 +168,7 @@ class TGM:
         # Save the previous visible mask
         self.prev_region = [x0_new, y0_new, x1_new, y1_new]
 
-    def predict(self, predictFrame=None):
+    def randomPredict(self, predictFrame=None):
         # Crop the maps if necessary
         if predictFrame is None:
             staticMap = self.staticMap.data
@@ -143,6 +191,114 @@ class TGM:
 
         # Compute weather prediction
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        return predStaticMap, predDynamicMap, predWeatherMap
+    
+    def NNpredict(self, predictFrame=None):
+        # Crop the maps if necessary
+        if predictFrame is None:
+            staticMap = self.staticMap.data
+            dynamicMap = self.dynamicMap.data
+        else:
+            staticMap = self.staticMap.crop(predictFrame).data
+            dynamicMap = self.dynamicMap.crop(predictFrame).data
+        
+        # Compute dynamic and static predictions using the model
+        staticTorch = torch.tensor(staticMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        dynamicTorch = torch.tensor(dynamicMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        input = torch.cat((staticTorch, dynamicTorch), 1).float()
+        output = self.model(input)
+
+        # Transform logits to probabilities
+        output = torch.nn.functional.softmax(output, dim=1)
+
+        output = output.cpu().detach().numpy()
+        predStaticMap = output[0, 0, :, :]
+        predDynamicMap = output[0, 1, :, :]
+
+        # If GPU, move the predictions to the GPU
+        if self.GPU:
+            predStaticMap = cp.asarray(predStaticMap)
+            predDynamicMap = cp.asarray(predDynamicMap)
+
+        # Compute weather prediction
+        predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        return predStaticMap, predDynamicMap, predWeatherMap
+    
+    def NNDynamicPredict(self, predictFrame=None):
+        # Crop the maps if necessary
+        if predictFrame is None:
+            staticMap = self.staticMap.data
+            dynamicMap = self.dynamicMap.data
+        else:
+            staticMap = self.staticMap.crop(predictFrame).data
+            dynamicMap = self.dynamicMap.crop(predictFrame).data
+        
+        # Compute dynamic and static predictions using the model
+        dynamicTorch = torch.tensor(dynamicMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        staticTorch = torch.tensor(staticMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        input = torch.cat((staticTorch, dynamicTorch), 1).float()
+        output = self.model(input)
+
+        # Discard the static prediction and keep only dynamic and free
+        output = output[:, 1:, :, :]
+
+        # Transform logits to probabilities
+        output = torch.nn.functional.softmax(output, dim=1)
+
+        # Move the output to the CPU
+        output = output.cpu().detach().numpy()
+        # If GPU, move the output to the GPU
+        if self.GPU:
+            output = cp.asarray(output)
+        
+        # Compute predictions
+        predStaticMap = staticMap
+        predDynamicMap = output[0, 0, :, :] * (1 - staticMap)
+
+        # Compute weather prediction
+        predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        return predStaticMap, predDynamicMap, predWeatherMap
+
+    def NNDynamicMaskPredict(self, predictFrame=None, Mask=None):
+        # Crop the maps if necessary
+        if predictFrame is None:
+            staticMap = self.staticMap.data
+            dynamicMap = self.dynamicMap.data
+        else:
+            staticMap = self.staticMap.crop(predictFrame).data
+            dynamicMap = self.dynamicMap.crop(predictFrame).data
+        
+        # Compute dynamic and static predictions using the model
+        dynamicTorch = torch.tensor(dynamicMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        staticTorch = torch.tensor(staticMap).unsqueeze(0).unsqueeze(0).to(self.NNdevice)
+        input = torch.cat((staticTorch, dynamicTorch), 1).float()
+        output = self.model(input)
+
+        # Discard the static prediction and keep only dynamic and free
+        output = output[:, 1:, :, :]
+
+        # Transform logits to probabilities
+        output = torch.nn.functional.softmax(output, dim=1)
+
+        # Move the output to the CPU
+        output = output.cpu().detach().numpy()
+        # If GPU, move the output to the GPU
+        if self.GPU:
+            output = cp.asarray(output)
+        
+        # Compute predictions
+        predStaticMap = staticMap
+        predDynamicMap = output[0, 0, :, :] * (1 - staticMap)
+
+        # Compute weather prediction
+        predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
+
+        # In the masked region, set the dynamic prediction to the prior
+        if Mask is not None:
+            predDynamicMap[Mask] = self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior) * (1 - staticMap[Mask])
 
         return predStaticMap, predDynamicMap, predWeatherMap
     
