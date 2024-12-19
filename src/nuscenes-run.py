@@ -7,7 +7,7 @@ from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import computeMetrics, IoU
-from gridMap import frame
+from gridMap import gridMap, frame
 
 # NuScenes stuff
 from nuscenes.nuscenes import NuScenes
@@ -63,10 +63,8 @@ def run():
 
     # Empty arrays for the results
     x_t_SLAM_array = []
-    n_occ_cells_array = []
-    n_snow_occ_cells_original = []
-    n_snow_occ_cells_baseline = []
-    n_snow_occ_cells_our_method = []
+    intersection_array = []
+    union_array = []
     IoU_array = []
 
     # Initial guess for the velocity
@@ -78,7 +76,7 @@ def run():
     while sample_data_token != '':
         i += 1
         if i == 1:
-            tgm.switchPredictions(predictionMode='NNDynamicMask')
+            tgm.switchPredictions(predictionMode='NNDynamic')
         timeStart = time.time()
 
         # Import sensor data
@@ -182,6 +180,50 @@ def run():
         tgm.update(gm, x_t)
         timeTGM = time.time()
 
+        '''
+        EVALUATION
+        '''
+        if sample_data['is_key_frame']:
+            # Create an empty grid map with the same size and resolution as gm
+            gm_gt = gridMap(gm.frame, np.zeros((gm.frame.w, gm.frame.h)))
+            # Get the annotation
+            anns = []
+            if sample_data['is_key_frame']:
+                # Update the sample corresponding to the keyframe
+                sample = nusc.get('sample', sample_data['sample_token'])
+                for ann_token in sample['anns']:
+                    ann = nusc.get('sample_annotation', ann_token)
+                    # If the category name contains 'vehicle' or 'human', add it to the list
+                    if 'vehicle' in ann['category_name'] or 'human' in ann['category_name']:
+                        anns.append(ann)
+            # Draw the bounding boxes in the ground truth grid map
+            for ann in anns:
+                # Get position, orientation and bounding box
+                position = ann['translation']
+                orientation = ann['rotation']
+                size = ann['size']
+
+                # Compute the orientation as an angle and discard the z component of the position
+                orientation = -Rotation.from_quat(orientation).as_euler('zyx')[2] + np.pi/2
+                position = np.array([position[0], position[1]])
+
+                # Correct position by x_t_diff
+                position = position - np.array([x_t_diff[0], x_t_diff[1]])
+
+                # Draw the bounding box
+                gm_gt.drawFilledRectangle(position[0], position[1], orientation, size[0], size[1], 1.0)
+
+            # Compute IoU for dynamic grid map
+            #dynamic = tgm.oneLayer('dynamic', gm.frame).toBool(0.5).toCPU()
+            dynamic = tgm.maxLayer('dynamic', gm.frame).toBool(0.5).toCPU()
+            dynamic_gt = gm_gt.toBool(0.5)
+            # The mask is the visible area, which is the free or occupied area in the instantaneous grid map
+            mask = gridMap(gm.frame, np.logical_or(gm.data == conf.invModel[0], gm.data == conf.invModel[1]))
+            intersection, union, IoU_result = IoU(dynamic, dynamic_gt)
+            intersection_array.append(intersection)
+            union_array.append(union)
+            IoU_array.append(IoU_result)
+
         # Plot maps
         fig.clear()
         # Compute the frame for the plot
@@ -213,12 +255,10 @@ def run():
     if conf.isSLAM:
         np.savetxt(videoPath + 'x_t_SLAM.csv', x_t_SLAM_array, delimiter=',')
 
-    # Save snow metrics
-    if conf.isLabeled:
-        np.savetxt(videoPath + 'n_snow_occ_cells_original.csv', n_snow_occ_cells_original, delimiter=',')
-        np.savetxt(videoPath + 'n_snow_occ_cells_baseline.csv', n_snow_occ_cells_baseline, delimiter=',')
-        np.savetxt(videoPath + 'n_snow_occ_cells_our_method.csv', n_snow_occ_cells_our_method, delimiter=',')
-        np.savetxt(videoPath + 'IoU.csv', IoU_array, delimiter=',')
+    # Save IoU results
+    np.savetxt(videoPath + 'intersection.csv', intersection_array, delimiter=',')
+    np.savetxt(videoPath + 'union.csv', union_array, delimiter=',')
+    np.savetxt(videoPath + 'IoU.csv', IoU_array, delimiter=',')
 
     # Save video
     if conf.saveVideo:

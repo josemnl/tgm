@@ -27,9 +27,18 @@ def computeMetrics(z_t, x_t, gM, label=1):
 
     return n_occ_cells, z_t_snow.ranges.size
 
-def IoU(gM1, gM2, verbose=False):
+def IoU(gM1, gM2, Mask = None, verbose=False):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
+    if Mask is not None:
+        assert isinstance(Mask, gridMap)
+        assert gM1.frame.w == Mask.frame.w
+        assert gM1.frame.h == Mask.frame.h
+        assert gM1.frame.r == Mask.frame.r
+        assert gM1.frame.ox == Mask.frame.ox
+        assert gM1.frame.oy == Mask.frame.oy
+        assert gM1.isBool
+        assert Mask.isBool
     assert gM1.frame.w == gM2.frame.w
     assert gM1.frame.h == gM2.frame.h
     assert gM1.frame.r == gM2.frame.r
@@ -41,11 +50,17 @@ def IoU(gM1, gM2, verbose=False):
 
     # Compute the intersection
     intersection = np.logical_and(gM1.data, gM2.data)
+    if Mask is not None:
+        intersection = np.logical_and(intersection, Mask.data)
     intersection_sum = np.sum(intersection)
 
     # Compute the union
     union = np.logical_or(gM1.data, gM2.data)
+    if Mask is not None:
+        union = np.logical_or(union, Mask.data)
     union_sum = np.sum(union)
+
+    # If verbose, print the results
     if verbose:
         print('')
         print('IoU metrics:')
