@@ -210,6 +210,8 @@ class TGM:
             I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
             I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/np.square(1-weatherMap))
             I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
+            # Make sure the values are between 0 and 1
+            I = np.clip(I, 0, 1)
         elif style == 'static':
             I = 1 - np.transpose(staticMap)
         elif style == 'dynamic':
