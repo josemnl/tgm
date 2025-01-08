@@ -49,10 +49,10 @@ isVoxelGridFilter : False               # If True, it uses the Voxel Grid filter
 # Snow filter parameters
 isROR : False                           # If True, it uses the ROR filter
 ROR_k : 5                               # Number of neighbors to consider in the ROR filter
-ROR_r : 0.5                             # Radius of the ROR filter
+ROR_r : 0.25                             # Radius of the ROR filter
 isSOR : False                           # If True, it uses the SOR filter
 SOR_k : 5                               # Number of neighbors to consider in the SOR filter
-SOR_s : 0.5                             # Number of standard deviations to consider in the SOR filter
+SOR_s : 0.25                             # Number of standard deviations to consider in the SOR filter
 isDROR : False                          # If True, it uses the DROR filter
 DROR_k : 5                              # Number of neighbors to consider in the DROR filter
 DROR_rho : 0.07                         # Distance factor of the DROR filter
