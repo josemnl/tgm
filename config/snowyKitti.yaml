@@ -12,23 +12,23 @@ simHorizon : NAN                        # If 0, it runs until the end of the log
 isSLAM : True                           # If True, it computes x_t using SLAM
 velTracking : True                      # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 0                    # Number of time steps to use ground truth x_t before starting SLAM
-startPoseSLAM : [50, 50, 1]        # Initial pose for the SLAM algorithm if x_t is not available
+startPoseSLAM : [50, 50, 0]             # Initial pose for the SLAM algorithm if x_t is not available
 
 # Plotting parameters
-saveVideo : True                       # If True, it saves the video
+saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveMap : False                         # If True, it saves the map as a PNG file
 saveSvg : False                         # If True, it saves each frame as a SVG file
-videoSection : 'Following'               # Section of the map to plot: 'Full', 'Following', 'Constant'
-videoWidth : 50                        # Width of the following window
-videoHeight : 50                       # Height of the following window
+videoSection : 'Following'              # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoWidth : 50                         # Width of the following window
+videoHeight : 50                        # Height of the following window
 videoOrigin : [450,450]                 # Origin of the video
 style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
 
 # Grid parameters
 origin : [0,0]                          # Origin of the grid
-width : 100                            # Width of the grid
-height : 100                           # Height of the grid
+width : 100                             # Width of the grid
+height : 100                            # Height of the grid
 resolution : 0.125                      # Resolution of the grid
 
 # TGM parameters
@@ -55,15 +55,15 @@ SOR_k : 5                               # Number of neighbors to consider in the
 SOR_s : 0.5                             # Number of standard deviations to consider in the SOR filter
 isDROR : False                          # If True, it uses the DROR filter
 DROR_k : 5                              # Number of neighbors to consider in the DROR filter
-DROR_rho : 0.07                          # Distance factor of the DROR filter
-isDSOR : False                           # If True, it uses the DSOR filter
+DROR_rho : 0.07                         # Distance factor of the DROR filter
+isDSOR : False                          # If True, it uses the DSOR filter
 DSOR_k : 5                              # Number of neighbors to consider in the DSOR filter
 DSOR_s : 2                              # Number of standard deviations to consider in the DSOR filter
 DSOR_rho : 0.08                         # Distance factor of the DSOR filter
 
 # Inverse Sensor Model parameters
-smWidth : 50                           # Width of the inverse sensor model
-smHeight : 50                          # Height of the inverse sensor model
-sensorRange : 25                       # Maximum range of the sensor
-invModel : [0.01, 0.99]                   # High and low values of the beam inverse sensor model
-freeUpGroundDetections : True          # If True, it frees up the ground detections
+smWidth : 50                            # Width of the inverse sensor model
+smHeight : 50                           # Height of the inverse sensor model
+sensorRange : 25                        # Maximum range of the sensor
+invModel : [0.01, 0.99]                 # High and low values of the beam inverse sensor model
+freeUpGroundDetections : True           # If True, it frees up the ground detections
