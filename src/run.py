@@ -239,15 +239,19 @@ def run(logID, conf):
         createVideo(logID, videoPath, removeFrames = conf.removeFrames)
 
     # Save last frame
+    fig.clear()
     tgm.plot(fig, saveMap=True, imgName= videoPath + logID)
 
     # Save static grid map
+    fig.clear()
     tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_static', style='static')
 
     # Save dynamic grid map
+    fig.clear()
     tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
 
     # Save weather grid map
+    fig.clear()
     tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
 
 if __name__ == '__main__':
