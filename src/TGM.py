@@ -7,6 +7,8 @@ from scipy.signal import convolve2d, fftconvolve
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
 from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
 import cupy as cp
+import matplotlib
+matplotlib.use('Qt5Agg')
 
 class TGM:
     def __init__(self, tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits, fftConv=False, isGPU=True):
@@ -241,7 +243,8 @@ class TGM:
                 y3 = y - car_length/2 * np.sin(theta) - car_width/2 * np.sin(theta + np.pi/2)
                 x4 = x - car_length/2 * np.cos(theta) + car_width/2 * np.cos(theta + np.pi/2)
                 y4 = y - car_length/2 * np.sin(theta) + car_width/2 * np.sin(theta + np.pi/2)
-                plt.fill([x1, x2, x3, x4, x1], [y1, y2, y3, y4, y1], color='white', edgecolor='black')
+                rectangle = plt.Polygon([[x1, y1], [x2, y2], [x3, y3], [x4, y4]], closed=True, facecolor='white', edgecolor='black')
+                plt.gca().add_patch(rectangle)
                 # Plot the heading as a triangle
                 x1 = x + car_length/2 * np.cos(theta)
                 y1 = y + car_length/2 * np.sin(theta)
@@ -249,7 +252,8 @@ class TGM:
                 y2 = y + (car_length/2-car_width) * np.sin(theta) - car_width/2 * np.cos(theta)
                 x3 = x + (car_length/2-car_width) * np.cos(theta) - car_width/2 * np.sin(theta)
                 y3 = y + (car_length/2-car_width) * np.sin(theta) + car_width/2 * np.cos(theta)
-                plt.fill([x1, x2, x3, x1], [y1, y2, y3, y1], color='white', edgecolor='black')
+                triangle = plt.Polygon([[x1, y1], [x2, y2], [x3, y3]], closed=True, facecolor='white', edgecolor='black')
+                plt.gca().add_patch(triangle)
 
         if saveMap:
             imsave(imgName + '_map.png', I, origin ="lower", cmap='gray')
