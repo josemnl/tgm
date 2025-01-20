@@ -44,7 +44,7 @@ def snowPlotResults():
                 nWrongSnowGrids_original = np.array([line.split(",") for line in f]).astype(float)
             with open(folder + 'nWrongSnowGrids_baseline.csv') as f:
                 nWrongSnowGrids_baseline = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'nWrongSnowGrids_TGM.csv') as f:
+            with open(folder + 'nWrongSnowGrids_tgm.csv') as f:
                 nWrongSnowGrids_TGM = np.array([line.split(",") for line in f]).astype(float)
             with open(folder + 'IoU.csv') as f:
                 IoU = np.array([line.split(",") for line in f]).astype(float)
