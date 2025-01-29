@@ -7,7 +7,7 @@ from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabl
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
-from metrics import computeMetrics, IoU
+from metrics import classificationMetrics
 from gridMap import gridMap, frame
 
 def run(logID, conf):
@@ -33,6 +33,9 @@ def run(logID, conf):
     Intersection_array = []
     Union_array = []
     IoU_array = []
+    precision_array = []
+    recall_array = []
+    f1_array = []
 
     # Initial guess for the velocity
     v_t = [0, 0, 0]
@@ -192,7 +195,7 @@ def run(logID, conf):
 
             # Compute IoU
             snow_gm_our_method = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
-            intersection, union, IoU_result = IoU(snow_gm_baseline, snow_gm_our_method)
+            intersection, union, IoU, precision, recall, f1 = classificationMetrics(snow_gm_baseline, snow_gm_our_method)
 
             # Compute the number of wrong snow grids with our method
             nWrongSnowGrids_tgm = nWrongSnowGrids_baseline - intersection
@@ -202,7 +205,10 @@ def run(logID, conf):
             print('Total snow grids before filter: ' + str(nWrongSnowGrids_original))
             print('Total snow grids baseline: ' + str(nWrongSnowGrids_baseline))
             print('Total snow grids our method: ' + str(nWrongSnowGrids_tgm))
-            print('IoU: {:.10f}'.format(IoU_result))
+            print('IoU: {:.10f}'.format(IoU))
+            print('Precision: {:.10f}'.format(precision))
+            print('Recall: {:.10f}'.format(recall))
+            print('F1: {:.10f}'.format(f1))
 
             # Append results to arrays
             nWrongSnowGrids_original_array.append(nWrongSnowGrids_original)
@@ -210,7 +216,10 @@ def run(logID, conf):
             nWrongSnowGrids_tgm_array.append(nWrongSnowGrids_tgm)
             Intersection_array.append(intersection)
             Union_array.append(union)
-            IoU_array.append(IoU_result)
+            IoU_array.append(IoU)
+            precision_array.append(precision)
+            recall_array.append(recall)
+            f1_array.append(f1)
 
     # Save runtimes as csv
     runtimes['Data'] = np.array(runtimes['Data'])
@@ -233,6 +242,9 @@ def run(logID, conf):
         np.savetxt(videoPath + 'Intersection.csv', Intersection_array, delimiter=',')
         np.savetxt(videoPath + 'Union.csv', Union_array, delimiter=',')
         np.savetxt(videoPath + 'IoU.csv', IoU_array, delimiter=',')
+        np.savetxt(videoPath + 'precision.csv', precision_array, delimiter=',')
+        np.savetxt(videoPath + 'recall.csv', recall_array, delimiter=',')
+        np.savetxt(videoPath + 'f1.csv', f1_array, delimiter=',')
 
     # Save video
     if conf.saveVideo:

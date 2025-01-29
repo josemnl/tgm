@@ -27,7 +27,7 @@ def computeMetrics(z_t, x_t, gM, label=1):
 
     return n_occ_cells, z_t_snow.ranges.size
 
-def IoU(gM1, gM2, verbose=False):
+def classificationMetrics(gM1, gM2, verbose=False):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
     assert gM1.frame.w == gM2.frame.w
@@ -46,14 +46,26 @@ def IoU(gM1, gM2, verbose=False):
     # Compute the union
     union = np.logical_or(gM1.data, gM2.data)
     union_sum = np.sum(union)
+
+    # Compute IoU
+    IoU = intersection_sum / union_sum
+
+    # Compute precision and recall (gM1 is the ground truth)
+    precision = intersection_sum / np.sum(gM1.data)
+    recall = intersection_sum / np.sum(gM2.data)
+
+    # Compute F1 score
+    f1 = 2 * (precision * recall) / (precision + recall)
+
     if verbose:
         print('')
         print('IoU metrics:')
         print('Intersection: ' + str(intersection_sum))
         print('Union: ' + str(union_sum))
-        print('Sum of intersection: ' + str(intersection_sum))
+        print('Precision: ' + str(precision))
+        print('Recall: ' + str(recall))
 
-    return intersection_sum, union_sum, intersection_sum/union_sum
+    return intersection_sum, union_sum, IoU, precision, recall, f1
 
 if __name__ == "__main__":
     # Config file
