@@ -167,6 +167,32 @@ class gridMap:
         points = rotated_corners.reshape((-1, 1, 2)).astype(np.int32)
         cv2.fillPoly(self.data, [points], fill_value)
 
+    def diff(self, otherGM: 'gridMap') -> 'gridMap':
+        # Implements the set difference between two grid maps
+        assert self.frame.w == otherGM.frame.w
+        assert self.frame.h == otherGM.frame.h
+        assert self.frame.r == otherGM.frame.r
+        assert self.frame.ox == otherGM.frame.ox
+        assert self.frame.oy == otherGM.frame.oy
+        assert self.isBool
+        assert otherGM.isBool
+        if self.isGPU:
+            return gridMap(self.frame, cp.logical_and(self.data, cp.logical_not(otherGM.data)))
+        return gridMap(self.frame, np.logical_and(self.data, np.logical_not(otherGM.data)))
+    
+    def union(self, otherGM: 'gridMap') -> 'gridMap':
+        # Implements the set union between two grid maps
+        assert self.frame.w == otherGM.frame.w
+        assert self.frame.h == otherGM.frame.h
+        assert self.frame.r == otherGM.frame.r
+        assert self.frame.ox == otherGM.frame.ox
+        assert self.frame.oy == otherGM.frame.oy
+        assert self.isBool
+        assert otherGM.isBool
+        if self.isGPU:
+            return gridMap(self.frame, cp.logical_or(self.data, otherGM.data))
+        return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
+
     @classmethod
     def loadState(cls, filename: str, data_type: np.dtype = np.float64) -> 'gridMap':
         with open(filename, 'rb') as file:

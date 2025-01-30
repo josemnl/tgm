@@ -7,11 +7,11 @@ from utilities import loadConfigAsDict
 RESULTS_ROOT = 'D:/Results/'
 META_RESULTS_FOLDER = './results/snowMetaResults/'
 
-VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
+VALID_LOGS = [11]
 
 ROR_VALUES = [0.25, 0.2, 0.18, 0.15]
 SOR_VALUES = [0.1, 0.15, 0.25, 0.5]
-DROR_VALUES = [0.05, 0.07, 0.08, 0.1]
+DROR_VALUES = [0.07]
 
 TEST_LOGS = [22]
 
@@ -31,7 +31,7 @@ def snowPlotResults():
     # For each log in VALID_LOGS
     for log in VALID_LOGS:
         # For each filter
-        for filter in ['ROR', 'SOR', 'DROR']:
+        for filter in ['DROR']:
             # Define the logID
             if filter == 'ROR':
                 logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.ROR_k) + '-r-' + str(conf.ROR_r)
@@ -56,26 +56,132 @@ def snowPlotResults():
                 Intersection = np.array([line.split(",") for line in f]).astype(float)
             with open(folder + 'Union.csv') as f:
                 Union = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Precision.csv') as f:
+                Precision = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Recall.csv') as f:
+                Recall = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'F1.csv') as f:
+                F1 = np.array([line.split(",") for line in f]).astype(float)
+
+            # Load new files
+            with open(folder + 'IoU_b.csv') as f:
+                IoU_b = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Precision_b.csv') as f:
+                Precision_b = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Recall_b.csv') as f:
+                Recall_b = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'F1_b.csv') as f:
+                F1_b = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'IoU_t.csv') as f:
+                IoU_t = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Precision_t.csv') as f:
+                Precision_t = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'Recall_t.csv') as f:
+                Recall_t = np.array([line.split(",") for line in f]).astype(float)
+            with open(folder + 'F1_t.csv') as f:
+                F1_t = np.array([line.split(",") for line in f]).astype(float)
 
             # Plot the nWrongSnowGrids
-            plt.plot(nWrongSnowGrids_original, label='Original')
-            plt.plot(nWrongSnowGrids_baseline, label='Baseline')
-            plt.plot(nWrongSnowGrids_TGM, label='TGM')
-            plt.xlabel('Frame')
-            plt.ylabel('nWrongSnowGrids')
-            plt.title('nWrongSnowGrids for ' + logID)
+            plt.plot(nWrongSnowGrids_original, label='Unfiltered')
+            plt.plot(nWrongSnowGrids_baseline, label=str(filter))
+            plt.plot(nWrongSnowGrids_TGM, label=str(filter) + ' + TGM')
             plt.legend()
+            plt.ylim(0, max(max(nWrongSnowGrids_original), max(nWrongSnowGrids_baseline), max(nWrongSnowGrids_TGM)))
+            plt.xlim(0, len(nWrongSnowGrids_original))
+            plt.gcf().set_size_inches(20, 5)
             plt.savefig(META_RESULTS_FOLDER + logID + '_nWrongSnowGrids.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_nWrongSnowGrids.svg', format='svg', dpi=1200)
 
             # Clear the plot
             plt.clf()
             
             # Plot the IoU
             plt.plot(IoU)
-            plt.xlabel('Frame')
-            plt.ylabel('IoU')
-            plt.title('IoU for ' + logID)
+            plt.ylim(0, 1)
+            plt.xlim(0, len(IoU))
+            plt.gcf().set_size_inches(20, 5)
             plt.savefig(META_RESULTS_FOLDER + logID + '_IoU.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_IoU.svg', format='svg', dpi=1200)
+
+            # Clear the plot
+            plt.clf()
+
+            # Plot precision, recall and F1
+            plt.plot(Precision, label='Precision')
+            plt.plot(Recall, label='Recall')
+            plt.plot(F1, label='F1')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(Precision))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_metrics.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_metrics.svg', format='svg', dpi=1200)
+
+            # clear the plot
+            plt.clf()
+
+            # Plot f1 and IoU
+            plt.plot(F1, label='F1')
+            plt.plot(IoU, label='IoU')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(F1))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_f1_iou.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_f1_iou.svg', format='svg', dpi=1200)
+
+            # Clear the plot
+            plt.clf()
+
+            # NEW METRICS
+            # IoU
+            plt.plot(IoU_b, label='IoU_b')
+            plt.plot(IoU_t, label='IoU_t')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(IoU_b))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_iou.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_iou.svg', format='svg', dpi=1200)
+
+            # Clear the plot
+            plt.clf()
+
+            # Precision
+            plt.plot(Precision_b, label='Precision_b')
+            plt.plot(Precision_t, label='Precision_t')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(Precision_b))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_precision.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_precision.svg', format='svg', dpi=1200)
+
+            # Clear the plot
+            plt.clf()
+
+            # Recall
+            plt.plot(Recall_b, label='Recall_b')
+            plt.plot(Recall_t, label='Recall_t')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(Recall_b))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_recall.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_recall.svg', format='svg', dpi=1200)
+
+            # Clear the plot
+            plt.clf()
+
+            # F1
+            plt.plot(F1_b, label='F1_b')
+            plt.plot(F1_t, label='F1_t')
+            plt.legend()
+            plt.ylim(0, 1)
+            plt.xlim(0, len(F1_b))
+            plt.gcf().set_size_inches(20, 5)
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_f1.png')
+            plt.savefig(META_RESULTS_FOLDER + logID + '_new_metrics_f1.svg', format='svg', dpi=1200)
 
             # Clear the plot
             plt.clf()
@@ -155,5 +261,5 @@ def filterValuesPlot():
 
 
 if __name__ == '__main__':
-    #snowPlotResults()
-    filterValuesPlot()
+    snowPlotResults()
+    #filterValuesPlot()

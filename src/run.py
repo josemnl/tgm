@@ -37,6 +37,16 @@ def run(logID, conf):
     recall_array = []
     f1_array = []
 
+    # Arrays for the new snow metrics
+    IoU_b_array = []
+    precision_b_array = []
+    recall_b_array = []
+    f1_b_array = []
+    IoU_t_array = []
+    precision_t_array = []
+    recall_t_array = []
+    f1_t_array = []
+
     # Initial guess for the velocity
     v_t = [0, 0, 0]
 
@@ -221,6 +231,46 @@ def run(logID, conf):
             recall_array.append(recall)
             f1_array.append(f1)
 
+            # --------------------------------------------------------
+
+            # NEW SNOW METRICS
+            # Here we aim to compare the performance of the baselines vs baselines + TGM
+
+            # Compute the original snow grid map
+            snow_gm_original = sM.generateGridMap(z_t_before_filter.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            non_snow_gm_original = sM.generateGridMap(z_t_before_filter.filterOutByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            snow_gm_original = snow_gm_original.diff(non_snow_gm_original) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
+
+            # Compute the snow grid map with the baseline
+            snow_gm_baseline = sM.generateGridMap(z_t.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            non_snow_gm_baseline = sM.generateGridMap(z_t.filterOutByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            snow_gm_baseline = snow_gm_baseline.diff(non_snow_gm_baseline) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
+
+            # Compute the snow cells that had been removed by the baseline
+            removed_snow_gm_baseline = snow_gm_original.diff(snow_gm_baseline)
+
+            # Compute the snow grid map with the baseline + TGM
+            snow_gm_tgm = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
+
+            # Compute the snow cells that had been removed by the baseline + TGM
+            removed_snow_gm_tgm = removed_snow_gm_baseline.union(snow_gm_tgm)
+
+            # Compute metrics baseline / original
+            intersection_b, union_b, IoU_b, precision_b, recall_b, f1_b = classificationMetrics(snow_gm_original, removed_snow_gm_baseline)
+
+            # Compute metrics baseline + TGM / original
+            intersection_t, union_t, IoU_t, precision_t, recall_t, f1_t = classificationMetrics(snow_gm_original, removed_snow_gm_tgm)
+
+            # Append results to arrays
+            IoU_b_array.append(IoU_b)
+            precision_b_array.append(precision_b)
+            recall_b_array.append(recall_b)
+            f1_b_array.append(f1_b)
+            IoU_t_array.append(IoU_t)
+            precision_t_array.append(precision_t)
+            recall_t_array.append(recall_t)
+            f1_t_array.append(f1_t)
+
     # Save runtimes as csv
     runtimes['Data'] = np.array(runtimes['Data'])
     runtimes['SLAM'] = np.array(runtimes['SLAM'])
@@ -245,6 +295,16 @@ def run(logID, conf):
         np.savetxt(videoPath + 'precision.csv', precision_array, delimiter=',')
         np.savetxt(videoPath + 'recall.csv', recall_array, delimiter=',')
         np.savetxt(videoPath + 'f1.csv', f1_array, delimiter=',')
+
+        # Save new snow metrics
+        np.savetxt(videoPath + 'IoU_b.csv', IoU_b_array, delimiter=',')
+        np.savetxt(videoPath + 'precision_b.csv', precision_b_array, delimiter=',')
+        np.savetxt(videoPath + 'recall_b.csv', recall_b_array, delimiter=',')
+        np.savetxt(videoPath + 'f1_b.csv', f1_b_array, delimiter=',')
+        np.savetxt(videoPath + 'IoU_t.csv', IoU_t_array, delimiter=',')
+        np.savetxt(videoPath + 'precision_t.csv', precision_t_array, delimiter=',')
+        np.savetxt(videoPath + 'recall_t.csv', recall_t_array, delimiter=',')
+        np.savetxt(videoPath + 'f1_t.csv', f1_t_array, delimiter=',')
 
     # Save video
     if conf.saveVideo:
