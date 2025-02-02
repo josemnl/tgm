@@ -46,6 +46,10 @@ def run(logID, conf):
     precision_t_array = []
     recall_t_array = []
     f1_t_array = []
+    IoU_t_b_array = []
+    precision_t_b_array = []
+    recall_t_b_array = []
+    f1_t_b_array = []
 
     # Initial guess for the velocity
     v_t = [0, 0, 0]
@@ -261,6 +265,9 @@ def run(logID, conf):
             # Compute metrics baseline + TGM / original
             intersection_t, union_t, IoU_t, precision_t, recall_t, f1_t = classificationMetrics(snow_gm_original, removed_snow_gm_tgm)
 
+            # Compute metrics baseline + TGM / baseline
+            intersection_t_b, union_t_b, IoU_t_b, precision_t_b, recall_t_b, f1_t_b = classificationMetrics(snow_gm_baseline, removed_snow_gm_tgm)
+
             # Append results to arrays
             IoU_b_array.append(IoU_b)
             precision_b_array.append(precision_b)
@@ -270,6 +277,10 @@ def run(logID, conf):
             precision_t_array.append(precision_t)
             recall_t_array.append(recall_t)
             f1_t_array.append(f1_t)
+            IoU_t_b_array.append(IoU_t_b)
+            precision_t_b_array.append(precision_t_b)
+            recall_t_b_array.append(recall_t)
+            f1_t_b_array.append(f1_t_b)
 
     # Save runtimes as csv
     runtimes['Data'] = np.array(runtimes['Data'])
@@ -305,6 +316,10 @@ def run(logID, conf):
         np.savetxt(videoPath + 'precision_t.csv', precision_t_array, delimiter=',')
         np.savetxt(videoPath + 'recall_t.csv', recall_t_array, delimiter=',')
         np.savetxt(videoPath + 'f1_t.csv', f1_t_array, delimiter=',')
+        np.savetxt(videoPath + 'IoU_t_b.csv', IoU_t_b_array, delimiter=',')
+        np.savetxt(videoPath + 'precision_t_b.csv', precision_t_b_array, delimiter=',')
+        np.savetxt(videoPath + 'recall_t_b.csv', recall_t_b_array, delimiter=',')
+        np.savetxt(videoPath + 'f1_t_b.csv', f1_t_b_array, delimiter=',')
 
     # Save video
     if conf.saveVideo:
