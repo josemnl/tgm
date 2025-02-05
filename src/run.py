@@ -174,6 +174,25 @@ def run(logID, conf):
         tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
         timePlot = time.time()
 
+        # Special plots for snow
+        if i == 14 or i == 349 or i == 846:
+            plotFrameSnow = frame.frameAroundPose(x_t[0], x_t[1], int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), tgm.frame.r)
+            gm_unfiltered = sM.generateGridMap(z_t_before_filter, x_t)
+            fig.clear()
+            # Create a new unfiltered tgm with the same frame
+            tgm_unfiltered = TGM(tgm.frame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_unfiltered.update(gm_unfiltered, x_t)
+            tgm_unfiltered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
+            
+            gm_filtered = sM.generateGridMap(z_t, x_t)
+            fig.clear()
+            tgm_filtered = TGM(tgm.frame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_filtered.update(gm_filtered, x_t)
+            tgm_filtered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
+
+            tgm.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_tgm', style=conf.style)
+
+
         # Print progress
         print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
 
