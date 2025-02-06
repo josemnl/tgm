@@ -1,11 +1,15 @@
 from run import run
 from utilities import loadConfigAsDict
 import os
+import copy
+import concurrent.futures
 
 #DATASET_ROOT = './snowyKITTI/dataset/sequences/'
 DATASET_ROOT = 'D:/snowyKITTI/dataset/sequences/'
 
 VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
+
+FILTERS = ['ROR', 'SOR', 'DROR']
 
 def snowRunLoop():
     configPath = './config/'
@@ -20,6 +24,8 @@ def snowRunLoop():
     # Update default config file with specific config file
     conf.__dict__.update(specificConf.__dict__)
 
+    tasks = []
+
     for log in VALID_LOGS:
         # Update the paths for the lidar and the labels
         conf.lidarPath = DATASET_ROOT + str(log).zfill(2) + '/snow_velodyne/'
@@ -30,27 +36,31 @@ def snowRunLoop():
         conf.simHorizon = len(files)
 
         # Update the filter
-        for filter in ['ROR', 'SOR', 'DROR']:
+        for filter in FILTERS:
+            newConf = copy.deepcopy(conf)
             if filter == 'ROR':
-                conf.isROR = True
-                conf.isSOR = False
-                conf.isDROR = False
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.ROR_k) + '-r-' + str(conf.ROR_r)
+                newConf.isROR = True
+                newConf.isSOR = False
+                newConf.isDROR = False
+                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.ROR_k) + '-r-' + str(newConf.ROR_r)
             elif filter == 'SOR':
-                conf.isROR = False
-                conf.isSOR = True
-                conf.isDROR = False
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.SOR_k) + '-s-' + str(conf.SOR_s)
+                newConf.isROR = False
+                newConf.isSOR = True
+                newConf.isDROR = False
+                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.SOR_k) + '-s-' + str(newConf.SOR_s)
             elif filter == 'DROR':
-                conf.isROR = False
-                conf.isSOR = False
-                conf.isDROR = True
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.DROR_k) + '-rho-' + str(conf.DROR_rho)
+                newConf.isROR = False
+                newConf.isSOR = False
+                newConf.isDROR = True
+                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.DROR_k) + '-rho-' + str(newConf.DROR_rho)
 
-            print('Running simulation ' + str(log) + ' with filter ' + filter)
+            print('Adding task: ' + logID)
 
-            # Run the simulation
-            run(logID, conf)
+            tasks.append((logID, newConf))
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = [executor.submit(run, task[0], task[1]) for task in tasks]
+        concurrent.futures.wait(futures)
 
 if __name__ == '__main__':
     snowRunLoop()
