@@ -10,9 +10,11 @@ DATASET_ROOT = '/media/jmgs/T7-Jose/snowyKITTI/dataset/sequences/'
 
 VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
 
-FILTERS = ['ROR']
+FILTERS = ['ROR', 'SOR', 'DROR']
 
 MAX_WORKERS = 12
+
+IS_PARALLEL = True
 
 def snowRunLoop():
     configPath = './config/'
@@ -61,9 +63,13 @@ def snowRunLoop():
 
             tasks.append((logID, newConf))
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(run, task[0], task[1]) for task in tasks]
-        concurrent.futures.wait(futures)
+    if IS_PARALLEL:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(run, task[0], task[1]) for task in tasks]
+            concurrent.futures.wait(futures)
+    else:
+        for task in tasks:
+            run(task[0], task[1])
 
 if __name__ == '__main__':
     snowRunLoop()
