@@ -227,7 +227,7 @@ def sensitivityPlot():
             filter_variable_txt = 's'
         elif filter == 'DROR':
             filter_values = DROR_VALUES
-            filter_variable_txt = r'$\rho$'
+            filter_variable_txt = r'$\gamma$'
 
         AccIoU_t_b = [[] for _ in filter_values]
         AccIoU_t = [[] for _ in filter_values]
@@ -391,8 +391,12 @@ def sensitivityPlot():
         # PRECISION RECALL PLOT
         ##############################################################################################################
 
+        # Swap the mean precision for mean recall and vice versa due to previous code
+        meanPrecision_t, meanRecall_t = meanRecall_t, meanPrecision_t
+        meanPrecision_b, meanRecall_b = meanRecall_b, meanPrecision_b
+
         # Plot precision vs recall
-        plt.plot(meanRecall_t, meanPrecision_t, label=filter + ' + TGM / unfiltered', marker='o', color='red')
+        plt.plot(meanRecall_t, meanPrecision_t, label=filter + ' + TGM / unfiltered', marker='s', color='red')
         plt.plot(meanRecall_b, meanPrecision_b, label=filter + ' / unfiltered', marker='o', color='blue')
 
         # Draw lines connecting each recall-precision point from the TGM filter to the baseline filter
@@ -413,11 +417,15 @@ def sensitivityPlot():
         plt.ylabel('Precision')
 
         # Set the size of the plot
-        plt.gcf().set_size_inches(7.5, 5)
+        plt.gcf().set_size_inches(7, 3.5)
 
         # Set ticks to not have more than 2 decimal places
         plt.gca().xaxis.set_major_formatter(plt.FormatStrFormatter('%.2f'))
         plt.gca().yaxis.set_major_formatter(plt.FormatStrFormatter('%.2f'))
+
+        # Add grid lines
+        plt.grid(which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+        plt.minorticks_on()
 
         # Adjust layout
         plt.tight_layout()
