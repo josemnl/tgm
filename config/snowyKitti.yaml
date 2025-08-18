@@ -9,7 +9,7 @@ initialTimeStep : 0                     # Initial time step to start the simulat
 simHorizon : NAN                        # If 0, it runs until the end of the log
 
 # SLAM parameters
-isSLAM : True                           # If True, it computes x_t using SLAM
+isSLAM : False                           # If True, it computes x_t using SLAM
 velTracking : True                      # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 0                    # Number of time steps to use ground truth x_t before starting SLAM
 startPoseSLAM : [50, 50, 0]             # Initial pose for the SLAM algorithm if x_t is not available
@@ -18,7 +18,7 @@ startPoseSLAM : [50, 50, 0]             # Initial pose for the SLAM algorithm if
 saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveMap : False                         # If True, it saves the map as a PNG file
-saveSvg : False                         # If True, it saves each frame as a SVG file
+saveSvg : True                         # If True, it saves each frame as a SVG file
 videoSection : 'Following'              # Section of the map to plot: 'Full', 'Following', 'Constant'
 videoWidth : 50                         # Width of the following window
 videoHeight : 50                        # Height of the following window
@@ -38,6 +38,7 @@ weatherPrior : 0.01                     # If 0, it assumes no weather noise
 maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
 saturationLimits : [0, 1, 0, 1]         # Saturation limits for the TGM
 fftConv : True                          # If True, it uses FFT to compute the convolution
+isGPU : True                           # If True, it uses the GPU to compute the TGM
 
 # Filter parameters
 groundThreshold : -0.5                  # Threshold to consider a point as ground
@@ -49,13 +50,13 @@ isVoxelGridFilter : False               # If True, it uses the Voxel Grid filter
 # Snow filter parameters
 isROR : False                           # If True, it uses the ROR filter
 ROR_k : 5                               # Number of neighbors to consider in the ROR filter
-ROR_r : 0.25                             # Radius of the ROR filter
+ROR_r : 0.24                            # Radius of the ROR filter
 isSOR : False                           # If True, it uses the SOR filter
 SOR_k : 5                               # Number of neighbors to consider in the SOR filter
-SOR_s : 0.25                             # Number of standard deviations to consider in the SOR filter
+SOR_s : 0.5                             # Number of standard deviations to consider in the SOR filter
 isDROR : False                          # If True, it uses the DROR filter
 DROR_k : 5                              # Number of neighbors to consider in the DROR filter
-DROR_rho : 0.07                         # Distance factor of the DROR filter
+DROR_rho : 0.09                         # Distance factor of the DROR filter
 isDSOR : False                          # If True, it uses the DSOR filter
 DSOR_k : 5                              # Number of neighbors to consider in the DSOR filter
 DSOR_s : 2                              # Number of standard deviations to consider in the DSOR filter

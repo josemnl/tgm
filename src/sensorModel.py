@@ -18,7 +18,7 @@ class sensorModel:
     def updateBasedOnPose(self, x_t):
         self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
 
-    def generateGridMap(self, z_t, x_t, z_t_ground=None, rayTraceGround = False):
+    def generateGridMap(self, z_t, x_t, z_t_ground=None, rayTraceGround = True):
         timeStart = time.time()
         assert isinstance(z_t, lidarScan)
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None

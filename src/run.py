@@ -14,7 +14,7 @@ def run(logID, conf):
     # Print logID
     print('Running ' + logID)
     # Paths
-    videoPath = './results/' + logID + '/'
+    videoPath = '/media/jmgs/T7-Jose/FINAL-results/' + logID + '/'
 
     # Create results folder if it does not exist
     if not os.path.exists(videoPath):
@@ -115,6 +115,7 @@ def run(logID, conf):
             # Voxel grid filter
             if conf.isVoxelGridFilter:
                 z_t.voxelGridFilter(conf.voxelGridSize)
+                z_t_ground.voxelGridFilter(conf.voxelGridSize)
 
             # Order by angle
             z_t.orderByAngle()
@@ -123,7 +124,7 @@ def run(logID, conf):
 
         # Compute robot pose with SLAM or get it from log
         if not conf.isSLAM:
-            x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
+            x_t = readPose(conf.lidarPath + "../snow_pose/" + "x_" + str(i).zfill(6) + ".csv")
         elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
@@ -223,12 +224,12 @@ def run(logID, conf):
 
             # Compute the number of wrong snow grids after filter
             z_t_snow = z_t.filterInByLabel(conf.snowLabel)
-            snow_gm_baseline = sM.generateGridMap(z_t_snow, x_t).toBool(conf.occPrior)
-            nWrongSnowGrids_baseline = np.sum(snow_gm_baseline.data)
+            gm_baseline_snow = sM.generateGridMap(z_t_snow, x_t).toBool(conf.occPrior)
+            nWrongSnowGrids_baseline = np.sum(gm_baseline_snow.data)
 
             # Compute IoU
-            snow_gm_our_method = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
-            intersection, union, IoU, precision, recall, f1 = classificationMetrics(snow_gm_baseline, snow_gm_our_method)
+            snow_gm_our_method = tgm.maxLayer('weather', gm_baseline_snow.frame).toCPU()
+            intersection, union, IoU, precision, recall, f1 = classificationMetrics(gm_baseline_snow, snow_gm_our_method)
 
             # Compute the number of wrong snow grids with our method
             nWrongSnowGrids_tgm = nWrongSnowGrids_baseline - intersection
@@ -259,33 +260,47 @@ def run(logID, conf):
             # NEW SNOW METRICS
             # Here we aim to compare the performance of the baselines vs baselines + TGM
 
-            # Compute the original snow grid map
-            snow_gm_original = sM.generateGridMap(z_t_before_filter.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            # Compute the original grid maps (full and snow)
+            gm_original_full = sM.generateGridMap(z_t_before_filter, x_t).toBool(conf.occPrior)
+            gm_original_snow = sM.generateGridMap(z_t_before_filter.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
             non_snow_gm_original = sM.generateGridMap(z_t_before_filter.filterOutByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
-            snow_gm_original = snow_gm_original.diff(non_snow_gm_original) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
+            gm_original_snow = gm_original_snow.diff(non_snow_gm_original) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
 
-            # Compute the snow grid map with the baseline
-            snow_gm_baseline = sM.generateGridMap(z_t.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
+            # Compute the baseline grid maps (full and snow)
+            gm_baseline_full = sM.generateGridMap(z_t, x_t).toBool(conf.occPrior)
+            gm_baseline_snow = sM.generateGridMap(z_t.filterInByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
             non_snow_gm_baseline = sM.generateGridMap(z_t.filterOutByLabel(conf.snowLabel), x_t).toBool(conf.occPrior)
-            snow_gm_baseline = snow_gm_baseline.diff(non_snow_gm_baseline) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
+            gm_baseline_snow = gm_baseline_snow.diff(non_snow_gm_baseline) # This is to make sure that cells that contain both snow and non-snow are considered as non-snow
 
-            # Compute the snow cells that had been removed by the baseline
-            removed_snow_gm_baseline = snow_gm_original.diff(snow_gm_baseline)
+            # Compute the cells that had been removed by the baseline
+            gm_removed_by_baseline = gm_original_full.diff(gm_baseline_full)
 
             # Compute the snow grid map with the baseline + TGM
-            snow_gm_tgm = tgm.maxLayer('weather', snow_gm_baseline.frame).toCPU()
+            gm_removed_by_tgm = tgm.maxLayer('weather', gm_baseline_snow.frame).toCPU()
 
             # Compute the snow cells that had been removed by the baseline + TGM
-            removed_snow_gm_tgm = removed_snow_gm_baseline.union(snow_gm_tgm)
+            gm_removed_by_baseline_and_tgm = gm_removed_by_baseline.union(gm_removed_by_tgm)
+
+            '''
+            # Plot the grids
+            fig.clear()
+            # Redraw the figure
+            plt.show()
+            print('Snow original')
+            gm_original_snow.plot(isPause=True)
+            fig.clear()
+            print('Snow removed baseline')
+            gm_removed_by_baseline.plot(isPause=True)
+            '''
 
             # Compute metrics baseline / original
-            intersection_b, union_b, IoU_b, precision_b, recall_b, f1_b = classificationMetrics(snow_gm_original, removed_snow_gm_baseline)
+            intersection_b, union_b, IoU_b, precision_b, recall_b, f1_b = classificationMetrics(gm_original_snow, gm_removed_by_baseline)
 
             # Compute metrics baseline + TGM / original
-            intersection_t, union_t, IoU_t, precision_t, recall_t, f1_t = classificationMetrics(snow_gm_original, removed_snow_gm_tgm)
+            intersection_t, union_t, IoU_t, precision_t, recall_t, f1_t = classificationMetrics(gm_original_snow, gm_removed_by_baseline_and_tgm)
 
             # Compute metrics baseline + TGM / baseline
-            intersection_t_b, union_t_b, IoU_t_b, precision_t_b, recall_t_b, f1_t_b = classificationMetrics(snow_gm_baseline, snow_gm_tgm)
+            intersection_t_b, union_t_b, IoU_t_b, precision_t_b, recall_t_b, f1_t_b = classificationMetrics(gm_baseline_snow, gm_removed_by_tgm)
 
             # Append results to arrays
             IoU_b_array.append(IoU_b)
