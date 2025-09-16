@@ -307,6 +307,6 @@ if __name__ == '__main__':
     weatherPrior = 0.01
     maxVelocity = 1
     saturationLimits = [0.1, 0.9, 0.1, 0.9]
-    tgmFrame = frame(origin_x, origin_y, width, height, resolution)
+    tgmFrame = frame((origin_x, origin_y, 0), (width, height, 1), resolution)
     tgm = TGM(tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits)
     tgm.plot()

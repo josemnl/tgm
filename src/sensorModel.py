@@ -121,7 +121,7 @@ class sensorModel:
         print("")
         '''
 
-        gridFrame = frame(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), int(self.width*self.resolution), int(self.height*self.resolution), 1/self.resolution)
+        gridFrame = frame((int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), 0), (int(self.width*self.resolution), int(self.height*self.resolution), 1), 1/self.resolution)
 
         return gridMap(gridFrame, self.data)
 
