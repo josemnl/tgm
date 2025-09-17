@@ -8,7 +8,7 @@ from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
-from gridMap import gridMap, frame, origin, size, position
+from gridMap import gridMap, frame, origin, size, position, pose, orientation
 
 def run(logID, conf):
     # Print logID
@@ -132,15 +132,15 @@ def run(logID, conf):
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
             except:
                 x_t = np.array(conf.startPoseSLAM, dtype=float)
+                x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
         else:
             x_prev = x_t
             if conf.velTracking:
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            slamPosition = position(x_t[0], x_t[1], 0.0)
             slamSize = size(conf.smWidth, conf.smHeight, 1)
-            slamFrame = frame.frameAroundPosition(slamPosition, slamSize, tgm.frame.r)
+            slamFrame = frame.frameAroundPosition(x_t.position, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
             x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
             v_t = x_t - x_prev
@@ -148,7 +148,7 @@ def run(logID, conf):
 
         # Save SLAM results
         if conf.isSLAM:
-            x_t_SLAM_array.append(x_t)
+            x_t_SLAM_array.append([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
 
         # Compute instantaneous grid map with inverse sensor model
         sM.updateBasedOnPose(x_t)
@@ -160,9 +160,8 @@ def run(logID, conf):
 
         # If gm is partially outside the TGM, resize the TGM
         if not tgm.contains(gm.frame):
-            newPosition = position(x_t[0], x_t[1], 0.0)
             newSize = size(tgm.frame.w, tgm.frame.h, tgm.frame.d)
-            newFrame = frame.frameAroundPosition(newPosition, newSize, tgm.frame.r)
+            newFrame = frame.frameAroundPosition(x_t.position, newSize, tgm.frame.r)
             tgm.reshape(newFrame)
 
         # Update TGM
@@ -175,9 +174,8 @@ def run(logID, conf):
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
         elif conf.videoSection == 'Following':
-            plotPosition = position(x_t[0], x_t[1], 0.0)
             plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1))
-            plotFrame = frame.frameAroundPosition(plotPosition, plotSize, tgm.frame.r)
+            plotFrame = frame.frameAroundPosition(x_t.position, plotSize, tgm.frame.r)
         elif conf.videoSection == 'Constant':
             plotOrigin = origin(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), 0)
             plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), 1)
@@ -187,9 +185,8 @@ def run(logID, conf):
 
         # Special plots for snow
         if i == 14 or i == 349 or i == 846:
-            plotFramePosition = position(x_t[0], x_t[1], 0.0)
             plotFrameSize = size(int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), int(1))
-            plotFrameSnow = frame.frameAroundPosition(plotFramePosition, plotFrameSize, tgm.frame.r)
+            plotFrameSnow = frame.frameAroundPosition(x_t.position, plotFrameSize, tgm.frame.r)
             gm_unfiltered = sM.generateGridMap(z_t_before_filter, x_t)
             fig.clear()
             # Create a new unfiltered tgm with the same frame

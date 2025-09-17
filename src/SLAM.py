@@ -4,15 +4,18 @@ from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 from lidarScan import lidarScan
-from gridMap import gridMap
+from gridMap import gridMap, pose, position, orientation
 
-def lsqnl_matching(scan, lsq_map: gridMap, x0, max_range):
+def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range):
     # Remove the no-return scans from scan
     scan.removeFarPoints(max_range)
 
+    x_0 = np.array([x0.position.x, x0.position.y, x0.orientation.yaw])
+
     # Perform the least squares optimization
-    x = least_squares(lsq_fun, x0, max_nfev=500, args=(scan, lsq_map), method='lm')
+    x = least_squares(lsq_fun, x_0, max_nfev=500, args=(scan, lsq_map), method='lm')
     x = x.x
+    x = pose(position(x[0], x[1], 0.0), orientation(0.0, 0.0, x[2]))
     return x
 
 def lsq_fun(relPose, lsq_scan, lsq_map: gridMap):

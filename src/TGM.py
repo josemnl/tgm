@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
-from gridMap import gridMap, frame, origin, size
+from gridMap import gridMap, frame, origin, size, pose
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
@@ -49,12 +49,12 @@ class TGM:
     def freeMap(self):
         return gridMap(self.frame, 1 - self.staticMap.data - self.dynamicMap.data - self.weatherMap.data)
 
-    def update(self, instGridMap, x_t):
+    def update(self, instGridMap, x_t: pose):
         assert isinstance(instGridMap, gridMap)
         assert instGridMap.frame.r == self.frame.r
 
         # Update ego position (used for visualization purposes only)
-        self.x_t = x_t
+        self.x_t = [x_t.position.x, x_t.position.y, x_t.orientation.yaw]
 
         # Compute overlaping grid between the instantaneous map and the TGM
         overlap = self.staticMap.computeOverlap(instGridMap.frame)

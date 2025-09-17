@@ -1,5 +1,5 @@
 import numpy as np
-from gridMap import gridMap, frame, origin, size
+from gridMap import gridMap, frame, origin, size, pose, position, orientation
 from lidarScan import lidarScan
 import time
 
@@ -15,10 +15,12 @@ class sensorModel:
         self.occPrior = occPrior
         self.data = np.ones((self.width*self.resolution, self.height*self.resolution)) * self.occPrior
 
-    def updateBasedOnPose(self, x_t):
+    def updateBasedOnPose(self, x_t: pose):
+        x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
         self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
 
-    def generateGridMap(self, z_t, x_t, z_t_ground=None, rayTraceGround = True):
+    def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
+        x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
         timeStart = time.time()
         assert isinstance(z_t, lidarScan)
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
@@ -179,6 +181,7 @@ def main():
     
     with open("./logs/sim_corridor/x_100.csv") as data:
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
+    x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
 
     start = time.time()
     gm = sM.generateGridMap(z_t, x_t)

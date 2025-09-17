@@ -15,6 +15,16 @@ class position:
         self.y = y
         self.z = z
 
+    def __add__(self, other):
+        if not isinstance(other, position):
+            return NotImplemented
+        return position(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other):
+        if not isinstance(other, position):
+            return NotImplemented
+        return position(self.x - other.x, self.y - other.y, self.z - other.z)
+
 class orientation:
     def __init__(self, roll: float, pitch: float, yaw: float):
         assert isinstance(roll, float)
@@ -23,6 +33,37 @@ class orientation:
         self.roll = roll
         self.pitch = pitch
         self.yaw = yaw
+
+    def __add__(self, other):
+        if not isinstance(other, orientation):
+            return NotImplemented
+        return orientation(self.roll + other.roll, self.pitch + other.pitch, self.yaw + other.yaw)
+    
+    def __sub__(self, other):
+        if not isinstance(other, orientation):
+            return NotImplemented
+        return orientation(self.roll - other.roll, self.pitch - other.pitch, self.yaw - other.yaw)
+
+class pose:
+    def __init__(self, pose_position: position, pose_orientation: orientation):
+        assert isinstance(pose_position, position)
+        assert isinstance(pose_orientation, orientation)
+        self.position = pose_position
+        self.orientation = pose_orientation
+
+    def __add__(self, other):
+        if not isinstance(other, pose):
+            return NotImplemented
+        new_position = self.position + other.position
+        new_orientation = self.orientation + other.orientation
+        return pose(new_position, new_orientation)
+    
+    def __sub__(self, other):
+        if not isinstance(other, pose):
+            return NotImplemented
+        new_position = self.position - other.position
+        new_orientation = self.orientation - other.orientation
+        return pose(new_position, new_orientation)
 
 class origin:
     def __init__(self, x: int, y: int, z: int = 0):

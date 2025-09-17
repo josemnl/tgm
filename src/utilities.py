@@ -5,11 +5,12 @@ from lidarScan import lidarScan, lidarScan3D
 import yaml
 import pandas as pd
 from types import SimpleNamespace
+from gridMap import pose, position, orientation
 
 def readPose(file):
     with open(file) as data:
         x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-    return x_t
+    return pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[5]))
 
 def read2DLidarCSV(file):
     with open(file) as data:
