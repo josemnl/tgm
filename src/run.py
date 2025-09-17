@@ -8,7 +8,7 @@ from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
-from gridMap import gridMap, frame
+from gridMap import gridMap, frame, origin, size, position
 
 def run(logID, conf):
     # Print logID
@@ -22,7 +22,9 @@ def run(logID, conf):
 
     # Create Sensor Model and TGM
     sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgmFrame = frame((conf.origin[0], conf.origin[1], 0), (conf.width, conf.height, 1), conf.resolution)
+    tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    tgmSize = size(conf.width, conf.height, 1)
+    tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
     tgm = TGM(tgmFrame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     # Empty arrays for the results
@@ -129,14 +131,16 @@ def run(logID, conf):
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
             except:
-                x_t = np.array(conf.startPoseSLAM)
+                x_t = np.array(conf.startPoseSLAM, dtype=float)
         else:
             x_prev = x_t
             if conf.velTracking:
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            slamFrame = frame.frameAroundPose((x_t[0], x_t[1], 0.0), (conf.smWidth, conf.smHeight, 1), tgm.frame.r)
+            slamPosition = position(x_t[0], x_t[1], 0.0)
+            slamSize = size(conf.smWidth, conf.smHeight, 1)
+            slamFrame = frame.frameAroundPosition(slamPosition, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
             x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
             v_t = x_t - x_prev
@@ -156,7 +160,9 @@ def run(logID, conf):
 
         # If gm is partially outside the TGM, resize the TGM
         if not tgm.contains(gm.frame):
-            newFrame = frame.frameAroundPose((x_t[0], x_t[1], 0.0), (tgm.frame.w, tgm.frame.h, tgm.frame.d), tgm.frame.r)
+            newPosition = position(x_t[0], x_t[1], 0.0)
+            newSize = size(tgm.frame.w, tgm.frame.h, tgm.frame.d)
+            newFrame = frame.frameAroundPosition(newPosition, newSize, tgm.frame.r)
             tgm.reshape(newFrame)
 
         # Update TGM
@@ -169,15 +175,21 @@ def run(logID, conf):
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
         elif conf.videoSection == 'Following':
-            plotFrame = frame.frameAroundPose((x_t[0], x_t[1], 0.0), (int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1)), tgm.frame.r)
+            plotPosition = position(x_t[0], x_t[1], 0.0)
+            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1))
+            plotFrame = frame.frameAroundPosition(plotPosition, plotSize, tgm.frame.r)
         elif conf.videoSection == 'Constant':
-            plotFrame = frame((int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), int(0)), (int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1)), tgm.frame.r)
+            plotOrigin = origin(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), 0)
+            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), 1)
+            plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
         tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
         timePlot = time.time()
 
         # Special plots for snow
         if i == 14 or i == 349 or i == 846:
-            plotFrameSnow = frame.frameAroundPose((x_t[0], x_t[1], 0.0), (int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), int(1)), tgm.frame.r)
+            plotFramePosition = position(x_t[0], x_t[1], 0.0)
+            plotFrameSize = size(int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), int(1))
+            plotFrameSnow = frame.frameAroundPosition(plotFramePosition, plotFrameSize, tgm.frame.r)
             gm_unfiltered = sM.generateGridMap(z_t_before_filter, x_t)
             fig.clear()
             # Create a new unfiltered tgm with the same frame

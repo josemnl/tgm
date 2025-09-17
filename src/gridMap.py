@@ -6,43 +6,72 @@ import cv2
 import cupy as cp
 from typing import Tuple, Union
 
+class position:
+    def __init__(self, x: float, y: float, z: float = 0.0):
+        assert isinstance(x, float)
+        assert isinstance(y, float)
+        assert isinstance(z, float)
+        self.x = x
+        self.y = y
+        self.z = z
+
+class orientation:
+    def __init__(self, roll: float, pitch: float, yaw: float):
+        assert isinstance(roll, float)
+        assert isinstance(pitch, float)
+        assert isinstance(yaw, float)
+        self.roll = roll
+        self.pitch = pitch
+        self.yaw = yaw
+
+class origin:
+    def __init__(self, x: int, y: int, z: int = 0):
+        """
+        Origin coordinates of a grid, measured in cells
+        """
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        assert isinstance(z, int)
+        self.x = x
+        self.y = y
+        self.z = z
+
+class size:
+    def __init__(self, width: int, height: int, depth: int = 1):
+        """
+        Size of a grid, measured in number of cells
+        """
+        assert isinstance(width, int)
+        assert isinstance(height, int)
+        assert isinstance(depth, int)
+        assert width >= 0
+        assert height >= 0
+        assert depth >= 0
+        self.w = width
+        self.h = height
+        self.d = depth
+
 class frame:
-    def __init__(self, origin: Tuple[int, int, int], size: Tuple[int, int, int], resolution: float):
+    def __init__(self, frame_origin: origin, frame_size: size, resolution: float):
         """
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
         """
         # Validate input types
-        assert isinstance(origin, tuple)
-        assert all(isinstance(origin[i], int) for i in range(len(origin)))
-
-        assert isinstance(size, tuple)
-        assert all(isinstance(size[i], int) for i in range(len(size)))
-        
+        assert isinstance(frame_origin, origin)
+        assert isinstance(frame_size, size)
         assert isinstance(resolution, float)
 
-        # Check length of origin and size
-        assert len(origin) == 3 or len(origin) == 2
-        assert len(size) == 3 or len(size) == 2
-        assert len(origin) == len(size)
-
-        # Expand 2D to 3D
-        if len(origin) == 2:
-            origin = (origin[0], origin[1], 0)
-            size = (size[0], size[1], 1)
-
         # Validate input values
-        assert all(size[i] >= 0 for i in range(len(size)))
-
         assert resolution > 0
 
         # Save parameters
-        self.ox = origin[0]
-        self.oy = origin[1]
-        self.oz = origin[2]
-        self.w = size[0]
-        self.h = size[1]
-        self.d = size[2]
+        self.ox = frame_origin.x
+        self.oy = frame_origin.y
+        self.oz = frame_origin.z
+        self.w = frame_size.w
+        self.h = frame_size.h
+        self.d = frame_size.d
         self.r = resolution
 
     def contains(self, other: 'frame') -> bool:
@@ -64,18 +93,25 @@ class frame:
         overlap_height = min(self.oy + self.h, other.oy + other.h) - overlap_origin_y
         overlap_depth = min(self.oz + self.d, other.oz + other.d) - overlap_origin_z
 
-        return frame((overlap_origin_x, overlap_origin_y, overlap_origin_z),
-                     (overlap_width, overlap_height, overlap_depth), self.r)
+        overlap_origin = origin(overlap_origin_x, overlap_origin_y, overlap_origin_z)
+        overlap_size = size(overlap_width, overlap_height, overlap_depth)
+
+        return frame(overlap_origin, overlap_size, self.r)
 
     @classmethod
-    def frameAroundPose(cls, pose: Tuple[float, float, float], size: Tuple[int, int, int], resolution: float) -> 'frame':
+    def frameAroundPosition(cls, pos: position, frame_size: size, resolution: float) -> 'frame':
         """
         Create a frame centered around a pose with the specified width and height.
         """
-        origin_x = int((pose[0] / resolution) - size[0]/2)
-        origin_y = int((pose[1] / resolution) - size[1]/2)
-        origin_z = int((pose[2] / resolution) - size[2]/2)
-        return cls((origin_x, origin_y, origin_z), size, resolution)
+        assert isinstance(pos, position)
+        assert isinstance(frame_size, size)
+        origin_x = int((pos.x / resolution) - frame_size.w/2)
+        origin_y = int((pos.y / resolution) - frame_size.h/2)
+        origin_z = int((pos.z / resolution) - frame_size.d/2)
+
+        frame_origin = origin(origin_x, origin_y, origin_z)
+
+        return cls(frame_origin, frame_size, resolution)
 
 class gridMap:
     def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
@@ -235,7 +271,9 @@ def main() -> None:
     width = 10*2
     height = 5*2
     resolution = 0.5
-    currentFrame = frame((origin_x, origin_y, 0), (width, height, 1), resolution)
+    orig = origin(origin_x, origin_y, 0)
+    frame_size = size(width, height, 1)
+    currentFrame = frame(orig, frame_size, resolution)
 
     data = np.zeros((width, height))
     data[0][0] = 1
@@ -245,7 +283,7 @@ def main() -> None:
     grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
     grid.plot(isPause=True)
 
-    newFrame = frame((10, 0, 0), (10, 6, 1), 0.5)
+    newFrame = frame(origin(10, 0, 0), size(10, 6, 1), 0.5)
 
     grid.crop(newFrame).plot(isPause=True)
 

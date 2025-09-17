@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
-from gridMap import gridMap, frame
+from gridMap import gridMap, frame, origin, size
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
 from cupyx.scipy.signal import convolve2d as cp_convolve2d
@@ -307,6 +307,8 @@ if __name__ == '__main__':
     weatherPrior = 0.01
     maxVelocity = 1
     saturationLimits = [0.1, 0.9, 0.1, 0.9]
-    tgmFrame = frame((origin_x, origin_y, 0), (width, height, 1), resolution)
+    tgmOrigin = origin(origin_x, origin_y, 0)
+    tgmSize = size(width, height, 1)
+    tgmFrame = frame(tgmOrigin, tgmSize, resolution)
     tgm = TGM(tgmFrame, staticPrior, dynamicPrior, weatherPrior, maxVelocity, saturationLimits)
     tgm.plot()
