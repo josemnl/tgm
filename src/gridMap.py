@@ -77,6 +77,11 @@ class origin:
         self.y = y
         self.z = z
 
+    def __eq__(self, other):
+        if not isinstance(other, origin):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
 class size:
     def __init__(self, width: int, height: int, depth: int = 1):
         """
@@ -91,6 +96,11 @@ class size:
         self.w = width
         self.h = height
         self.d = depth
+
+    def __eq__(self, other):
+        if not isinstance(other, size):
+            return NotImplemented
+        return self.w == other.w and self.h == other.h and self.d == other.d
 
 class frame:
     def __init__(self, frame_origin: origin, frame_size: size, resolution: float):
@@ -114,6 +124,13 @@ class frame:
         self.h = frame_size.h
         self.d = frame_size.d
         self.r = resolution
+
+    def __eq__(self, other):
+        if not isinstance(other, frame):
+            return NotImplemented
+        return self.ox == other.ox and self.oy == other.oy and self.oz == other.oz and \
+               self.w == other.w and self.h == other.h and self.d == other.d and \
+               self.r == other.r
 
     def contains(self, other: 'frame') -> bool:
         return self.ox <= other.ox and \
@@ -275,11 +292,7 @@ class gridMap:
 
     def diff(self, otherGM: 'gridMap') -> 'gridMap':
         # Implements the set difference between two grid maps
-        assert self.frame.w == otherGM.frame.w
-        assert self.frame.h == otherGM.frame.h
-        assert self.frame.r == otherGM.frame.r
-        assert self.frame.ox == otherGM.frame.ox
-        assert self.frame.oy == otherGM.frame.oy
+        assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
         if self.isGPU:
@@ -288,11 +301,7 @@ class gridMap:
     
     def union(self, otherGM: 'gridMap') -> 'gridMap':
         # Implements the set union between two grid maps
-        assert self.frame.w == otherGM.frame.w
-        assert self.frame.h == otherGM.frame.h
-        assert self.frame.r == otherGM.frame.r
-        assert self.frame.ox == otherGM.frame.ox
-        assert self.frame.oy == otherGM.frame.oy
+        assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
         if self.isGPU:
