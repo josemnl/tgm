@@ -4,16 +4,18 @@ from lidarScan import lidarScan
 import time
 
 class sensorModel:
-    def __init__ (self, origin, width, height, resolution, sensorRange, invModel ,occPrior):
-        # Units are converted to meters for the origin, width and height; and to cells/meter for the resolution
+    def __init__ (self, origin, width, height, resolution: float, sensorRange, invModel ,occPrior):
+        # Units are converted to meters for the origin, width, height
+        # Resolution is kept in meters/cell
+        # sensorRange is converted to meters
         self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
         self.width = int(width*resolution)
         self.height = int(height*resolution)
-        self.resolution = int(1/resolution)
+        self.resolution = resolution
         self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
         self.occPrior = occPrior
-        self.data = np.ones((self.width*self.resolution, self.height*self.resolution)) * self.occPrior
+        self.data = np.ones((width, height)) * self.occPrior
 
     def updateBasedOnPose(self, x_t: pose):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
@@ -53,15 +55,15 @@ class sensorModel:
         timeGround = time.time()
 
         # Compute matrix index for ego pose
-        ix_t = ((x_t[0:2]-self.origin) * self.resolution).astype(int)
+        ix_t = ((x_t[0:2]-self.origin) / self.resolution).astype(int)
 
         # Initialize matrix with prior
         self.data.fill(self.occPrior)
         timeInit = time.time()
 
         # Compute matrix indices for detections
-        ix = np.round((ox - self.origin[0]) * self.resolution).astype(int)
-        iy = np.round((oy - self.origin[1]) * self.resolution).astype(int)
+        ix = np.round((ox - self.origin[0]) / self.resolution).astype(int)
+        iy = np.round((oy - self.origin[1]) / self.resolution).astype(int)
 
         # Filter out-of-bounds detections
         valid = (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
@@ -76,8 +78,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is false, mark free cells
         if z_t_ground is not None and not rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
-            iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+            ix_ground = np.round((ox_ground - self.origin[0]) / self.resolution).astype(int)
+            iy_ground = np.round((oy_ground - self.origin[1]) / self.resolution).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -98,8 +100,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is true, mark free cells along the rays
         if z_t_ground is not None and rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground - self.origin[0]) * self.resolution).astype(int)
-            iy_ground = np.round((oy_ground - self.origin[1]) * self.resolution).astype(int)
+            ix_ground = np.round((ox_ground - self.origin[0]) / self.resolution).astype(int)
+            iy_ground = np.round((oy_ground - self.origin[1]) / self.resolution).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -123,10 +125,10 @@ class sensorModel:
         print("")
         '''
 
-        gridOrigin = origin(int(self.origin[0]*self.resolution), int(self.origin[1]*self.resolution), 0)
-        gridSize = size(int(self.width*self.resolution), int(self.height*self.resolution), 1)
+        gridOrigin = origin(int(self.origin[0]/self.resolution), int(self.origin[1]/self.resolution), 0)
+        gridSize = size(int(self.width/self.resolution), int(self.height/self.resolution), 1)
 
-        gridFrame = frame(gridOrigin, gridSize, 1/self.resolution)
+        gridFrame = frame(gridOrigin, gridSize, self.resolution)
 
         return gridMap(gridFrame, self.data)
 
