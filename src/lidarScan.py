@@ -19,9 +19,9 @@ class lidarScan:
         return np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles)])
 
     def computeRelativeCartesian(self, relPose):
-        angles = self.angles + relPose[2]
-        x = self.ranges * np.cos(angles) + relPose[0]
-        y = self.ranges * np.sin(angles) + relPose[1]
+        angles = self.angles + relPose.orientation.yaw
+        x = self.ranges * np.cos(angles) + relPose.position.x
+        y = self.ranges * np.sin(angles) + relPose.position.y
         return np.column_stack([x, y])
 
     def plot(self, ax=None, byLabel=False):

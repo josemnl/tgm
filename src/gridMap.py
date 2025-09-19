@@ -9,9 +9,15 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 class position:
     def __init__(self, x: float, y: float, z: float = 0.0):
-        assert isinstance(x, float)
-        assert isinstance(y, float)
-        assert isinstance(z, float)
+        assert isinstance(x, (float, int))
+        assert isinstance(y, (float, int))
+        assert isinstance(z, (float, int))
+        if isinstance(x, int):
+            x = float(x)
+        if isinstance(y, int):
+            y = float(y)
+        if isinstance(z, int):
+            z = float(z)
         self.x = x
         self.y = y
         self.z = z
@@ -28,9 +34,15 @@ class position:
 
 class orientation:
     def __init__(self, roll: float, pitch: float, yaw: float):
-        assert isinstance(roll, float)
-        assert isinstance(pitch, float)
-        assert isinstance(yaw, float)
+        assert isinstance(roll, (float, int))
+        assert isinstance(pitch, (float, int))
+        assert isinstance(yaw, (float, int))
+        if isinstance(roll, int):
+            roll = float(roll)
+        if isinstance(pitch, int):
+            pitch = float(pitch)
+        if isinstance(yaw, int):
+            yaw = float(yaw)
         self.roll = roll
         self.pitch = pitch
         self.yaw = yaw
