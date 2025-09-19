@@ -5,11 +5,10 @@ import time
 
 class sensorModel:
     def __init__ (self, origin, smSize: size, resolution: float, sensorRange, invModel ,occPrior):
-        # Units are converted to meters for the origin
-        # Width and height are kept in cells
-        # Resolution is kept in meters/cell
+        # Origin, width and height are expressed in cells
+        # Resolution is in meters/cell
         # sensorRange is converted to meters
-        self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
+        self.origin = origin
         self.size = smSize
         self.resolution = resolution
         self.sensorRange = int(sensorRange*resolution)
@@ -19,7 +18,7 @@ class sensorModel:
 
     def updateBasedOnPose(self, x_t: pose):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
-        self.origin = ((x_t[0:2]) - np.array([self.size.w/2, self.size.h/2]) * self.resolution).round(0)
+        self.origin = ((x_t[0:2] / self.resolution) - (self.size.w/2, self.size.h/2)).astype(int).tolist()
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
@@ -55,15 +54,15 @@ class sensorModel:
         timeGround = time.time()
 
         # Compute matrix index for ego pose
-        ix_t = ((x_t[0:2]-self.origin) / self.resolution).astype(int)
+        ix_t = ((x_t[0:2] / self.resolution) - self.origin).astype(int)
 
         # Initialize matrix with prior
         self.data.fill(self.occPrior)
         timeInit = time.time()
 
         # Compute matrix indices for detections
-        ix = np.round((ox - self.origin[0]) / self.resolution).astype(int)
-        iy = np.round((oy - self.origin[1]) / self.resolution).astype(int)
+        ix = np.round((ox / self.resolution) - self.origin[0]).astype(int)
+        iy = np.round((oy / self.resolution) - self.origin[1]).astype(int)
 
         # Filter out-of-bounds detections
         valid = (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
@@ -78,8 +77,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is false, mark free cells
         if z_t_ground is not None and not rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground - self.origin[0]) / self.resolution).astype(int)
-            iy_ground = np.round((oy_ground - self.origin[1]) / self.resolution).astype(int)
+            ix_ground = np.round((ox_ground / self.resolution) - self.origin[0]).astype(int)
+            iy_ground = np.round((oy_ground / self.resolution) - self.origin[1]).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -100,8 +99,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is true, mark free cells along the rays
         if z_t_ground is not None and rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground - self.origin[0]) / self.resolution).astype(int)
-            iy_ground = np.round((oy_ground - self.origin[1]) / self.resolution).astype(int)
+            ix_ground = np.round((ox_ground / self.resolution) - self.origin[0]).astype(int)
+            iy_ground = np.round((oy_ground / self.resolution) - self.origin[1]).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -125,7 +124,7 @@ class sensorModel:
         print("")
         '''
 
-        gridOrigin = origin(int(self.origin[0]/self.resolution), int(self.origin[1]/self.resolution), 0)
+        gridOrigin = origin(self.origin[0], self.origin[1], 0)
         gridSize = size(self.size.w, self.size.h, 1)
 
         gridFrame = frame(gridOrigin, gridSize, self.resolution)
