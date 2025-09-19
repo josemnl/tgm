@@ -4,22 +4,22 @@ from lidarScan import lidarScan
 import time
 
 class sensorModel:
-    def __init__ (self, origin, width: int, height: int, resolution: float, sensorRange, invModel ,occPrior):
-        # Units are converted to meters for the origin, width, height
+    def __init__ (self, origin, smSize: size, resolution: float, sensorRange, invModel ,occPrior):
+        # Units are converted to meters for the origin
+        # Width and height are kept in cells
         # Resolution is kept in meters/cell
         # sensorRange is converted to meters
         self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
-        self.width = width
-        self.height = height
+        self.size = smSize
         self.resolution = resolution
         self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
         self.occPrior = occPrior
-        self.data = np.ones((width, height)) * self.occPrior
+        self.data = np.ones((self.size.w, self.size.h)) * self.occPrior
 
     def updateBasedOnPose(self, x_t: pose):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
-        self.origin = ((x_t[0:2]) - np.array([self.width/2, self.height/2]) * self.resolution).round(0)
+        self.origin = ((x_t[0:2]) - np.array([self.size.w/2, self.size.h/2]) * self.resolution).round(0)
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
@@ -126,7 +126,7 @@ class sensorModel:
         '''
 
         gridOrigin = origin(int(self.origin[0]/self.resolution), int(self.origin[1]/self.resolution), 0)
-        gridSize = size(self.width, self.height, 1)
+        gridSize = size(self.size.w, self.size.h, 1)
 
         gridFrame = frame(gridOrigin, gridSize, self.resolution)
 
@@ -176,7 +176,8 @@ def main():
     sensorRange = 50
     invModel = [0.1, 0.9]
     occPrior = 0.5
-    sM = sensorModel(origin, width, height, resolution, sensorRange, invModel ,occPrior)
+    smSize = size(width, height)
+    sM = sensorModel(origin, smSize, resolution, sensorRange, invModel ,occPrior)
 
     with open("./logs/sim_corridor/z_100.csv") as data:
         z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)

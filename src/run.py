@@ -21,7 +21,8 @@ def run(logID, conf):
         os.makedirs(videoPath)
 
     # Create Sensor Model and TGM
-    sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    sMsize = size(conf.smWidth, conf.smHeight, 1)
+    sM = sensorModel(conf.origin, sMsize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
