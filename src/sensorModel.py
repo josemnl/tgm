@@ -4,13 +4,13 @@ from lidarScan import lidarScan
 import time
 
 class sensorModel:
-    def __init__ (self, origin, width, height, resolution: float, sensorRange, invModel ,occPrior):
+    def __init__ (self, origin, width: int, height: int, resolution: float, sensorRange, invModel ,occPrior):
         # Units are converted to meters for the origin, width, height
         # Resolution is kept in meters/cell
         # sensorRange is converted to meters
         self.origin = int(origin[0]*resolution), int(origin[1]*resolution)
-        self.width = int(width*resolution)
-        self.height = int(height*resolution)
+        self.width = width
+        self.height = height
         self.resolution = resolution
         self.sensorRange = int(sensorRange*resolution)
         self.invModel = invModel
@@ -19,7 +19,7 @@ class sensorModel:
 
     def updateBasedOnPose(self, x_t: pose):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
-        self.origin = ((x_t[0:2] - np.array([self.width/2, self.height/2])) * self.resolution).round(0) / self.resolution
+        self.origin = ((x_t[0:2]) - np.array([self.width/2, self.height/2]) * self.resolution).round(0)
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
@@ -126,7 +126,7 @@ class sensorModel:
         '''
 
         gridOrigin = origin(int(self.origin[0]/self.resolution), int(self.origin[1]/self.resolution), 0)
-        gridSize = size(int(self.width/self.resolution), int(self.height/self.resolution), 1)
+        gridSize = size(self.width, self.height, 1)
 
         gridFrame = frame(gridOrigin, gridSize, self.resolution)
 
