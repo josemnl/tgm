@@ -23,7 +23,8 @@ def run(logID, conf):
     # Create Sensor Model and TGM
     sMsize = size(conf.smWidth, conf.smHeight, 1)
     smOrigin = origin(conf.origin[0], conf.origin[1], 0)
-    sM = sensorModel(smOrigin, sMsize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smFrame = frame(smOrigin, sMsize, conf.resolution)
+    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)

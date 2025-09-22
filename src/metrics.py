@@ -77,7 +77,8 @@ if __name__ == "__main__":
 
     smSize = size(conf.smWidth, conf.smHeight)
     smOrigin = origin(conf.origin[0], conf.origin[1], 0)
-    sM = sensorModel(smOrigin, smSize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smFrame = frame(smOrigin, smSize, conf.resolution)
+    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')

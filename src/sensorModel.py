@@ -4,20 +4,17 @@ from lidarScan import lidarScan
 import time
 
 class sensorModel:
-    def __init__ (self, origin: origin, smSize: size, resolution: float, sensorRange, invModel ,occPrior):
-        # Origin, width, height and sensor range are expressed in cells
-        # Resolution is in meters/cell
-        self.origin = origin
-        self.size = smSize
-        self.resolution = resolution
+    def __init__ (self, smFrame: frame, sensorRange, invModel ,occPrior):
+        assert isinstance(smFrame, frame)
+        self.frame = smFrame
         self.sensorRange = sensorRange
         self.invModel = invModel
         self.occPrior = occPrior
-        self.data = np.ones((self.size.w, self.size.h)) * self.occPrior
+        self.data = np.ones((self.frame.size.w, self.frame.size.h)) * self.occPrior
 
     def updateBasedOnPose(self, x_t: pose):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
-        self.origin = origin(int((x_t[0] / self.resolution) - (self.size.w/2)), int((x_t[1] / self.resolution) - (self.size.h/2)), 0)
+        self.frame.origin = origin(int((x_t[0] / self.frame.r) - (self.frame.size.w/2)), int((x_t[1] / self.frame.r) - (self.frame.size.h/2)), 0)
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
@@ -31,7 +28,7 @@ class sensorModel:
         timePose = time.time()
 
         # Remove measurements further than sensor range
-        mask = dist < self.sensorRange * self.resolution
+        mask = dist < self.sensorRange * self.frame.r
         ang = ang[mask]
         dist = dist[mask]
         timeClip = time.time()
@@ -45,7 +42,7 @@ class sensorModel:
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
             np.add(ang_ground, x_t[2], out=ang_ground)
-            mask = dist_ground < self.sensorRange * self.resolution
+            mask = dist_ground < self.sensorRange * self.frame.r
             ang_ground = ang_ground[mask]
             dist_ground = dist_ground[mask]
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
@@ -53,15 +50,15 @@ class sensorModel:
         timeGround = time.time()
 
         # Compute matrix index for ego pose
-        ix_t = ((x_t[0:2] / self.resolution) - (self.origin.x, self.origin.y)).astype(int)
+        ix_t = ((x_t[0:2] / self.frame.r) - (self.frame.origin.x, self.frame.origin.y)).astype(int)
 
         # Initialize matrix with prior
         self.data.fill(self.occPrior)
         timeInit = time.time()
 
         # Compute matrix indices for detections
-        ix = np.round((ox / self.resolution) - self.origin.x).astype(int)
-        iy = np.round((oy / self.resolution) - self.origin.y).astype(int)
+        ix = np.round((ox / self.frame.r) - self.frame.origin.x).astype(int)
+        iy = np.round((oy / self.frame.r) - self.frame.origin.y).astype(int)
 
         # Filter out-of-bounds detections
         valid = (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
@@ -76,8 +73,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is false, mark free cells
         if z_t_ground is not None and not rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground / self.resolution) - self.origin.x).astype(int)
-            iy_ground = np.round((oy_ground / self.resolution) - self.origin.y).astype(int)
+            ix_ground = np.round((ox_ground / self.frame.r) - self.frame.origin.x).astype(int)
+            iy_ground = np.round((oy_ground / self.frame.r) - self.frame.origin.y).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -98,8 +95,8 @@ class sensorModel:
         # If ground points are provided and rayTraceGround is true, mark free cells along the rays
         if z_t_ground is not None and rayTraceGround:
             # Compute the matrix indices for ground points
-            ix_ground = np.round((ox_ground / self.resolution) - self.origin.x).astype(int)
-            iy_ground = np.round((oy_ground / self.resolution) - self.origin.y).astype(int)
+            ix_ground = np.round((ox_ground / self.frame.r) - self.frame.origin.x).astype(int)
+            iy_ground = np.round((oy_ground / self.frame.r) - self.frame.origin.y).astype(int)
             # Filter out-of-bounds ground points
             valid = (ix_ground >= 0) & (ix_ground < self.data.shape[0]) & (iy_ground >= 0) & (iy_ground < self.data.shape[1])
             ix_ground = ix_ground[valid]
@@ -123,10 +120,10 @@ class sensorModel:
         print("")
         '''
 
-        gridOrigin = origin(self.origin.x, self.origin.y, 0)
-        gridSize = size(self.size.w, self.size.h, 1)
+        gridOrigin = origin(self.frame.origin.x, self.frame.origin.y, 0)
+        gridSize = size(self.frame.size.w, self.frame.size.h, 1)
 
-        gridFrame = frame(gridOrigin, gridSize, self.resolution)
+        gridFrame = frame(gridOrigin, gridSize, self.frame.r)
 
         return gridMap(gridFrame, self.data)
 
@@ -175,7 +172,7 @@ def main():
     invModel = [0.1, 0.9]
     occPrior = 0.5
     smSize = size(width, height)
-    sM = sensorModel(smOrigin, smSize, resolution, sensorRange, invModel ,occPrior)
+    sM = sensorModel(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
 
     with open("./logs/sim_corridor/z_100.csv") as data:
         z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
