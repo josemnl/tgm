@@ -162,7 +162,7 @@ def run(logID, conf):
 
         # If gm is partially outside the TGM, resize the TGM
         if not tgm.contains(gm.frame):
-            newSize = size(tgm.frame.w, tgm.frame.h, tgm.frame.d)
+            newSize = size(tgm.frame.size.w, tgm.frame.size.h, tgm.frame.size.d)
             newFrame = frame.frameAroundPosition(x_t.position, newSize, tgm.frame.r)
             tgm.reshape(newFrame)
 

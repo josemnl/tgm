@@ -130,39 +130,35 @@ class frame:
         assert resolution > 0
 
         # Save parameters
-        self.ox = frame_origin.x
-        self.oy = frame_origin.y
-        self.oz = frame_origin.z
-        self.w = frame_size.w
-        self.h = frame_size.h
-        self.d = frame_size.d
+        self.origin = frame_origin
+        self.size = frame_size
         self.r = resolution
 
     def __eq__(self, other):
         if not isinstance(other, frame):
             return NotImplemented
-        return self.ox == other.ox and self.oy == other.oy and self.oz == other.oz and \
-               self.w == other.w and self.h == other.h and self.d == other.d and \
+        return self.origin.x == other.origin.x and self.origin.y == other.origin.y and self.origin.z == other.origin.z and \
+               self.size.w == other.size.w and self.size.h == other.size.h and self.size.d == other.size.d and \
                self.r == other.r
 
     def contains(self, other: 'frame') -> bool:
-        return self.ox <= other.ox and \
-               self.oy <= other.oy and \
-               self.oz <= other.oz and \
-               self.ox + self.w >= other.ox + other.w and \
-               self.oy + self.h >= other.oy + other.h and \
-               self.oz + self.d >= other.oz + other.d
+        return self.origin.x <= other.origin.x and \
+               self.origin.y <= other.origin.y and \
+               self.origin.z <= other.origin.z and \
+               self.origin.x + self.size.w >= other.origin.x + other.size.w and \
+               self.origin.y + self.size.h >= other.origin.y + other.size.h and \
+               self.origin.z + self.size.d >= other.origin.z + other.size.d
 
     def computeOverlap(self, other: 'frame') -> 'frame':
         """
         Compute the overlap between this frame and another frame.
         """
-        overlap_origin_x = max(self.ox, other.ox)
-        overlap_origin_y = max(self.oy, other.oy)
-        overlap_origin_z = max(self.oz, other.oz)
-        overlap_width = min(self.ox + self.w, other.ox + other.w) - overlap_origin_x
-        overlap_height = min(self.oy + self.h, other.oy + other.h) - overlap_origin_y
-        overlap_depth = min(self.oz + self.d, other.oz + other.d) - overlap_origin_z
+        overlap_origin_x = max(self.origin.x, other.origin.x)
+        overlap_origin_y = max(self.origin.y, other.origin.y)
+        overlap_origin_z = max(self.origin.z, other.origin.z)
+        overlap_width = min(self.origin.x + self.size.w, other.origin.x + other.size.w) - overlap_origin_x
+        overlap_height = min(self.origin.y + self.size.h, other.origin.y + other.size.h) - overlap_origin_y
+        overlap_depth = min(self.origin.z + self.size.d, other.origin.z + other.size.d) - overlap_origin_z
 
         overlap_origin = origin(overlap_origin_x, overlap_origin_y, overlap_origin_z)
         overlap_size = size(overlap_width, overlap_height, overlap_depth)
@@ -194,12 +190,12 @@ class gridMap:
         # Assert that the data is a 2D or 3D array
         assert isinstance(data, (np.ndarray, cp.ndarray))
         assert data.ndim in [2, 3]
-        assert data.shape[0] == gridFrame.w
-        assert data.shape[1] == gridFrame.h
+        assert data.shape[0] == gridFrame.size.w
+        assert data.shape[1] == gridFrame.size.h
         if data.ndim == 2:
             # Expand to 3D array with depth 1
             data = data[:, :, np.newaxis]
-        assert data.shape[2] == gridFrame.d
+        assert data.shape[2] == gridFrame.size.d
 
         self.frame = gridFrame
         self.data = data
@@ -223,16 +219,16 @@ class gridMap:
     def plot(self, layer: int = 0, isPause: bool = False) -> None:
         I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
-                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
+                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
+                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
         plt.show(block=isPause)
         plt.pause(0.0001)
 
     def savePNG(self, layer: int, filename: str) -> None:
         I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
-                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
+                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
+                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
         plt.savefig(filename)
 
     def contains(self, frame) -> bool:
@@ -245,12 +241,12 @@ class gridMap:
         """
         if not self.contains(newFrame):
             raise ValueError("New grid is outside the old one")
-        x0 = newFrame.ox - self.frame.ox
-        y0 = newFrame.oy - self.frame.oy
-        z0 = newFrame.oz - self.frame.oz
-        x1 = x0 + newFrame.w
-        y1 = y0 + newFrame.h
-        z1 = z0 + newFrame.d
+        x0 = newFrame.origin.x - self.frame.origin.x
+        y0 = newFrame.origin.y - self.frame.origin.y
+        z0 = newFrame.origin.z - self.frame.origin.z
+        x1 = x0 + newFrame.size.w
+        y1 = y0 + newFrame.size.h
+        z1 = z0 + newFrame.size.d
         return gridMap(newFrame, self.data[x0:x1, y0:y1, z0:z1])
 
     def reshape(self, newFrame: frame, fill_value: float) -> 'gridMap':
@@ -260,29 +256,29 @@ class gridMap:
         """
         overlap = self.computeOverlap(newFrame)
         if self.isGPU:
-            newData = cp.full((newFrame.w, newFrame.h, newFrame.d), fill_value)
+            newData = cp.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
         else:
-            newData = np.full((newFrame.w, newFrame.h, newFrame.d), fill_value)
-        ix_0 = overlap.ox - newFrame.ox
-        iy_0 = overlap.oy - newFrame.oy
-        iz_0 = overlap.oz - newFrame.oz
-        ix_1 = ix_0 + overlap.w - 1
-        iy_1 = iy_0 + overlap.h - 1
-        iz_1 = iz_0 + overlap.d - 1
-        nx_0 = overlap.ox - self.frame.ox
-        ny_0 = overlap.oy - self.frame.oy
-        nz_0 = overlap.oz - self.frame.oz
-        nx_1 = nx_0 + overlap.w - 1
-        ny_1 = ny_0 + overlap.h - 1
-        nz_1 = nz_0 + overlap.d - 1
+            newData = np.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
+        ix_0 = overlap.origin.x - newFrame.origin.x
+        iy_0 = overlap.origin.y - newFrame.origin.y
+        iz_0 = overlap.origin.z - newFrame.origin.z
+        ix_1 = ix_0 + overlap.size.w - 1
+        iy_1 = iy_0 + overlap.size.h - 1
+        iz_1 = iz_0 + overlap.size.d - 1
+        nx_0 = overlap.origin.x - self.frame.origin.x
+        ny_0 = overlap.origin.y - self.frame.origin.y
+        nz_0 = overlap.origin.z - self.frame.origin.z
+        nx_1 = nx_0 + overlap.size.w - 1
+        ny_1 = ny_0 + overlap.size.h - 1
+        nz_1 = nz_0 + overlap.size.d - 1
 
         newData[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = self.data[nx_0:nx_1, ny_0:ny_1, nz_0:nz_1]
         return gridMap(newFrame, newData)
 
     def occupancy(self, x: float, y: float, z: float = 0) -> float:
-        ix = np.round((x - self.frame.ox*self.frame.r)/self.frame.r).astype(int)
-        iy = np.round((y - self.frame.oy*self.frame.r)/self.frame.r).astype(int)
-        iz = np.round((z - self.frame.oz*self.frame.r)/self.frame.r).astype(int)
+        ix = np.round((x - self.frame.origin.x*self.frame.r)/self.frame.r).astype(int)
+        iy = np.round((y - self.frame.origin.y*self.frame.r)/self.frame.r).astype(int)
+        iz = np.round((z - self.frame.origin.z*self.frame.r)/self.frame.r).astype(int)
         return self.data[ix][iy][iz]
 
     def saveState(self, filename: str) -> None:
@@ -311,8 +307,8 @@ class gridMap:
         rotated_corners = np.dot(rotation_matrix, (corners - np.array([x, y])).T).T + np.array([x, y])
 
         # Translate the corners to the grid map
-        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.frame.ox*self.frame.r)/self.frame.r
-        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.frame.oy*self.frame.r)/self.frame.r
+        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.frame.origin.x*self.frame.r)/self.frame.r
+        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.frame.origin.y*self.frame.r)/self.frame.r
 
         # Swap x and y (for consistency with openCV)
         rotated_corners[:, 0], rotated_corners[:, 1] = rotated_corners[:, 1], rotated_corners[:, 0].copy()
@@ -364,9 +360,9 @@ class gridMap:
         ax.view_init(elev=elev, azim=azim)
 
         # Compute centers in index units (can scale to meters if desired)
-        xs = self.frame.ox + np.arange(self.frame.w) + 0.5
-        ys = self.frame.oy + np.arange(self.frame.h) + 0.5
-        zs = self.frame.oz + np.arange(self.frame.d) + 0.5
+        xs = self.frame.origin.x + np.arange(self.frame.size.w) + 0.5
+        ys = self.frame.origin.y + np.arange(self.frame.size.h) + 0.5
+        zs = self.frame.origin.z + np.arange(self.frame.size.d) + 0.5
 
         # Shapes
         nx, ny, nz = len(xs), len(ys), len(zs)
@@ -390,11 +386,11 @@ class gridMap:
                    depthshade=False)
 
         # Limits & aspect
-        ax.set_xlim(self.frame.ox, self.frame.ox + self.frame.w)
-        ax.set_ylim(self.frame.oy, self.frame.oy + self.frame.h)
-        ax.set_zlim(self.frame.oz, self.frame.oz + self.frame.d)
+        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
+        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
+        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
         try:
-            ax.set_box_aspect((self.frame.w, self.frame.h, self.frame.d))
+            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
         except Exception:
             try:
                 ax.set_aspect('equal')
@@ -402,9 +398,9 @@ class gridMap:
                 pass
 
         tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
-        ax.set_xticks(np.arange(self.frame.ox, self.frame.ox + self.frame.w + 1, tick_interval))
-        ax.set_yticks(np.arange(self.frame.oy, self.frame.oy + self.frame.h + 1, tick_interval))
-        ax.set_zticks(np.arange(self.frame.oz, self.frame.oz + self.frame.d + 1, tick_interval))
+        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
 
         plt.show(block=isPause)
         plt.pause(0.0001)
@@ -455,18 +451,18 @@ class gridMap:
             ]
 
         # Centers per axis
-        xs = self.frame.ox + np.arange(self.frame.w) + 0.5
-        ys = self.frame.oy + np.arange(self.frame.h) + 0.5
-        zs = self.frame.oz + np.arange(self.frame.d) + 0.5
+        xs = self.frame.origin.x + np.arange(self.frame.size.w) + 0.5
+        ys = self.frame.origin.y + np.arange(self.frame.size.h) + 0.5
+        zs = self.frame.origin.z + np.arange(self.frame.size.d) + 0.5
 
-        for k in range(self.frame.d):
+        for k in range(self.frame.size.d):
             zc = zs[k]
             polys = []
             face_cols = []
             edge_cols = []
-            for i in range(self.frame.w):
+            for i in range(self.frame.size.w):
                 xc = xs[i]
-                for j in range(self.frame.h):
+                for j in range(self.frame.size.h):
                     yc = ys[j]
                     col = inten[i, j, k]
                     a = alpha[i, j, k]
@@ -485,11 +481,11 @@ class gridMap:
                     pass
                 ax.add_collection3d(coll)
 
-        ax.set_xlim(self.frame.ox, self.frame.ox + self.frame.w)
-        ax.set_ylim(self.frame.oy, self.frame.oy + self.frame.h)
-        ax.set_zlim(self.frame.oz, self.frame.oz + self.frame.d)
+        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
+        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
+        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
         try:
-            ax.set_box_aspect((self.frame.w, self.frame.h, self.frame.d))
+            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
         except Exception:
             try:
                 ax.set_aspect('equal')
@@ -497,9 +493,9 @@ class gridMap:
                 pass
 
         tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
-        ax.set_xticks(np.arange(self.frame.ox, self.frame.ox + self.frame.w + 1, tick_interval))
-        ax.set_yticks(np.arange(self.frame.oy, self.frame.oy + self.frame.h + 1, tick_interval))
-        ax.set_zticks(np.arange(self.frame.oz, self.frame.oz + self.frame.d + 1, tick_interval))
+        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
 
         plt.show(block=isPause)
         plt.pause(0.0001)

@@ -18,9 +18,9 @@ class TGM:
         self.weatherPrior = weatherPrior
         self.freePrior = 1 - staticPrior - dynamicPrior - weatherPrior
         self.sdwPrior = self.staticPrior + self.dynamicPrior + self.weatherPrior
-        self.staticMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * staticPrior)
-        self.dynamicMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * dynamicPrior)
-        self.weatherMap = gridMap(self.frame, np.ones((self.frame.w, self.frame.h)) * weatherPrior)
+        self.staticMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h)) * staticPrior)
+        self.dynamicMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h)) * dynamicPrior)
+        self.weatherMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h)) * weatherPrior)
 
         r = int(maxVelocity / self.frame.r)
         shape = disk(r).astype(float)
@@ -109,10 +109,10 @@ class TGM:
         self.dynamicMap.data[x0:x1, y0:y1] = (1 - self.staticMap.data[x0:x1, y0:y1]) * self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior)
 
         # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
-        x0_new = overlap.ox - self.frame.ox
-        y0_new = overlap.oy - self.frame.oy
-        x1_new = x0_new + overlap.w
-        y1_new = y0_new + overlap.h
+        x0_new = overlap.origin.x - self.frame.origin.x
+        y0_new = overlap.origin.y - self.frame.origin.y
+        x1_new = x0_new + overlap.size.w
+        y1_new = y0_new + overlap.size.h
 
         # Save the visible cells
         self.staticMap.data[x0_new:x1_new, y0_new:y1_new] = staticMatrix
@@ -156,10 +156,10 @@ class TGM:
         '''
         Update the origin and size of the TGM, reshaping the maps and updating the previous region.
         '''
-        self.prev_region[0] = self.prev_region[0] + self.frame.ox - newFrame.ox
-        self.prev_region[1] = self.prev_region[1] + self.frame.oy - newFrame.oy
-        self.prev_region[2] = self.prev_region[2] + self.frame.ox - newFrame.ox
-        self.prev_region[3] = self.prev_region[3] + self.frame.oy - newFrame.oy
+        self.prev_region[0] = self.prev_region[0] + self.frame.origin.x - newFrame.origin.x
+        self.prev_region[1] = self.prev_region[1] + self.frame.origin.y - newFrame.origin.y
+        self.prev_region[2] = self.prev_region[2] + self.frame.origin.x - newFrame.origin.x
+        self.prev_region[3] = self.prev_region[3] + self.frame.origin.y - newFrame.origin.y
 
         self.staticMap = self.staticMap.reshape(newFrame, self.staticPrior)
         self.dynamicMap = self.dynamicMap.reshape(newFrame, self.dynamicPrior)
@@ -170,8 +170,8 @@ class TGM:
         # Make sure the previous region is within the new map
         self.prev_region[0] = max(0, self.prev_region[0])
         self.prev_region[1] = max(0, self.prev_region[1])
-        self.prev_region[2] = min(newFrame.w, self.prev_region[2])
-        self.prev_region[3] = min(newFrame.h, self.prev_region[3])
+        self.prev_region[2] = min(newFrame.size.w, self.prev_region[2])
+        self.prev_region[3] = min(newFrame.size.h, self.prev_region[3])
 
     def oneLayer(self, layer, layerFrame):
         overlap = self.frame.computeOverlap(layerFrame)
@@ -208,7 +208,7 @@ class TGM:
 
         # Plot the map according to the style
         if style == 'combined':
-            I = np.zeros((overlap.h, overlap.w, 3))
+            I = np.zeros((overlap.size.h, overlap.size.w, 3))
             I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
             I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/np.square(1-weatherMap))
             I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
@@ -222,8 +222,8 @@ class TGM:
             I = 1 - np.transpose(weatherMap)
         ax = fig.add_subplot(1, 1, 1)
         ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                extent=(overlap.ox*self.frame.r, (overlap.ox + overlap.w)*self.frame.r,
-                        overlap.oy*self.frame.r, (overlap.oy + overlap.h)*self.frame.r))
+                extent=(overlap.origin.x*self.frame.r, (overlap.origin.x + overlap.size.w)*self.frame.r,
+                        overlap.origin.y*self.frame.r, (overlap.origin.y + overlap.size.h)*self.frame.r))
 
         # Plot the ego pose
         if self.x_t is not None and len(self.x_t) != 0:

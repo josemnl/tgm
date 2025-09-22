@@ -20,10 +20,10 @@ def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range):
 
 def lsq_fun(relPose, lsq_scan: lidarScan, lsq_map: gridMap):
     # Extract grid parameters
-    limit_x = lsq_map.frame.w*lsq_map.frame.r
-    limit_y = lsq_map.frame.h*lsq_map.frame.r
-    origin_x = lsq_map.frame.ox*lsq_map.frame.r
-    origin_y = lsq_map.frame.oy*lsq_map.frame.r
+    limit_x = lsq_map.frame.size.w*lsq_map.frame.r
+    limit_y = lsq_map.frame.size.h*lsq_map.frame.r
+    origin_x = lsq_map.frame.origin.x*lsq_map.frame.r
+    origin_y = lsq_map.frame.origin.y*lsq_map.frame.r
     cell_length = lsq_map.frame.r
 
     # Create the grid

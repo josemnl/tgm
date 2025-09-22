@@ -30,11 +30,11 @@ def computeMetrics(z_t, x_t, gM, label=1):
 def classificationMetrics(gM1, gM2, verbose=False):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
-    assert gM1.frame.w == gM2.frame.w
-    assert gM1.frame.h == gM2.frame.h
+    assert gM1.frame.size.w == gM2.frame.size.w
+    assert gM1.frame.size.h == gM2.frame.size.h
     assert gM1.frame.r == gM2.frame.r
-    assert gM1.frame.ox == gM2.frame.ox
-    assert gM1.frame.oy == gM2.frame.oy
+    assert gM1.frame.origin.x == gM2.frame.origin.x
+    assert gM1.frame.origin.y == gM2.frame.origin.y
     assert gM1.frame.r == gM2.frame.r
     assert gM1.isBool
     assert gM2.isBool
