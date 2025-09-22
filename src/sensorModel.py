@@ -5,13 +5,12 @@ import time
 
 class sensorModel:
     def __init__ (self, origin: origin, smSize: size, resolution: float, sensorRange, invModel ,occPrior):
-        # Origin, width and height are expressed in cells
+        # Origin, width, height and sensor range are expressed in cells
         # Resolution is in meters/cell
-        # sensorRange is converted to meters
         self.origin = origin
         self.size = smSize
         self.resolution = resolution
-        self.sensorRange = int(sensorRange*resolution)
+        self.sensorRange = sensorRange
         self.invModel = invModel
         self.occPrior = occPrior
         self.data = np.ones((self.size.w, self.size.h)) * self.occPrior
@@ -32,7 +31,7 @@ class sensorModel:
         timePose = time.time()
 
         # Remove measurements further than sensor range
-        mask = dist < self.sensorRange
+        mask = dist < self.sensorRange * self.resolution
         ang = ang[mask]
         dist = dist[mask]
         timeClip = time.time()
@@ -46,7 +45,7 @@ class sensorModel:
         if z_t_ground is not None:
             ang_ground, dist_ground = z_t_ground.angles, z_t_ground.ranges
             np.add(ang_ground, x_t[2], out=ang_ground)
-            mask = dist_ground < self.sensorRange
+            mask = dist_ground < self.sensorRange * self.resolution
             ang_ground = ang_ground[mask]
             dist_ground = dist_ground[mask]
             ox_ground = x_t[0] + np.cos(ang_ground) * dist_ground
