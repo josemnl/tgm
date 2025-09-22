@@ -1,5 +1,5 @@
 from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap, pose, position, orientation, size, frame
+from gridMap import gridMap, pose, position, orientation, size, frame, origin
 import numpy as np
 from utilities import read3DLabledLidarBIN, loadConfigAsDict
 from sensorModel import sensorModel
@@ -76,7 +76,8 @@ if __name__ == "__main__":
     conf = loadConfigAsDict(configPath, logID)
 
     smSize = size(conf.smWidth, conf.smHeight)
-    sM = sensorModel(conf.origin, smSize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    sM = sensorModel(smOrigin, smSize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')

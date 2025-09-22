@@ -22,7 +22,8 @@ def run(logID, conf):
 
     # Create Sensor Model and TGM
     sMsize = size(conf.smWidth, conf.smHeight, 1)
-    sM = sensorModel(conf.origin, sMsize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    sM = sensorModel(smOrigin, sMsize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
@@ -54,8 +55,8 @@ def run(logID, conf):
     recall_t_b_array = []
     f1_t_b_array = []
 
-    # Initial guess for the velocity
-    v_t = [0, 0, 0]
+    # Initial guess for the velocity (pose type to support pose arithmetic)
+    v_t = pose(position(0.0, 0.0, 0.0), orientation(0.0, 0.0, 0.0))
 
     # Dict to store runtimes. Each key is a type of time, and each value is an array with the time for each frame
     runtimes = {}

@@ -18,7 +18,7 @@ def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range):
     x = pose(position(x[0], x[1], 0.0), orientation(0.0, 0.0, x[2]))
     return x
 
-def lsq_fun(relPose, lsq_scan, lsq_map: gridMap):
+def lsq_fun(relPose, lsq_scan: lidarScan, lsq_map: gridMap):
     # Extract grid parameters
     limit_x = lsq_map.frame.w*lsq_map.frame.r
     limit_y = lsq_map.frame.h*lsq_map.frame.r
@@ -31,10 +31,11 @@ def lsq_fun(relPose, lsq_scan, lsq_map: gridMap):
     y = np.linspace(origin_y, origin_y + limit_y - cell_length, lsq_map.data.shape[1])
 
     # Transform the scan
+    relPose = pose(position(relPose[0], relPose[1], 0.0), orientation(0.0, 0.0, relPose[2]))
     transCart = lsq_scan.computeRelativeCartesian(relPose)
 
     # Compute the cost function using RegularGridInterpolator
-    interp = RegularGridInterpolator((x, y), lsq_map.data, bounds_error=False, method='linear', fill_value=0)
+    interp = RegularGridInterpolator((x, y), lsq_map.data[:, :, 0], bounds_error=False, method='linear', fill_value=0)
     cost = 1 - interp(transCart)
     return cost
 
