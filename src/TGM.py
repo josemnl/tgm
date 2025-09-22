@@ -137,8 +137,8 @@ class TGM:
         # Compute dynamic prediction
         if self.dynamicPrior != 0:
             dynamicStay = dynamicMap * self.D0
-            bounceBack = conv2prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
-            dynamicMove = conv2prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
+            bounceBack = conv3prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
+            dynamicMove = conv3prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
             predDynamicMap = dynamicStay + bounceBack + dynamicMove
         else:
             predDynamicMap = cp.zeros_like(dynamicMap) if self.GPU else np.zeros_like(dynamicMap)
@@ -293,6 +293,30 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
             conv = cp_convolve2d(paddedMap, convShape, mode='valid')
         else:
             paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
+            conv = convolve2d(paddedMap, convShape, mode='valid')
+    return conv
+
+def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
+    # Pad the map with the prior before making the convolution
+    # Expand 2D convShape to 3D
+    convShape = convShape[:, :, np.newaxis]
+    sx, sy, sz = convShape.shape
+    px = (sx - 1) // 2
+    py = (sy - 1) // 2
+    pz = (sz - 1) // 2
+    if fftConv:
+        if GPU:
+            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py), (pz, pz)), constant_values=prior)
+            conv = cp_fftconvolve(paddedMap, convShape, mode='valid')
+        else:
+            paddedMap = np.pad(map, ((px, px), (py, py), (pz, pz)), constant_values=prior)
+            conv = fftconvolve(paddedMap, convShape, mode='valid')
+    else:
+        if GPU:
+            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py), (pz, pz)), constant_values=prior)
+            conv = cp_convolve2d(paddedMap, convShape, mode='valid')
+        else:
+            paddedMap = np.pad(map, ((px, px), (py, py), (pz, pz)), constant_values=prior)
             conv = convolve2d(paddedMap, convShape, mode='valid')
     return conv
 

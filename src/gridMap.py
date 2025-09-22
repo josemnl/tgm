@@ -5,12 +5,19 @@ import pickle
 import cv2
 import cupy as cp
 from typing import Tuple, Union
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 class position:
     def __init__(self, x: float, y: float, z: float = 0.0):
-        assert isinstance(x, float)
-        assert isinstance(y, float)
-        assert isinstance(z, float)
+        assert isinstance(x, (float, int))
+        assert isinstance(y, (float, int))
+        assert isinstance(z, (float, int))
+        if isinstance(x, int):
+            x = float(x)
+        if isinstance(y, int):
+            y = float(y)
+        if isinstance(z, int):
+            z = float(z)
         self.x = x
         self.y = y
         self.z = z
@@ -27,9 +34,15 @@ class position:
 
 class orientation:
     def __init__(self, roll: float, pitch: float, yaw: float):
-        assert isinstance(roll, float)
-        assert isinstance(pitch, float)
-        assert isinstance(yaw, float)
+        assert isinstance(roll, (float, int))
+        assert isinstance(pitch, (float, int))
+        assert isinstance(yaw, (float, int))
+        if isinstance(roll, int):
+            roll = float(roll)
+        if isinstance(pitch, int):
+            pitch = float(pitch)
+        if isinstance(yaw, int):
+            yaw = float(yaw)
         self.roll = roll
         self.pitch = pitch
         self.yaw = yaw
@@ -177,6 +190,17 @@ class gridMap:
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
         """
+
+        # Assert that the data is a 2D or 3D array
+        assert isinstance(data, (np.ndarray, cp.ndarray))
+        assert data.ndim in [2, 3]
+        assert data.shape[0] == gridFrame.w
+        assert data.shape[1] == gridFrame.h
+        if data.ndim == 2:
+            # Expand to 3D array with depth 1
+            data = data[:, :, np.newaxis]
+        assert data.shape[2] == gridFrame.d
+
         self.frame = gridFrame
         self.data = data
 
@@ -196,16 +220,16 @@ class gridMap:
     def toBool(self, threshold: float) -> 'gridMap':
         return gridMap(self.frame, self.data > threshold)
 
-    def plot(self, isPause: bool = False) -> None:
-        I = 1 - np.transpose(self.data)
+    def plot(self, layer: int = 0, isPause: bool = False) -> None:
+        I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                    extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
                            self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
         plt.show(block=isPause)
         plt.pause(0.0001)
 
-    def savePNG(self, filename: str) -> None:
-        I = 1 - np.transpose(self.data)
+    def savePNG(self, layer: int, filename: str) -> None:
+        I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                    extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
                            self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
@@ -223,10 +247,12 @@ class gridMap:
             raise ValueError("New grid is outside the old one")
         x0 = newFrame.ox - self.frame.ox
         y0 = newFrame.oy - self.frame.oy
+        z0 = newFrame.oz - self.frame.oz
         x1 = x0 + newFrame.w
         y1 = y0 + newFrame.h
-        return gridMap(newFrame, self.data[x0:x1, y0:y1])
-    
+        z1 = z0 + newFrame.d
+        return gridMap(newFrame, self.data[x0:x1, y0:y1, z0:z1])
+
     def reshape(self, newFrame: frame, fill_value: float) -> 'gridMap':
         """
         Reshape the grid map.
@@ -234,26 +260,31 @@ class gridMap:
         """
         overlap = self.computeOverlap(newFrame)
         if self.isGPU:
-            newData = cp.full((newFrame.w, newFrame.h), fill_value)
+            newData = cp.full((newFrame.w, newFrame.h, newFrame.d), fill_value)
         else:
-            newData = np.full((newFrame.w, newFrame.h), fill_value)
+            newData = np.full((newFrame.w, newFrame.h, newFrame.d), fill_value)
         ix_0 = overlap.ox - newFrame.ox
         iy_0 = overlap.oy - newFrame.oy
+        iz_0 = overlap.oz - newFrame.oz
         ix_1 = ix_0 + overlap.w - 1
         iy_1 = iy_0 + overlap.h - 1
+        iz_1 = iz_0 + overlap.d - 1
         nx_0 = overlap.ox - self.frame.ox
         ny_0 = overlap.oy - self.frame.oy
+        nz_0 = overlap.oz - self.frame.oz
         nx_1 = nx_0 + overlap.w - 1
         ny_1 = ny_0 + overlap.h - 1
+        nz_1 = nz_0 + overlap.d - 1
 
-        newData[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
+        newData[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = self.data[nx_0:nx_1, ny_0:ny_1, nz_0:nz_1]
         return gridMap(newFrame, newData)
 
-    def occupancy(self, x: float, y: float) -> float:
+    def occupancy(self, x: float, y: float, z: float = 0) -> float:
         ix = np.round((x - self.frame.ox*self.frame.r)/self.frame.r).astype(int)
         iy = np.round((y - self.frame.oy*self.frame.r)/self.frame.r).astype(int)
-        return self.data[ix][iy]
-    
+        iz = np.round((z - self.frame.oz*self.frame.r)/self.frame.r).astype(int)
+        return self.data[ix][iy][iz]
+
     def saveState(self, filename: str) -> None:
         original_data = self.data
         self.data = self.data.astype(np.float16)
@@ -308,6 +339,171 @@ class gridMap:
             return gridMap(self.frame, cp.logical_or(self.data, otherGM.data))
         return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
 
+    def plot3D_scatter(self, isPause: bool = False, s_min: float = 120.0, s_max: float = 120.0,
+                   alpha_min: float = 0.0, alpha_max: float = 1.0, elev: float = 20, azim: float = -60) -> None:
+        """
+        3D scatter representation: place a marker at the center of each voxel cell.
+        - Color = grayscale 1 - value (imshow-like)
+        - Alpha scales with occupancy (alpha_min..alpha_max)
+        - Marker size scales with occupancy (s_min..s_max) to hint density
+
+        Drawn per z-slice back-to-front to improve blending.
+        """
+        data = cp.asnumpy(self.data) if self.isGPU else self.data
+        values = np.clip(data.astype(float), 0.0, 1.0)
+        inten = 1.0 - values
+        alpha = alpha_min + (alpha_max - alpha_min) * values
+        sizes = s_min + (s_max - s_min) * values
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        try:
+            ax.set_proj_type('ortho')
+        except Exception:
+            pass
+        ax.view_init(elev=elev, azim=azim)
+
+        # Compute centers in index units (can scale to meters if desired)
+        xs = self.frame.ox + np.arange(self.frame.w) + 0.5
+        ys = self.frame.oy + np.arange(self.frame.h) + 0.5
+        zs = self.frame.oz + np.arange(self.frame.d) + 0.5
+
+        # Shapes
+        nx, ny, nz = len(xs), len(ys), len(zs)
+
+        # 1D coordinates consistent with arr.ravel(order='C') for shape (nx, ny, nz)
+        X = np.repeat(xs, ny * nz)
+        Y = np.tile(np.repeat(ys, nz), nx)
+        Z = np.tile(zs, nx * ny)
+
+        # Per-point RGBA and sizes
+        rgba = np.zeros(inten.shape + (4,), dtype=float)
+        rgba[..., 0] = inten
+        rgba[..., 1] = inten
+        rgba[..., 2] = inten
+        rgba[..., 3] = alpha
+
+        ax.scatter(X, Y, Z,
+                   s=sizes.ravel(),
+                   c=rgba.reshape(-1, 4),
+                   marker='o',
+                   depthshade=False)
+
+        # Limits & aspect
+        ax.set_xlim(self.frame.ox, self.frame.ox + self.frame.w)
+        ax.set_ylim(self.frame.oy, self.frame.oy + self.frame.h)
+        ax.set_zlim(self.frame.oz, self.frame.oz + self.frame.d)
+        try:
+            ax.set_box_aspect((self.frame.w, self.frame.h, self.frame.d))
+        except Exception:
+            try:
+                ax.set_aspect('equal')
+            except Exception:
+                pass
+
+        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
+        ax.set_xticks(np.arange(self.frame.ox, self.frame.ox + self.frame.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.oy, self.frame.oy + self.frame.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.oz, self.frame.oz + self.frame.d + 1, tick_interval))
+
+        plt.show(block=isPause)
+        plt.pause(0.0001)
+
+    def plot3D_cubes(self, isPause: bool = False, cube_size: float = 1.0,
+                   alpha_min: float = 0.0, alpha_max: float = 1.0,
+                   face_edges: bool = False, elev: float = 20, azim: float = -60) -> None:
+        """
+        3D glyph scatter with cubes: draw a smaller cube centered in each cell.
+        - cube_size in (0, 1]: side-length relative to cell size (default 0.6)
+        - Color = 1 - value (imshow-like grayscale)
+        - Alpha scales with occupancy (alpha_min..alpha_max)
+        - Optional edges (off by default for speed)
+
+        Renders per z-slice back-to-front for decent transparency blending.
+        """
+        data = cp.asnumpy(self.data) if self.isGPU else self.data
+        values = np.clip(data.astype(float), 0.0, 1.0)
+        inten = 1.0 - values
+        alpha = alpha_min + (alpha_max - alpha_min) * values
+
+        half = float(cube_size) / 2.0
+        # Clamp to (0, 0.5]; 0.5 means cubes span the full cell and touch
+        if half <= 0:
+            half = 1e-3
+        if half > 0.5:
+            half = 0.5
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        try:
+            ax.set_proj_type('ortho')
+        except Exception:
+            pass
+        ax.view_init(elev=elev, azim=azim)
+
+        def cube_faces(cx, cy, cz, h):
+            x0, x1 = cx - h, cx + h
+            y0, y1 = cy - h, cy + h
+            z0, z1 = cz - h, cz + h
+            return [
+                [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)],
+                [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
+                [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)],
+                [(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)],
+                [(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)],
+                [(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)],
+            ]
+
+        # Centers per axis
+        xs = self.frame.ox + np.arange(self.frame.w) + 0.5
+        ys = self.frame.oy + np.arange(self.frame.h) + 0.5
+        zs = self.frame.oz + np.arange(self.frame.d) + 0.5
+
+        for k in range(self.frame.d):
+            zc = zs[k]
+            polys = []
+            face_cols = []
+            edge_cols = []
+            for i in range(self.frame.w):
+                xc = xs[i]
+                for j in range(self.frame.h):
+                    yc = ys[j]
+                    col = inten[i, j, k]
+                    a = alpha[i, j, k]
+                    faces = cube_faces(xc, yc, zc, half)
+                    rgba = (col, col, col, a)
+                    for f in faces:
+                        polys.append(f)
+                        face_cols.append(rgba)
+                        edge_cols.append((0, 0, 0, 0.25) if face_edges else (0, 0, 0, 0))
+            if polys:
+                coll = Poly3DCollection(polys, facecolors=face_cols, edgecolors=edge_cols)
+                coll.set_alpha(None)
+                try:
+                    coll.set_zsort('none')
+                except Exception:
+                    pass
+                ax.add_collection3d(coll)
+
+        ax.set_xlim(self.frame.ox, self.frame.ox + self.frame.w)
+        ax.set_ylim(self.frame.oy, self.frame.oy + self.frame.h)
+        ax.set_zlim(self.frame.oz, self.frame.oz + self.frame.d)
+        try:
+            ax.set_box_aspect((self.frame.w, self.frame.h, self.frame.d))
+        except Exception:
+            try:
+                ax.set_aspect('equal')
+            except Exception:
+                pass
+
+        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
+        ax.set_xticks(np.arange(self.frame.ox, self.frame.ox + self.frame.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.oy, self.frame.oy + self.frame.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.oz, self.frame.oz + self.frame.d + 1, tick_interval))
+
+        plt.show(block=isPause)
+        plt.pause(0.0001)
+
     @classmethod
     def loadState(cls, filename: str, data_type: np.dtype = np.float64) -> 'gridMap':
         with open(filename, 'rb') as file:
@@ -316,26 +512,28 @@ class gridMap:
             return obj
 
 def main() -> None:
-    origin_x = 0
-    origin_y = 0
     width = 10*2
     height = 5*2
     resolution = 0.5
-    orig = origin(origin_x, origin_y, 0)
-    frame_size = size(width, height, 1)
+    orig = origin(0, 0, 0)
+    frame_size = size(width, height, 2)
     currentFrame = frame(orig, frame_size, resolution)
 
-    data = np.zeros((width, height))
-    data[0][0] = 1
-    data[19][0] = 0.5
+    data = np.zeros((width, height, 2))+0.01
+    data[0][0][0] = 1
+    data[19][0][1] = 0.5
     
     grid = gridMap(currentFrame, data)
     grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
-    grid.plot(isPause=True)
+    grid.plot(0, isPause=True)
+    grid.plot3D_scatter(isPause=True) # Balls
+    grid.plot3D_cubes(isPause=True)
 
-    newFrame = frame(origin(10, 0, 0), size(10, 6, 1), 0.5)
-
+    newFrame = frame(origin(10, 0, 0), size(10, 6, 2), 0.5)
+    
     grid.crop(newFrame).plot(isPause=True)
+    grid.crop(newFrame).plot3D_scatter(isPause=True)
+    grid.crop(newFrame).plot3D_cubes(isPause=True)
 
 if __name__ == '__main__':
     main()

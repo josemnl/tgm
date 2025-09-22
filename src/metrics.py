@@ -1,12 +1,12 @@
 from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap
+from gridMap import gridMap, pose, position, orientation, size, frame, origin
 import numpy as np
 from utilities import read3DLabledLidarBIN, loadConfigAsDict
 from sensorModel import sensorModel
 
 def computeMetrics(z_t, x_t, gM, label=1):
     assert isinstance(z_t, lidarScan)
-    assert isinstance(x_t, np.ndarray)
+    assert isinstance(x_t, pose)
     assert isinstance(gM, gridMap)
     
     # Keep only the snow points
@@ -75,7 +75,9 @@ if __name__ == "__main__":
     # Load parameters as dictionary
     conf = loadConfigAsDict(configPath, logID)
 
-    sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smSize = size(conf.smWidth, conf.smHeight)
+    smOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    sM = sensorModel(smOrigin, smSize, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')
@@ -101,7 +103,7 @@ if __name__ == "__main__":
     #z_t.voxelGridFilter(conf.voxelGridSize)
     z_t.orderByAngle()
 
-    x_t = np.array(conf.startPoseSLAM)
+    x_t = pose(position(conf.startPoseSLAM[0], conf.startPoseSLAM[1], 0.0), orientation(0.0, 0.0, conf.startPoseSLAM[2]))
 
     
     
