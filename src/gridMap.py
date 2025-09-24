@@ -336,12 +336,14 @@ class gridMap:
         return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
 
     def plot3D_scatter(self, isPause: bool = False, s_min: float = 120.0, s_max: float = 120.0,
-                   alpha_min: float = 0.0, alpha_max: float = 1.0, elev: float = 20, azim: float = -60) -> None:
+                   alpha_min: float = 0.0, alpha_max: float = 1.0, elev: float = 20, azim: float = -60,
+                   value_min: float = 0.0, value_max: float = 1.0) -> None:
         """
         3D scatter representation: place a marker at the center of each voxel cell.
         - Color = grayscale 1 - value (imshow-like)
         - Alpha scales with occupancy (alpha_min..alpha_max)
         - Marker size scales with occupancy (s_min..s_max) to hint density
+        - Only plot values in [value_min..value_max] range (default 0..1)
 
         Drawn per z-slice back-to-front to improve blending.
         """
@@ -379,9 +381,13 @@ class gridMap:
         rgba[..., 2] = inten
         rgba[..., 3] = alpha
 
-        ax.scatter(X, Y, Z,
-                   s=sizes.ravel(),
-                   c=rgba.reshape(-1, 4),
+        # Mask out low and high values
+        mask = (values >= value_min) & (values <= value_max)
+        mask = mask.ravel()
+
+        ax.scatter(X[mask], Y[mask], Z[mask],
+                   s=sizes.ravel()[mask],
+                   c=rgba.reshape(-1, 4)[mask],
                    marker='o',
                    depthshade=False)
 

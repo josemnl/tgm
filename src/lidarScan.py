@@ -133,6 +133,10 @@ class lidarScan:
         ranges = self.ranges[mask]
         labels = self.labels[mask]
         return lidarScan(angles, ranges, labels)
+    
+    def convertTo3D(self, height=0.0):
+        points3D = np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles), np.ones(self.ranges.shape) * height])
+        return lidarScan3D(points3D, self.labels)
 
 class lidarScan3D:
     def __init__(self, points3D, labels=None):
@@ -230,7 +234,7 @@ class lidarScan3D:
                 ax.scatter(self.points3D[indices, 0], self.points3D[indices, 1], self.points3D[indices, 2], color)
         else:
             ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
-        #ax.axis('equal')
+        ax.axis('equal')
         plt.show()
 
     def ROR(self, k, r):
@@ -344,6 +348,33 @@ class lidarScan3D:
         # This function performs the ground segmentation using the RMF algorithm
         ground, objects = ground_seg(self.points3D)
         return lidarScan3D(ground), lidarScan3D(objects)
+    
+    def voxelGridFilter(self, voxel_size):
+        # Determine the grid indices for each point
+        grid_indices = np.floor(self.points3D / voxel_size).astype(int)
+
+        # Create a dictionary to store points in each voxel
+        voxel_dict = {}
+        for i, idx in enumerate(grid_indices):
+            key = tuple(idx)
+            if key not in voxel_dict:
+                voxel_dict[key] = []
+            voxel_dict[key].append(self.points3D[i])
+
+        # Create a list to store the downsampled points
+        downsampled_points = []
+
+        # Iterate through each voxel and average the points inside
+        for key, points in voxel_dict.items():
+            average_point = np.mean(points, axis=0)
+            downsampled_points.append(average_point)
+
+        downsampled_points = np.array(downsampled_points)
+        self.points3D = downsampled_points
+
+        # Remove labels if they exist
+        if self.labels is not None:
+            self.labels = None
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point

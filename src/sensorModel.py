@@ -1,7 +1,9 @@
+from typing import Optional
 import numpy as np
 from gridMap import gridMap, frame, origin, size, pose, position, orientation
-from lidarScan import lidarScan
+from lidarScan import lidarScan, lidarScan3D
 import time
+from utilities import read3DLidarCSV
 
 class sensorModel:
     def __init__ (self, smFrame: frame, sensorRange, invModel ,occPrior):
@@ -163,7 +165,153 @@ class sensorModel:
             if np.all(self.data[x_coords, y_coords] != valueCondition):
                 self.data[x_coords, y_coords] = value
 
+class sensorModel3D:
+    def __init__(self, smFrame: frame, sensorRange, invModel, occPrior: float):
+        assert isinstance(smFrame, frame)
+        assert smFrame.size.d > 0
+        self.frame = smFrame
+        self.sensorRange = sensorRange          # in cells (same semantics as 2D)
+        self.invModel = invModel                # [free_val, occ_val]
+        self.occPrior = occPrior
+        self.data = np.ones(
+            (self.frame.size.w, self.frame.size.h, self.frame.size.d), dtype=float
+        ) * self.occPrior
+
+    def updateBasedOnPose(self, x_t: pose):
+        ox = int((x_t.position.x / self.frame.r) - (self.frame.size.w / 2))
+        oy = int((x_t.position.y / self.frame.r) - (self.frame.size.h / 2))
+        oz = int((x_t.position.z / self.frame.r) - (self.frame.size.d / 2))
+        self.frame.origin = origin(ox, oy, oz)
+
+    def generateGridMap(self, z_t: lidarScan3D, x_t: pose) -> gridMap:
+        assert isinstance(z_t, lidarScan3D)
+
+        # Reset grid to prior
+        self.data.fill(self.occPrior)
+
+        # Transform 3D points from sensor to world using RPY
+        R = self._rpy_to_R(
+            x_t.orientation.roll, x_t.orientation.pitch, x_t.orientation.yaw
+        )
+        T = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
+        world_pts = (R @ z_t.points3D.T).T + T
+
+        # Range clip: sensorRange is in cells; convert to meters
+        max_range_m = self.sensorRange * self.frame.r
+        ranges = np.linalg.norm(world_pts - T, axis=1)
+        mask = ranges < max_range_m
+        world_pts = world_pts[mask]
+
+        # Start voxel (robot cell)
+        sx, sy, sz = self._world_to_idx(T[0], T[1], T[2])
+        if not self._in_bounds(sx, sy, sz):
+            # Error: sensor origin out of bounds
+            raise ValueError("Sensor origin out of bounds of the grid map.")
+
+        # Transform 3D points from world to grid indices using _world_to_idx
+        grid_pts = np.array([self._world_to_idx(p[0], p[1], p[2]) for p in world_pts])
+
+        # Filter out-of-bounds points using _in_bounds
+        in_bounds_mask = np.array([self._in_bounds(p[0], p[1], p[2]) for p in grid_pts])
+        grid_pts = grid_pts[in_bounds_mask]
+
+        # Mark free cells along the rays
+        for p in grid_pts:
+            ex, ey, ez = p
+            # Vectorized, dominant-axis integer-index line (like your 2D insertRay)
+            self.insertRay3D((sx, sy, sz), (ex, ey, ez), self.invModel[0])
+            
+        # Mark occupied endpoints
+        self.data[grid_pts[:, 0], grid_pts[:, 1], grid_pts[:, 2]] = self.invModel[1]
+
+        return gridMap(self.frame, self.data)
+
+    def insertRay3D(self, start: tuple[int, int, int], end: tuple[int, int, int],
+                    value: float, valueCondition: float | None = None):
+        x1, y1, z1 = start
+        x2, y2, z2 = end
+        dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
+        adx, ady, adz = abs(dx), abs(dy), abs(dz)
+
+        # Choose dominant axis
+        if adx >= ady and adx >= adz:
+            # March in x (vectorized)
+            if dx == 0:
+                x_coords = np.array([x1], dtype=int)
+            else:
+                step = 1 if dx > 0 else -1
+                x_coords = np.arange(x1, x2 + step, step, dtype=int)
+            # y,z by integer division (floor) to avoid floating drift
+            if dx != 0:
+                y_coords = np.floor(y1 + (dy * (x_coords - x1) / dx)).astype(int)
+                z_coords = np.floor(z1 + (dz * (x_coords - x1) / dx)).astype(int)
+            else:
+                y_coords = np.array([y1], dtype=int).repeat(len(x_coords))
+                z_coords = np.array([z1], dtype=int).repeat(len(x_coords))
+        elif ady >= adx and ady >= adz:
+            # March in y
+            if dy == 0:
+                y_coords = np.array([y1], dtype=int)
+            else:
+                step = 1 if dy > 0 else -1
+                y_coords = np.arange(y1, y2 + step, step, dtype=int)
+            if dy != 0:
+                x_coords = np.floor(x1 + (dx * (y_coords - y1) / dy)).astype(int)
+                z_coords = np.floor(z1 + (dz * (y_coords - y1) / dy)).astype(int)
+            else:
+                x_coords = np.array([x1], dtype=int).repeat(len(y_coords))
+                z_coords = np.array([z1], dtype=int).repeat(len(y_coords))
+        else:
+            # March in z
+            if dz == 0:
+                z_coords = np.array([z1], dtype=int)
+            else:
+                step = 1 if dz > 0 else -1
+                z_coords = np.arange(z1, z2 + step, step, dtype=int)
+            if dz != 0:
+                x_coords = np.floor(x1 + (dx * (z_coords - z1) / dz)).astype(int)
+                y_coords = np.floor(y1 + (dy * (z_coords - z1) / dz)).astype(int)
+            else:
+                x_coords = np.array([x1], dtype=int).repeat(len(z_coords))
+                y_coords = np.array([y1], dtype=int).repeat(len(z_coords))
+
+        # Bounds mask (avoid IndexError)
+        inb = (
+            (0 <= x_coords) & (x_coords < self.frame.size.w) &
+            (0 <= y_coords) & (y_coords < self.frame.size.h) &
+            (0 <= z_coords) & (z_coords < self.frame.size.d)
+        )
+
+        xi, yi, zi = x_coords[inb], y_coords[inb], z_coords[inb]
+
+        if valueCondition is None:
+            self.data[xi, yi, zi] = value
+        else:
+            # Only write if none of the traversed cells equal valueCondition (as in 2D)
+            if np.all(self.data[xi, yi, zi] != valueCondition):
+                self.data[xi, yi, zi] = value
+
+    def _world_to_idx(self, x: float, y: float, z: float) -> tuple[int, int, int]:
+        ix = int(np.round((x / self.frame.r) - self.frame.origin.x))
+        iy = int(np.round((y / self.frame.r) - self.frame.origin.y))
+        iz = int(np.round((z / self.frame.r) - self.frame.origin.z))
+        return ix, iy, iz
+
+    def _in_bounds(self, ix: int, iy: int, iz: int) -> bool:
+        return (0 <= ix < self.frame.size.w) and (0 <= iy < self.frame.size.h) and (0 <= iz < self.frame.size.d)
+
+    @staticmethod
+    def _rpy_to_R(roll: float, pitch: float, yaw: float) -> np.ndarray:
+        cr, sr = np.cos(roll), np.sin(roll)
+        cp, sp = np.cos(pitch), np.sin(pitch)
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
+        Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
+        Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
+        return Rz @ Ry @ Rx
+
 def main():
+    # Test 2D sensor model
     smOrigin = origin(0, 0, 0)
     width = 300
     height = 100
@@ -184,8 +332,28 @@ def main():
     start = time.time()
     gm = sM.generateGridMap(z_t, x_t)
     print(time.time() - start)
-    gm.plot()
-    
+    #gm.plot()
+
+    # Test 3D sensor model
+    smOrigin = origin(0, 0, 0)
+    smSize = size(100, 100, 25)
+    resolution = 0.5
+    sensorRange = 50
+    invModel = [0.1, 0.9]
+    occPrior = 0.5
+    sM = sensorModel3D(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+
+    z_t_3D = read3DLidarCSV("./logs/2024-02-13-10-35-56/z_1.csv")
+
+    z_t_3D.voxelGridFilter(resolution)
+
+    z_t_3D.plot()
+
+    x_t = pose(position(25, 25, 2.0), orientation(0.0, 0.0, 0.0))
+    start = time.time()
+    gm = sM.generateGridMap(z_t_3D, x_t)
+    print(time.time() - start)
+    gm.plot3D_scatter(isPause=True, value_min=0.6, value_max=1.0)
 
 if __name__ == '__main__':
     main()
