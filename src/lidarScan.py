@@ -376,6 +376,17 @@ class lidarScan3D:
         if self.labels is not None:
             self.labels = None
 
+    def transform(self, x_t: pose) -> 'lidarScan3D':
+        # This function transforms the 3D points using a given pose (x_t)
+        R = np.array([
+            [np.cos(x_t.orientation.yaw), -np.sin(x_t.orientation.yaw), 0],
+            [np.sin(x_t.orientation.yaw), np.cos(x_t.orientation.yaw), 0],
+            [0, 0, 1]
+        ])
+        T = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
+        
+        return lidarScan3D((R @ self.points3D.T).T + T, self.labels)
+
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point
     points3D = np.array([[1, 2, 3]])

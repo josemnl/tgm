@@ -164,6 +164,21 @@ class frame:
         overlap_size = size(overlap_width, overlap_height, overlap_depth)
 
         return frame(overlap_origin, overlap_size, self.r)
+    
+    def world_to_idx(self, x: float, y: float, z: float = 0.0) -> Tuple[int, int, int]:
+        """
+        Convert world coordinates (in meters) to grid indices (in cells).
+        """
+        ix = int(np.round((x / self.r) - self.origin.x))
+        iy = int(np.round((y / self.r) - self.origin.y))
+        iz = int(np.round((z / self.r) - self.origin.z))
+        return ix, iy, iz
+    
+    def in_bounds(self, ix: int, iy: int, iz: int = 0) -> bool:
+        """
+        Check if the given grid indices are within the bounds of the frame.
+        """
+        return (0 <= ix < self.size.w) and (0 <= iy < self.size.h) and (0 <= iz < self.size.d)
 
     @classmethod
     def frameAroundPosition(cls, pos: position, frame_size: size, resolution: float) -> 'frame':

@@ -166,11 +166,10 @@ class sensorModel:
                 self.data[x_coords, y_coords] = value
 
 class sensorModel3D:
-    def __init__(self, smFrame: frame, sensorRange, invModel, occPrior: float):
+    def __init__(self, smFrame: frame, invModel, occPrior: float):
         assert isinstance(smFrame, frame)
         assert smFrame.size.d > 0
         self.frame = smFrame
-        self.sensorRange = sensorRange          # in cells (same semantics as 2D)
         self.invModel = invModel                # [free_val, occ_val]
         self.occPrior = occPrior
         self.data = np.ones(
@@ -189,30 +188,20 @@ class sensorModel3D:
         # Reset grid to prior
         self.data.fill(self.occPrior)
 
-        # Transform 3D points from sensor to world using RPY
-        R = self._rpy_to_R(
-            x_t.orientation.roll, x_t.orientation.pitch, x_t.orientation.yaw
-        )
-        T = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
-        world_pts = (R @ z_t.points3D.T).T + T
-
-        # Range clip: sensorRange is in cells; convert to meters
-        max_range_m = self.sensorRange * self.frame.r
-        ranges = np.linalg.norm(world_pts - T, axis=1)
-        mask = ranges < max_range_m
-        world_pts = world_pts[mask]
+        # Transform 3D points from sensor to world using transform method
+        z_t_world = z_t.transform(x_t)
 
         # Start voxel (robot cell)
-        sx, sy, sz = self._world_to_idx(T[0], T[1], T[2])
-        if not self._in_bounds(sx, sy, sz):
+        sx, sy, sz = self.frame.world_to_idx(x_t.position.x, x_t.position.y, x_t.position.z)
+        if not self.frame.in_bounds(sx, sy, sz):
             # Error: sensor origin out of bounds
             raise ValueError("Sensor origin out of bounds of the grid map.")
 
-        # Transform 3D points from world to grid indices using _world_to_idx
-        grid_pts = np.array([self._world_to_idx(p[0], p[1], p[2]) for p in world_pts])
+        # Transform 3D points from world to grid indices using world_to_idx
+        grid_pts = np.array([self.frame.world_to_idx(p[0], p[1], p[2]) for p in z_t_world.points3D])
 
-        # Filter out-of-bounds points using _in_bounds
-        in_bounds_mask = np.array([self._in_bounds(p[0], p[1], p[2]) for p in grid_pts])
+        # Filter out-of-bounds points using in_bounds
+        in_bounds_mask = np.array([self.frame.in_bounds(p[0], p[1], p[2]) for p in grid_pts])
         grid_pts = grid_pts[in_bounds_mask]
 
         # Mark free cells along the rays
@@ -291,25 +280,6 @@ class sensorModel3D:
             if np.all(self.data[xi, yi, zi] != valueCondition):
                 self.data[xi, yi, zi] = value
 
-    def _world_to_idx(self, x: float, y: float, z: float) -> tuple[int, int, int]:
-        ix = int(np.round((x / self.frame.r) - self.frame.origin.x))
-        iy = int(np.round((y / self.frame.r) - self.frame.origin.y))
-        iz = int(np.round((z / self.frame.r) - self.frame.origin.z))
-        return ix, iy, iz
-
-    def _in_bounds(self, ix: int, iy: int, iz: int) -> bool:
-        return (0 <= ix < self.frame.size.w) and (0 <= iy < self.frame.size.h) and (0 <= iz < self.frame.size.d)
-
-    @staticmethod
-    def _rpy_to_R(roll: float, pitch: float, yaw: float) -> np.ndarray:
-        cr, sr = np.cos(roll), np.sin(roll)
-        cp, sp = np.cos(pitch), np.sin(pitch)
-        cy, sy = np.cos(yaw), np.sin(yaw)
-        Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
-        Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
-        Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
-        return Rz @ Ry @ Rx
-
 def main():
     # Test 2D sensor model
     smOrigin = origin(0, 0, 0)
@@ -341,7 +311,7 @@ def main():
     sensorRange = 50
     invModel = [0.1, 0.9]
     occPrior = 0.5
-    sM = sensorModel3D(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+    sM = sensorModel3D(frame(smOrigin, smSize, resolution), invModel, occPrior)
 
     z_t_3D = read3DLidarCSV("./logs/2024-02-13-10-35-56/z_1.csv")
 
