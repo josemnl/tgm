@@ -140,6 +140,9 @@ class lidarScan:
 
 class lidarScan3D:
     def __init__(self, points3D, labels=None):
+        assert points3D.shape[1] == 3
+        if labels is not None:
+            assert points3D.shape[0] == labels.shape[0]
         self.points3D = points3D
         self.numReadings = len(points3D)
         self.labels = labels

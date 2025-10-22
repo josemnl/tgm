@@ -9,8 +9,18 @@ from gridMap import pose, position, orientation
 
 def readPose(file):
     with open(file) as data:
-        x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-    return pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
+        # if there are only 3 values in the line, it is x, y, yaw
+        # if there are 6 values in the line, it is x, y, z, roll, pitch, yaw
+
+        if len(data.readline().split(",")) == 3:
+            data.seek(0)
+            x_t = np.array([line.split(",") for line in data]).astype(float)[0]
+            x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
+        else:
+            data.seek(0)
+            x_t = np.array([line.split(",") for line in data]).astype(float)[0]
+            x_t = pose(position(x_t[0], x_t[1], x_t[2]), orientation(x_t[3], x_t[4], x_t[5]))
+    return x_t
 
 def read2DLidarCSV(file):
     with open(file) as data:

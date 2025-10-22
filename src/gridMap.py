@@ -228,6 +228,11 @@ class gridMap:
             return gridMap(self.frame, cp.asnumpy(self.data))
         return self
     
+    def toGPU(self) -> 'gridMap':
+        if not self.isGPU:
+            return gridMap(self.frame, cp.asarray(self.data))
+        return self
+    
     def toBool(self, threshold: float) -> 'gridMap':
         return gridMap(self.frame, self.data > threshold)
 
