@@ -1,12 +1,12 @@
 import numpy as np
+import cupy as cp
+import scipy.signal as sp
+import cupyx.scipy.signal as csp
+
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
 from gridMap import gridMap, frame, orientation, origin, position, size, pose
 from skimage.morphology import disk
-from scipy.signal import convolve2d, fftconvolve
-from cupyx.scipy.signal import convolve2d as cp_convolve2d
-from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
-import cupy as cp
 import matplotlib
 
 from lidarScan import lidarScan, lidarScan3D
@@ -23,15 +23,22 @@ class TGM:
         assert isinstance(maxVelocity, int)
         assert isinstance(saturationLimits, list) and len(saturationLimits) == 4
 
+        # Choose numpy or cupy
+        self.GPU = isGPU
+        if self.GPU:
+            self.xp = cp
+        else:
+            self.xp = np
+
         self.frame = tgmFrame
         self.staticPrior = priors[0]
         self.dynamicPrior = priors[1]
         self.weatherPrior = priors[2]
         self.freePrior = 1 - priors[0] - priors[1] - priors[2]
         self.sdwPrior = self.staticPrior + self.dynamicPrior + self.weatherPrior
-        self.staticMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[0])
-        self.dynamicMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[1])
-        self.weatherMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[2])
+        self.staticMap = gridMap(self.frame, self.xp.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[0])
+        self.dynamicMap = gridMap(self.frame, self.xp.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[1])
+        self.weatherMap = gridMap(self.frame, self.xp.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[2])
 
         # Conv shape 2D
         shape2D = disk(maxVelocity).astype(float)
@@ -39,7 +46,7 @@ class TGM:
         shape2D /= np.sum(shape2D)
         shape2D[len(shape2D)//2, len(shape2D)//2] = 0
         self.convShape2D = shape2D
-
+        self.convShape2D = self.xp.asarray(self.convShape2D) # Ensure it's a cupy array if using GPU
 
         # Conv shape 3D
         # (For now, it's just a cuboid)
@@ -48,6 +55,7 @@ class TGM:
         shape3D /= np.sum(shape3D)
         shape3D[maxVelocity, maxVelocity, maxVelocity] = 0
         self.convShape3D = shape3D
+        self.convShape3D = self.xp.asarray(self.convShape3D) # Ensure it's a cupy array if using GPU
 
         self.satLowS = saturationLimits[0]
         self.satHighS = saturationLimits[1]
@@ -57,14 +65,6 @@ class TGM:
 
         self.x_t = None
         self.prev_region = [0, 0, 0, 0, 0, 0]
-
-        self.GPU = isGPU
-        if self.GPU:
-            self.staticMap = self.staticMap.toGPU()
-            self.dynamicMap = self.dynamicMap.toGPU()
-            self.weatherMap = self.weatherMap.toGPU()
-            self.convShape2D = cp.asarray(self.convShape2D)
-            self.convShape3D = cp.asarray(self.convShape3D)
 
     @property
     def freeMap(self):
@@ -78,9 +78,10 @@ class TGM:
     def is3D(self) -> bool:
         return self.frame.is3D
 
-    def update(self, instGridMap, x_t: pose | None):
+    def update(self, instGridMap: gridMap, x_t: pose | None):
         assert isinstance(instGridMap, gridMap)
         assert instGridMap.frame.r == self.frame.r
+        assert isinstance(x_t, pose) or x_t is None
 
         # Update ego position (used for visualization purposes only)
         self.x_t = x_t
@@ -108,15 +109,15 @@ class TGM:
         if self.staticPrior != 0:
             staticMatrix = instStaticMap * predStaticMap / self.staticPrior
         else:
-            staticMatrix = cp.zeros_like(instStaticMap) if self.GPU else np.zeros_like(instStaticMap)
+            staticMatrix = self.xp.zeros_like(instStaticMap)
         if self.dynamicPrior != 0:
             dynamicMatrix = instDynamicMap * predDynamicMap / self.dynamicPrior
         else:
-            dynamicMatrix = cp.zeros_like(instDynamicMap) if self.GPU else np.zeros_like(instDynamicMap)
+            dynamicMatrix = self.xp.zeros_like(instDynamicMap)
         if self.weatherPrior != 0:
             weatherMatrix = instWeatherMap * predWeatherMap / self.weatherPrior
         else:
-            weatherMatrix = cp.zeros_like(instWeatherMap) if self.GPU else np.zeros_like(instWeatherMap)
+            weatherMatrix = self.xp.zeros_like(instWeatherMap)
         freeMatrix = instFreeMap * predFreeMap / self.freePrior
 
         # Normalize the maps
@@ -126,12 +127,8 @@ class TGM:
         weatherMatrix /= total
 
         # Apply saturation limits
-        if self.GPU:
-            staticMatrix = cp.clip(staticMatrix, self.satLowS, self.satHighS)
-            dynamicMatrix = cp.clip(dynamicMatrix, self.satLowD, self.satHighD)
-        else:
-            staticMatrix = np.clip(staticMatrix, self.satLowS, self.satHighS)
-            dynamicMatrix = np.clip(dynamicMatrix, self.satLowD, self.satHighD)
+        staticMatrix = self.xp.clip(staticMatrix, self.satLowS, self.satHighS)
+        dynamicMatrix = self.xp.clip(dynamicMatrix, self.satLowD, self.satHighD)
 
         # Set the cells that were visible to the prior
         x0, y0, x1, y1, z0, z1 = self.prev_region
@@ -347,7 +344,7 @@ class TGM:
         colors = np.clip(colors, 0, 1)
 
         # Mask out low and high values
-        mask = (staticMap + dynamicMap + weatherMap >= value_min) & (staticMap + dynamicMap + weatherMap <= value_max)
+        mask = (staticMap + dynamicMap + weatherMap > value_min) & (staticMap + dynamicMap + weatherMap < value_max)
         X = X[mask]
         Y = Y[mask]
         Z = Z[mask]
@@ -378,6 +375,15 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
     # Assert that the map is 2D or has depth 1
     assert map.ndim == 2 or (map.ndim == 3 and map.shape[2] == 1)
 
+    # Choose numpy/scipy or cupy/cupyx
+    if GPU:
+        map = cp.asarray(map)
+        xp = cp
+        xsp = csp
+    else:
+        xp = np
+        xsp = sp
+
     # If the map is 3D with depth 1, squeeze it to 2D
     if map.ndim == 3:
         map = map[:,:,0]
@@ -389,46 +395,43 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
     sx, sy = convShape.shape
     px = (sx - 1) // 2
     py = (sy - 1) // 2
+    paddedMap = xp.pad(map, ((px, px), (py, py)), constant_values=prior)
+
+    # Make the convolution
     if fftConv:
-        if GPU:
-            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py)), constant_values=prior)
-            conv = cp_fftconvolve(paddedMap, convShape, mode='valid')
-        else:
-            paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
-            conv = fftconvolve(paddedMap, convShape, mode='valid')
+        conv = xsp.fftconvolve(paddedMap, convShape, mode='valid')
     else:
-        if GPU:
-            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py)), constant_values=prior)
-            conv = cp_convolve2d(paddedMap, convShape, mode='valid')
-        else:
-            paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
-            conv = convolve2d(paddedMap, convShape, mode='valid')
+        conv = xsp.convolve2d(paddedMap, convShape, mode='valid')
+
     # If the input was 3D with depth 1, add back the depth dimension
     if is_3D:
-        conv = conv[:,:,cp.newaxis] if GPU else conv[:,:,np.newaxis]
+        conv = conv[:,:,xp.newaxis]
     return conv
 
 def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     print("THIS FUNCTION IS USING 2D CONVOLUTIONS INSTEAD OF 3D. IT SHOULD BE FIXED.")
+
+    # Choose numpy/scipy or cupy/cupyx
+    if GPU:
+        map = cp.asarray(map)
+        xp = cp
+        xsp = csp
+    else:
+        xp = np
+        xsp = sp
+    
     # Pad the map with the prior before making the convolution
     sx, sy, sz = convShape.shape
     px = (sx - 1) // 2
     py = (sy - 1) // 2
     pz = (sz - 1) // 2
+    paddedMap = xp.pad(map, ((px, px), (py, py), (pz, pz)), constant_values=prior)
+
+    # Make the convolution
     if fftConv:
-        if GPU:
-            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py), (pz, pz)), constant_values=prior)
-            conv = cp_fftconvolve(paddedMap, convShape, mode='valid')
-        else:
-            paddedMap = np.pad(map, ((px, px), (py, py), (pz, pz)), constant_values=prior)
-            conv = fftconvolve(paddedMap, convShape, mode='valid')
+        conv = xsp.fftconvolve(paddedMap, convShape, mode='valid')
     else:
-        if GPU:
-            paddedMap = cp.pad(cp.asarray(map), ((px, px), (py, py), (pz, pz)), constant_values=prior)
-            conv = cp_convolve2d(paddedMap, convShape, mode='valid')
-        else:
-            paddedMap = np.pad(map, ((px, px), (py, py), (pz, pz)), constant_values=prior)
-            conv = convolve2d(paddedMap, convShape, mode='valid')
+        conv = xsp.convolve(paddedMap, convShape, mode='valid')
     return conv
 
 if __name__ == '__main__':
@@ -440,7 +443,7 @@ if __name__ == '__main__':
     tgmFrame = frame(tgmOrigin, tgmSize, resolution)
     priors = [0.3, 0.3, 0.01]
     maxVelocity = 1
-    saturationLimits = [0.1, 0.9, 0.1, 0.9]
+    saturationLimits = [0, 1, 0, 1]
     tgm = TGM(tgmFrame, priors, maxVelocity, saturationLimits, fftConv=True, isGPU=False)
 
     # Create a sensor model (using the same frame as the TGM for simplicity)
@@ -468,3 +471,46 @@ if __name__ == '__main__':
 
     # Plot the TGM
     tgm.plot3D(isPause=True, value_min=0.7, value_max=1.0)
+
+
+    # 2D convolution test
+    # To test of the 2D convolution works, we are going to create a small 2D map with a single dynamic cell in the center
+    testFrame = frame(origin(0, 0, 0), size(11, 11, 1), 1.0)
+    testTGM = TGM(testFrame, priors, maxVelocity=1, saturationLimits=saturationLimits, fftConv=False, isGPU=False)
+    testTGM.dynamicMap.data[:] = 0.0 # Set all cells to 0
+    testTGM.staticMap.data[:] = 0.0 # Set all cells to 0
+    testTGM.dynamicMap.data[5, 5, 0] = 0.9  # Set the center cell to be highly dynamic
+
+    # plot the initial map
+    testTGM.plot3D(isPause=True, value_min=0.01, value_max=1.0)
+
+    print("data", testTGM.dynamicMap.data[:,:,0])
+
+    # Update the TGM without any new measurements (to see the prediction only)
+    testTGM.update(gridMap(testFrame, np.ones((11, 11, 1))*sum(priors)), None)
+
+    # Plot the predicted map
+    testTGM.plot3D(isPause=True, value_min=0.1, value_max=1.0)
+
+    print("data after prediction", testTGM.dynamicMap.data[:,:,0])
+
+    # 3D convolution test
+    # To test of the 3D convolution works, we are going to create a small 3D map with a single dynamic cell in the center
+    testFrame = frame(origin(0, 0, 0), size(11, 11, 11), 1.0)
+    testTGM = TGM(testFrame, priors, maxVelocity=1, saturationLimits=saturationLimits, fftConv=False, isGPU=False)
+    testTGM.dynamicMap.data[:] = 0.0 # Set all cells to 0
+    testTGM.staticMap.data[:] = 0.0 # Set all cells to 0
+    testTGM.dynamicMap.data[5, 5, 5] = 0.9  # Set the center cell to be highly dynamic
+
+    # plot the initial map
+    testTGM.plot3D(isPause=True, value_min=0.1, value_max=1.0)
+
+    print("data", testTGM.dynamicMap.data[:,:,5])
+
+    # Update the TGM without any new measurements (to see the prediction only)
+    testTGM.update(gridMap(testFrame, np.ones((11, 11, 11))*sum(priors)), None)
+
+    # Plot the predicted map
+    testTGM.plot3D(isPause=True, value_min=0.01, value_max=1.0)
+
+    print("data after prediction", np.array2string(np.asarray(testTGM.dynamicMap.data[:, :, 5]), formatter={'float_kind': lambda x: f"{x:.4f}"}))
