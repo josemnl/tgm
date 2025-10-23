@@ -180,6 +180,14 @@ class frame:
         """
         return (0 <= ix < self.size.w) and (0 <= iy < self.size.h) and (0 <= iz < self.size.d)
 
+    @property
+    def is2D(self) -> bool:
+        return self.size.d == 1
+
+    @property
+    def is3D(self) -> bool:
+        return self.size.d > 1
+
     @classmethod
     def frameAroundPosition(cls, pos: position, frame_size: size, resolution: float) -> 'frame':
         """
