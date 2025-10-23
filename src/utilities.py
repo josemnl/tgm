@@ -134,6 +134,7 @@ def loadConfigAsDict(configPath, configFile):
     config.smWidth = int(config.smWidth/config.resolution)
     config.smHeight = int(config.smHeight/config.resolution)
     config.sensorRange = int(config.sensorRange/config.resolution)
+    config.maxVelocity = int(config.maxVelocity/config.resolution)
     # Compute occupancy prior
     config.occPrior = config.staticPrior + config.dynamicPrior + config.weatherPrior
     # Voxel grid size is the same as the resolution
