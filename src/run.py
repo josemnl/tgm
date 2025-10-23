@@ -28,7 +28,7 @@ def run(logID, conf):
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
-    tgm = TGM(tgmFrame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), (conf.maxVelocity, conf.maxVelocity, 0), conf.saturationLimits, conf.fftConv, conf.isGPU)
+    tgm = TGM(tgmFrame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     # Empty arrays for the results
     x_t_SLAM_array = []
@@ -193,13 +193,13 @@ def run(logID, conf):
             gm_unfiltered = sM.generateGridMap(z_t_before_filter, x_t)
             fig.clear()
             # Create a new unfiltered tgm with the same frame
-            tgm_unfiltered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), (conf.maxVelocity, conf.maxVelocity, 0), conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_unfiltered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_unfiltered.update(gm_unfiltered, x_t)
             tgm_unfiltered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
             
             gm_filtered = sM.generateGridMap(z_t, x_t)
             fig.clear()
-            tgm_filtered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), (conf.maxVelocity, conf.maxVelocity, 0), conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_filtered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_filtered.update(gm_filtered, x_t)
             tgm_filtered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
 

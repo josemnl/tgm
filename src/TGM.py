@@ -15,14 +15,12 @@ from utilities import read3DLidarCSV
 matplotlib.use('Qt5Agg')
 
 class TGM:
-    def __init__(self, tgmFrame: frame, priors: list, velocities: list, saturationLimits: list, fftConv=False, isGPU=True):
+    def __init__(self, tgmFrame: frame, priors: list, maxVelocity: int, saturationLimits: list, fftConv=False, isGPU=True):
         assert isinstance(tgmFrame, frame)
         assert isinstance(priors[0], (float, int))
         assert isinstance(priors[1], (float, int))
         assert isinstance(priors[2], (float, int))
-        assert isinstance(velocities[0], int)
-        assert isinstance(velocities[1], int)
-        assert isinstance(velocities[2], int)
+        assert isinstance(maxVelocity, int)
         assert isinstance(saturationLimits, list) and len(saturationLimits) == 4
 
         self.frame = tgmFrame
@@ -35,22 +33,21 @@ class TGM:
         self.dynamicMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[1])
         self.weatherMap = gridMap(self.frame, np.ones((self.frame.size.w, self.frame.size.h, self.frame.size.d)) * priors[2])
 
-        """
-        r = int(maxVelocity / self.frame.r)
-        shape = disk(r).astype(float)
-        self.D0 = 1 / np.sum(shape)
-        shape /= np.sum(shape)
-        shape[len(shape)//2, len(shape)//2] = 0
-        self.convShape = shape
-        """
+        # Conv shape 2D
+        shape2D = disk(maxVelocity).astype(float)
+        self.D0_2D = 1 / np.sum(shape2D)
+        shape2D /= np.sum(shape2D)
+        shape2D[len(shape2D)//2, len(shape2D)//2] = 0
+        self.convShape2D = shape2D
 
-        # Create a 3D convolution shape based on the provided velocities
+
+        # Conv shape 3D
         # (For now, it's just a cuboid)
-        shape = np.ones((2*velocities[0]+1, 2*velocities[1]+1, 2*velocities[2]+1))
-        self.D0 = 1 / np.sum(shape)
-        shape /= np.sum(shape)
-        shape[velocities[0], velocities[1], velocities[2]] = 0
-        self.convShape = shape
+        shape3D = np.ones((2*maxVelocity+1, 2*maxVelocity+1, 2*maxVelocity+1))
+        self.D0_3D = 1 / np.sum(shape3D)
+        shape3D /= np.sum(shape3D)
+        shape3D[maxVelocity, maxVelocity, maxVelocity] = 0
+        self.convShape3D = shape3D
 
         self.satLowS = saturationLimits[0]
         self.satHighS = saturationLimits[1]
@@ -66,11 +63,20 @@ class TGM:
             self.staticMap = self.staticMap.toGPU()
             self.dynamicMap = self.dynamicMap.toGPU()
             self.weatherMap = self.weatherMap.toGPU()
-            self.convShape = cp.asarray(self.convShape)
+            self.convShape2D = cp.asarray(self.convShape2D)
+            self.convShape3D = cp.asarray(self.convShape3D)
 
     @property
     def freeMap(self):
         return gridMap(self.frame, 1 - self.staticMap.data - self.dynamicMap.data - self.weatherMap.data)
+
+    @property
+    def is2D(self) -> bool:
+        return self.frame.is2D
+    
+    @property
+    def is3D(self) -> bool:
+        return self.frame.is3D
 
     def update(self, instGridMap, x_t: pose | None):
         assert isinstance(instGridMap, gridMap)
@@ -161,9 +167,16 @@ class TGM:
 
         # Compute dynamic prediction
         if self.dynamicPrior != 0:
-            dynamicStay = dynamicMap * self.D0
-            bounceBack = conv3prior(staticMap, self.convShape, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
-            dynamicMove = conv3prior(dynamicMap, self.convShape, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
+            if self.is3D:
+                print("3D convolution")
+                dynamicStay = dynamicMap * self.D0_3D
+                bounceBack = conv3prior(staticMap, self.convShape3D, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
+                dynamicMove = conv3prior(dynamicMap, self.convShape3D, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
+            else:
+                print("2D convolution")
+                dynamicStay = dynamicMap * self.D0_2D
+                bounceBack = conv2prior(staticMap, self.convShape2D, self.staticPrior, self.fftConv, self.GPU) * dynamicMap
+                dynamicMove = conv2prior(dynamicMap, self.convShape2D, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
             predDynamicMap = dynamicStay + bounceBack + dynamicMove
         else:
             predDynamicMap = cp.zeros_like(dynamicMap) if self.GPU else np.zeros_like(dynamicMap)
@@ -362,6 +375,16 @@ class TGM:
             raise ValueError("Invalid layer specified.")
 
 def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
+    # Assert that the map is 2D or has depth 1
+    assert map.ndim == 2 or (map.ndim == 3 and map.shape[2] == 1)
+
+    # If the map is 3D with depth 1, squeeze it to 2D
+    if map.ndim == 3:
+        map = map[:,:,0]
+        is_3D = True
+    else:
+        is_3D = False
+
     # Pad the map with the prior before making the convolution
     sx, sy = convShape.shape
     px = (sx - 1) // 2
@@ -380,6 +403,9 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
         else:
             paddedMap = np.pad(map, ((px, px), (py, py)), constant_values=prior)
             conv = convolve2d(paddedMap, convShape, mode='valid')
+    # If the input was 3D with depth 1, add back the depth dimension
+    if is_3D:
+        conv = conv[:,:,cp.newaxis] if GPU else conv[:,:,np.newaxis]
     return conv
 
 def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
@@ -413,9 +439,9 @@ if __name__ == '__main__':
     resolution = 0.5
     tgmFrame = frame(tgmOrigin, tgmSize, resolution)
     priors = [0.3, 0.3, 0.01]
-    velocities = [1, 1, 0]
+    maxVelocity = 1
     saturationLimits = [0.1, 0.9, 0.1, 0.9]
-    tgm = TGM(tgmFrame, priors, velocities, saturationLimits, fftConv=True, isGPU=False)
+    tgm = TGM(tgmFrame, priors, maxVelocity, saturationLimits, fftConv=True, isGPU=False)
 
     # Create a sensor model (using the same frame as the TGM for simplicity)
     # The occPrior of the sensor model MUST be the sum of the priors of the TGM
