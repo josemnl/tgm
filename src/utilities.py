@@ -32,11 +32,11 @@ def read3DLidarCSV(file):
     z_t_3D = lidarScan3D(data.values.astype(float))
     return z_t_3D
 
-def read3DLidarBIN(file):
+def read3DLidarBIN(file, n_fields=4):
     rawdata = np.fromfile(file, dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
-    data = np.reshape(rawdata, (-1, 4))
+    data = np.reshape(rawdata, (-1, n_fields))
     z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
