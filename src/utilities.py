@@ -127,12 +127,19 @@ def loadConfig(configPath, configFile):
 def loadConfigAsDict(configPath, configFile):
     # Import parameters from config file
     config = yaml.safe_load(open(configPath + configFile + '.yaml'))
+    # One-liner: shallow-normalize 'None' (string) to Python None across top-level keys
+    config = {k: (None if isinstance(v, str) and v.strip().lower() == 'none' else v) for k, v in config.items()}
+    # Wrap into a SimpleNamespace for attribute access
     config = SimpleNamespace(**config)
     # Convert meters to cells
     config.width = int(config.width/config.resolution)
     config.height = int(config.height/config.resolution)
+    if hasattr(config, 'depth'):
+        config.depth = int(config.depth/config.resolution)
     config.smWidth = int(config.smWidth/config.resolution)
     config.smHeight = int(config.smHeight/config.resolution)
+    if hasattr(config, 'smDepth'):
+        config.smDepth = int(config.smDepth/config.resolution)
     config.sensorRange = int(config.sensorRange/config.resolution)
     config.maxVelocity = int(config.maxVelocity/config.resolution)
     # Compute occupancy prior

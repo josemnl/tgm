@@ -302,7 +302,7 @@ class TGM:
         # Pause to show the image
         plt.pause(0.01)
 
-    def plot3D(self, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
+    def plot3D(self, fig: plt.Figure = None, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
         """
         3D plot of the TGM using scatter plot.
         Very similar to the one in gridMap.py, but plotting the 3 layers each using
@@ -310,13 +310,14 @@ class TGM:
         """
         if frame is None:
             frame = self.frame
+        if fig is None:
+            fig = plt.figure()
         overlap = self.frame.computeOverlap(frame)
         staticMap = self.staticMap.crop(overlap).toCPU().data
         dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
         weatherMap = self.weatherMap.crop(overlap).toCPU().data
 
-        # Create a figure and a 3D axis
-        fig = plt.figure()
+        # Create a 3D axis
         ax = fig.add_subplot(111, projection='3d')
 
         # Create a meshgrid for the coordinates
@@ -350,6 +351,27 @@ class TGM:
         Z = Z[mask]
         colors = colors[mask]
 
+        # Before plotting, enforce equal data scale across X/Y/Z using the true extents (in meters)
+        # Compute extents from the overlap frame (not from masked points)
+        x_min = overlap.origin.x * self.frame.r
+        x_max = (overlap.origin.x + overlap.size.w) * self.frame.r
+        y_min = overlap.origin.y * self.frame.r
+        y_max = (overlap.origin.y + overlap.size.h) * self.frame.r
+        z_min = overlap.origin.z * self.frame.r
+        z_max = (overlap.origin.z + overlap.size.d) * self.frame.r
+
+        rx = max(x_max - x_min, 0.0)
+        ry = max(y_max - y_min, 0.0)
+        rz = max(z_max - z_min, 0.0)
+
+        # Set explicit limits first (so autoscale doesn't change box-aspect)
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.set_zlim(z_min, z_max)
+
+        # Try to preserve the real aspect ratios (so short Z is not stretched)
+        ax.set_box_aspect((rx, ry, rz))
+
         # Scatter plot
         ax.scatter(X, Y, Z, c=colors, marker='o', s=1)
 
@@ -357,6 +379,10 @@ class TGM:
         ax.set_xlabel('X (m)')
         ax.set_ylabel('Y (m)')
         ax.set_zlabel('Z (m)')
+
+        # Plot the ego pose
+        if self.x_t is not None:
+            ax.scatter(self.x_t.position.x, self.x_t.position.y, self.x_t.position.z, c='red', marker='o', s=50)
 
         plt.show(block=isPause)
         plt.pause(0.01)
