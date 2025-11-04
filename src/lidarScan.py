@@ -237,6 +237,9 @@ class lidarScan3D:
                 ax.scatter(self.points3D[indices, 0], self.points3D[indices, 1], self.points3D[indices, 2], color)
         else:
             ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
         ax.axis('equal')
         plt.show()
 

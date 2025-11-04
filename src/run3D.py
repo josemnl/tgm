@@ -33,6 +33,8 @@ def run3D(logID, conf):
     # Initial guess for the velocity (pose type to support pose arithmetic)
     v_t = pose(position(0.0, 0.0, 0.0), orientation(0.0, 0.0, 0.0))
 
+    base_pose = readPose(conf.lidarPath + str(conf.initialTimeStep).zfill(6) + ".csv")
+
     # Main loop
     fig= plt.figure()
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
@@ -44,6 +46,15 @@ def run3D(logID, conf):
             z_t_3D = read3DLidarBIN(conf.lidarPath + str(i).zfill(6) + ".bin")
         else:
             raise ValueError('Invalid lidar format')
+
+        # Convert point cloud to adjust for coordinate frame:
+        # In the original data, the sensor faces towards +X, +Y is right, +Z is downward
+        # We want the sensor to face towards +X, +Y to be left, +Z to be upward
+        #z_t_3D.points3D[:, 0] = -z_t_3D.points3D[:, 0]
+        #z_t_3D.points3D[:, 1] = -z_t_3D.points3D[:, 1]
+        #z_t_3D.points3D[:, 2] = -z_t_3D.points3D[:, 2]
+
+        #z_t_3D.plot()
 
         # FILTER POINT CLOUD
         z_t_3D.removeClosePoints(conf.minDistance)
@@ -57,7 +68,11 @@ def run3D(logID, conf):
             z_t_3D.voxelGridFilter(conf.voxelGridSize)
 
         # Compute robot pose with SLAM or get it from log
-        if i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
+        if not conf.isSLAM:
+            x_t = readPose(conf.lidarPath + str(i).zfill(6) + ".csv") - base_pose + \
+                           pose(position(conf.startPoseSLAM[0], conf.startPoseSLAM[1], conf.startPoseSLAM[2]),
+                           orientation(0.0, 0.0, 0.0))
+        elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
             except:
@@ -108,10 +123,10 @@ def run3D(logID, conf):
         print('Plotting frame at origin (' + str(plotFrame.origin.x) + ', ' + str(plotFrame.origin.y) + ', ' + str(plotFrame.origin.z) + ') with size (' + str(plotFrame.size.w) + ', ' + str(plotFrame.size.h) + ', ' + str(plotFrame.size.d) + ') and resolution ' + str(plotFrame.r))
         tgm.plot3D(fig, plotFrame, isPause=False, value_min = 0.7, value_max = 1.0)
 
-        # Pause indefinitely when i = 100
-        if i == conf.initialTimeStep + 100:
-            plt.pause(0.01)
-            input("Press [enter] to continue.")
+        # Pause indefinitely for every i multiple of 50
+        if (i - conf.initialTimeStep) % 50 == 0 and i != conf.initialTimeStep:
+            plt.pause(0.1)
+            input("Press Enter to continue...")
 
         # Print progress
         print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
@@ -120,7 +135,7 @@ if __name__ == '__main__':
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'driving3D'
+    logID = 'underwater3D'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)

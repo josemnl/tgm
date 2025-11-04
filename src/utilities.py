@@ -8,19 +8,62 @@ from types import SimpleNamespace
 from gridMap import pose, position, orientation
 
 def readPose(file):
-    with open(file) as data:
-        # if there are only 3 values in the line, it is x, y, yaw
-        # if there are 6 values in the line, it is x, y, z, roll, pitch, yaw
+    """Read a single-line pose CSV file.
 
-        if len(data.readline().split(",")) == 3:
-            data.seek(0)
-            x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-            x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
+    Supported formats (comma-separated, first non-empty line only):
+    - 3 values: x, y, yaw (z assumed 0)
+    - 6 values: x, y, z, roll, pitch, yaw
+    - 7 values: x, y, z, qx, qy, qz, qw (quaternion -> roll, pitch, yaw)
+    """
+    # Use utf-8-sig to gracefully handle potential BOM
+    with open(file, 'r', encoding='utf-8-sig', newline='') as f:
+        first_non_empty = None
+        for line in f:
+            line = line.strip()
+            if line:
+                first_non_empty = line
+                break
+
+        if first_non_empty is None:
+            raise ValueError('Empty pose file: ' + file)
+
+        parts = [p.strip() for p in first_non_empty.split(',') if p.strip() != '']
+        n = len(parts)
+
+        # Parse as floats if count is valid
+        if n not in (3, 6, 7):
+            raise ValueError(
+                'Invalid pose format in file: ' + file + '. Expected 3, 6 or 7 values per line, got ' + str(n)
+            )
+
+        vals = list(map(float, parts))
+
+        if n == 3:
+            x, y, yaw = vals
+            return pose(position(x, y, 0.0), orientation(0.0, 0.0, yaw))
+
+        if n == 6:
+            x, y, z, roll, pitch, yaw = vals
+            return pose(position(x, y, z), orientation(roll, pitch, yaw))
+
+        # n == 7: quaternion -> roll, pitch, yaw
+        x, y, z, qx, qy, qz, qw = vals
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (qw * qx + qy * qz)
+        cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+        # Pitch (y-axis rotation)
+        sinp = 2 * (qw * qy - qz * qx)
+        if abs(sinp) >= 1:
+            pitch = np.sign(sinp) * (np.pi / 2)  # clamp at 90 degrees if out of range
         else:
-            data.seek(0)
-            x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-            x_t = pose(position(x_t[0], x_t[1], x_t[2]), orientation(x_t[3], x_t[4], x_t[5]))
-    return x_t
+            pitch = np.arcsin(sinp)
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (qw * qz + qx * qy)
+        cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+        ori_obj = orientation(roll, pitch, yaw)
+        return pose(position(x, y, z), ori_obj)
 
 def read2DLidarCSV(file):
     with open(file) as data:

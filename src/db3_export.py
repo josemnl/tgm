@@ -143,54 +143,70 @@ def image_from_ros2(msg) -> np.ndarray:
     img = buf.reshape((h, step))[:, : w * ch].reshape((h, w, ch))
     return img
 
-# Open bag with high-level reader and deserialize via reader.deserialize()
-typestore = get_typestore(stores.Stores.LATEST)
+if __name__ == '__main__':
+    # Open bag with high-level reader and deserialize via reader.deserialize()
+    typestore = get_typestore(stores.Stores.LATEST)
 
-with AnyReader([BAG_DIR], default_typestore=typestore) as reader:
-    # List topics and message types
-    for topic, conn in reader.topics.items():
+    # Export loop
+    with AnyReader([BAG_DIR], default_typestore=typestore) as reader:
+        # List topics and message types
         print('Listing topics:')
-        print(topic, conn.msgtype)
+        for topic, conn in reader.topics.items():
+            print(topic, conn.msgtype)
 
-    # Iterate over pose, camera and lidar messages and export
-    ensure_dir(EXP_DIR)
+        # Iterate over pose, camera and lidar messages and export
+        ensure_dir(EXP_DIR)
 
-    for connection, timestamp, rawdata in reader.messages():
-        if connection.topic == POSE_TOPIC:
-            msg = reader.deserialize(rawdata, connection.msgtype)
-            try:
-                position, orientation, header = decode_pose(msg)
-                pose_path = EXP_DIR / f"pose_{timestamp}.csv"
-                with open(pose_path, 'w') as f:
-                    f.write(f"{position[0]},{position[1]},{position[2]},{orientation[0]},{orientation[1]},{orientation[2]},{orientation[3]}\n")
-                print(f"Saved pose: {pose_path}")
-            except Exception as e:
-                print(f"[WARN] Failed to decode/save pose @ {timestamp}: {e}")
-
-        if connection.topic == CAMERA_TOPIC:
-            msg = reader.deserialize(rawdata, connection.msgtype)
-            try:
-                img = image_from_ros2(msg)
-                img_path = EXP_DIR / f"camera_{timestamp}.png"
-                cv2.imwrite(str(img_path), img)
-                print(f"Saved camera frame: {img_path}")
-            except Exception as e:
-                print(f"[WARN] Failed to save image @ {timestamp}: {e}")
-
-        if connection.topic == LIDAR_TOPIC:
-            msg = reader.deserialize(rawdata, connection.msgtype)
-            try:
-                pts = decode_pointcloud2_xyz(msg)
-                if pts.size == 0:
+        i = 0
+        isSavePose = False
+        isSaveCamera = False
+        for connection, timestamp, rawdata in reader.messages():
+            if connection.topic == POSE_TOPIC:
+                if not isSavePose:
                     continue
-                bin_path = EXP_DIR / f"lidar_{timestamp}.bin"
-                # Save as float32 (N,3)
-                pts.astype(np.float32).tofile(str(bin_path))
-                print(f"Saved lidar points: {bin_path} ({len(pts)} pts)")
+                msg = reader.deserialize(rawdata, connection.msgtype)
+                try:
+                    position, orientation, header = decode_pose(msg)
+                    pose_path = EXP_DIR / f"{str(i).zfill(6)}.csv"
+                    with open(pose_path, 'w') as f:
+                        f.write(f"{position[0]},{position[1]},{position[2]},{orientation[0]},{orientation[1]},{orientation[2]},{orientation[3]}\n")
+                    print(f"Saved pose: {pose_path}")
+                except Exception as e:
+                    print(f"[WARN] Failed to decode/save pose @ {timestamp}: {e}")
+                isSavePose = False  # Reset flag after saving pose
 
-                # Optional: read back and basic sanity check using existing utility
-                scan3D = read3DLidarBIN(str(bin_path), n_fields=3)
-                print(f"Read-back points: {len(scan3D.points3D)}")
-                scan3D.plot()
-            except Exception as e:
-                print(f"[WARN] Failed to decode/save lidar @ {timestamp}: {e}")
+            if connection.topic == CAMERA_TOPIC:
+                if not isSaveCamera:
+                    continue
+                msg = reader.deserialize(rawdata, connection.msgtype)
+                try:
+                    img = image_from_ros2(msg)
+                    img_path = EXP_DIR / f"{str(i).zfill(6)}.png"
+                    cv2.imwrite(str(img_path), img)
+                    print(f"Saved camera frame: {img_path}")
+                except Exception as e:
+                    print(f"[WARN] Failed to save image @ {timestamp}: {e}")
+                isSaveCamera = False  # Reset flag after saving camera
+
+            if connection.topic == LIDAR_TOPIC:
+                msg = reader.deserialize(rawdata, connection.msgtype)
+                try:
+                    pts = decode_pointcloud2_xyz(msg)
+                    if pts.size <= 10:
+                        continue
+                    i += 1
+                    isSavePose = True
+                    isSaveCamera = True
+                    # Expand points to Nx4 for compatibility
+                    pts = np.hstack([pts, np.ones((pts.shape[0], 1), dtype=pts.dtype)])
+                    bin_path = EXP_DIR / f"{str(i).zfill(6)}.bin"
+                    # Save as float32 (N,4)
+                    pts.astype(np.float32).tofile(str(bin_path))
+                    print(f"Saved lidar points: {bin_path} ({len(pts)} pts)")
+
+                    # Optional: read back and basic sanity check using existing utility
+                    scan3D = read3DLidarBIN(str(bin_path), n_fields=4)
+                    print(f"Read-back points: {len(scan3D.points3D)}")
+                    #scan3D.plot()
+                except Exception as e:
+                    print(f"[WARN] Failed to decode/save lidar @ {timestamp}: {e}")
