@@ -64,6 +64,31 @@ class orientation:
         p = (self.pitch - other.pitch) % two_pi
         y = (self.yaw - other.yaw) % two_pi
         return orientation(r, p, y)
+    
+    def to_R_zyx(self) -> np.ndarray:
+        cr, sr = np.cos(self.roll), np.sin(self.roll)
+        cp, sp = np.cos(self.pitch), np.sin(self.pitch)
+        cy, sy = np.cos(self.yaw), np.sin(self.yaw)
+        # Rz(yaw) * Ry(pitch) * Rx(roll)
+        return np.array([
+            [cy*cp,                cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
+            [sy*cp,                sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
+            [-sp,                  cp*sr,             cp*cr           ]
+        ])
+    
+    @staticmethod
+    def from_R_zyx(R: np.ndarray) -> 'orientation':
+        sy = np.sqrt(R[0, 0]**2 + R[1, 0]**2)
+        eps = 1e-9
+        if sy > eps:
+            roll = np.arctan2(R[2, 1], R[2, 2])
+            pitch = np.arctan2(-R[2, 0], sy)
+            yaw = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            roll = np.arctan2(-R[1, 2], R[1, 1])
+            pitch = np.arctan2(-R[2, 0], sy)  # ≈ ±pi/2
+            yaw = 0.0
+        return orientation(roll, pitch, yaw)
 
 class pose:
     def __init__(self, pose_position: position, pose_orientation: orientation):
@@ -85,67 +110,27 @@ class pose:
         new_position = self.position - other.position
         new_orientation = self.orientation - other.orientation
         return pose(new_position, new_orientation)
-    
-    @staticmethod
-    def _euler_zyx_to_R(o: 'orientation') -> np.ndarray:
-        cr, sr = np.cos(o.roll), np.sin(o.roll)
-        cp, sp = np.cos(o.pitch), np.sin(o.pitch)
-        cy, sy = np.cos(o.yaw), np.sin(o.yaw)
-        # Rz(yaw) * Ry(pitch) * Rx(roll)
-        return np.array([
-            [cy*cp,                cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
-            [sy*cp,                sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
-            [-sp,                  cp*sr,             cp*cr           ]
-        ])
-    
-    @staticmethod
-    def R_zyx(o: 'orientation') -> np.ndarray:
-        # Alias to your existing implementation
-        return pose._euler_zyx_to_R(o)
 
-    @staticmethod
-    def _R_to_euler_zyx(R: np.ndarray) -> 'orientation':
-        # Robust ZYX extraction with gimbal-lock handling
-        sy = np.sqrt(R[0, 0]**2 + R[1, 0]**2)
-        eps = 1e-9
-        if sy > eps:
-            roll = np.arctan2(R[2, 1], R[2, 2])
-            pitch = np.arctan2(-R[2, 0], sy)
-            yaw = np.arctan2(R[1, 0], R[0, 0])
-        else:
-            # Gimbal lock: yaw set to 0, roll absorbs heading
-            roll = np.arctan2(-R[1, 2], R[1, 1])
-            pitch = np.arctan2(-R[2, 0], sy)  # = ±pi/2
-            yaw = 0.0
-        return orientation(roll, pitch, yaw)
-
-    def transform(self, other: 'pose') -> 'pose':
-        """Compose poses: result = other ⊕ self (apply 'other' to 'self')."""
-        # Rotation/translation of 'other'
-        R_other = self._euler_zyx_to_R(other.orientation)
-        t_other = np.array([other.position.x, other.position.y, other.position.z])
-
-        # Rotate and translate position
-        p_self = np.array([self.position.x, self.position.y, self.position.z])
-        p_out = R_other @ p_self + t_other
-
-        # Compose orientations: R_out = R_other @ R_self
-        R_self = self._euler_zyx_to_R(self.orientation)
-        R_out = R_other @ R_self
-        o_out = self._R_to_euler_zyx(R_out)
-
-        return pose(position(p_out[0], p_out[1], p_out[2]), o_out)
-    
     def compose(self, right: 'pose') -> 'pose':
         """
-        Return self ⊕ right (apply self, then right). Matches matrix A @ B semantics.
-        Implemented via the existing left-multiply transform to stay consistent.
+        Return self ⊕ right (apply self, then right).
         """
-        return right.transform(self)
+        R_self = self.orientation.to_R_zyx()
+        t_self = np.array([self.position.x, self.position.y, self.position.z])
+
+        R_right = right.orientation.to_R_zyx()
+        t_right = np.array([right.position.x, right.position.y, right.position.z])
+
+        R_out = R_self @ R_right
+        t_out = R_self @ t_right + t_self
+
+        o_out = orientation.from_R_zyx(R_out)
+        p_out = position(float(t_out[0]), float(t_out[1]), float(t_out[2]))
+        return pose(p_out, o_out)
 
     def __matmul__(self, right: 'pose') -> 'pose':
         """
-        Python @ operator: A @ B == A ⊕ B
+        Python @ operator: A @ B == A ⊕ B (apply A, then B)
         """
         return self.compose(right)
 
