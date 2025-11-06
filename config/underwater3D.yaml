@@ -6,8 +6,8 @@ initialTimeStep : 10                    # Initial time step to start the simulat
 simHorizon : 441                        # If 0, it runs until the end of the log
 
 # SLAM parameters
-isSLAM : True                           # If True, it computes x_t using SLAM
-velTracking : True                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
+isSLAM : False                           # If True, it computes x_t using SLAM
+velTracking : False                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
 numTimeStepsSLAM : 1                    # Number of time steps to use ground truth x_t before starting SLAM
 startPoseSLAM : [2.5, 2.5, 2.5]         # Initial pose for the SLAM algorithm if x_t is not available
 
@@ -15,7 +15,7 @@ startPoseSLAM : [2.5, 2.5, 2.5]         # Initial pose for the SLAM algorithm if
 saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveSvg : True                          # If True, it saves each frame as a SVG file
-videoSection : 'Constant'               # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoSection : 'Following'               # Section of the map to plot: 'Full', 'Following', 'Constant'
 videoWidth : 5                          # Width of the following window
 videoHeight : 5                         # Height of the following window
 videoDepth : 5                          # Depth of the following window

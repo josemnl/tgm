@@ -19,10 +19,14 @@ def run3D(logID, conf):
     if not os.path.exists(videoPath):
         os.makedirs(videoPath)
 
+    # Read initial pose
+    x_0 = readPose(conf.lidarPath + str(conf.initialTimeStep).zfill(6) + ".csv")
+
     # Create Sensor Model and TGM
     sMsize = size(conf.smWidth, conf.smHeight, conf.smDepth)
     smOrigin = origin(conf.origin[0], conf.origin[1], conf.origin[2])
-    smFrame = frame(smOrigin, sMsize, conf.resolution)
+    # Create the frame around the initial position
+    smFrame = frame.frameAroundPosition(x_0.position, sMsize, conf.resolution)
     sM = sensorModel3D(smFrame, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], conf.origin[2])
     tgmSize = size(conf.width, conf.height, conf.depth)
@@ -32,8 +36,10 @@ def run3D(logID, conf):
     print('TGM initial frame is: origin (' + str(tgm.frame.origin.x) + ', ' + str(tgm.frame.origin.y) + ', ' + str(tgm.frame.origin.z) + ') with size (' + str(tgm.frame.size.w) + ', ' + str(tgm.frame.size.h) + ', ' + str(tgm.frame.size.d) + ') and resolution ' + str(tgm.frame.r))
     # Initial guess for the velocity (pose type to support pose arithmetic)
     v_t = pose(position(0.0, 0.0, 0.0), orientation(0.0, 0.0, 0.0))
-
-    base_pose = readPose(conf.lidarPath + str(conf.initialTimeStep).zfill(6) + ".csv")
+    
+    # Define transformations
+    link_world_base = pose(position(0.0, 0.0, 0.0), orientation(np.pi, 0.0, 0.0))
+    link_base_sensor = pose(position(0.22, 0.0, -0.15), orientation(0.0, -np.pi/6, 0.0))
 
     # Main loop
     fig= plt.figure()
@@ -69,9 +75,9 @@ def run3D(logID, conf):
 
         # Compute robot pose with SLAM or get it from log
         if not conf.isSLAM:
-            x_t = readPose(conf.lidarPath + str(i).zfill(6) + ".csv") - base_pose + \
-                           pose(position(conf.startPoseSLAM[0], conf.startPoseSLAM[1], conf.startPoseSLAM[2]),
-                           orientation(0.0, 0.0, 0.0))
+            x_t = readPose(conf.lidarPath + str(i).zfill(6) + ".csv")
+            # Apply transformation from world to base link and from base link to sensor
+            x_t = link_world_base @ x_t @ link_base_sensor
         elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
@@ -114,7 +120,8 @@ def run3D(logID, conf):
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
         elif conf.videoSection == 'Following':
-            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1))
+            print('Following frame around position (' + str(x_t.position.x) + ', ' + str(x_t.position.y) + ', ' + str(x_t.position.z) + ')')
+            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(conf.videoDepth / tgm.frame.r))
             plotFrame = frame.frameAroundPosition(x_t.position, plotSize, tgm.frame.r)
         elif conf.videoSection == 'Constant':
             plotOrigin = origin(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), int(conf.videoOrigin[2] / tgm.frame.r))
@@ -124,7 +131,7 @@ def run3D(logID, conf):
         tgm.plot3D(fig, plotFrame, isPause=False, value_min = 0.7, value_max = 1.0)
 
         # Pause indefinitely for every i multiple of 50
-        if (i - conf.initialTimeStep) % 50 == 0 and i != conf.initialTimeStep:
+        if (i - conf.initialTimeStep) % 100 == 0 and i != conf.initialTimeStep:
             plt.pause(0.1)
             input("Press Enter to continue...")
 

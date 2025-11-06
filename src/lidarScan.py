@@ -374,24 +374,10 @@ class lidarScan3D:
         for key, points in voxel_dict.items():
             average_point = np.mean(points, axis=0)
             downsampled_points.append(average_point)
-
-        downsampled_points = np.array(downsampled_points)
-        self.points3D = downsampled_points
-
-        # Remove labels if they exist
-        if self.labels is not None:
-            self.labels = None
-
     def transform(self, x_t: pose) -> 'lidarScan3D':
-        # This function transforms the 3D points using a given pose (x_t)
-        R = np.array([
-            [np.cos(x_t.orientation.yaw), -np.sin(x_t.orientation.yaw), 0],
-            [np.sin(x_t.orientation.yaw), np.cos(x_t.orientation.yaw), 0],
-            [0, 0, 1]
-        ])
-        T = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
-        
-        return lidarScan3D((R @ self.points3D.T).T + T, self.labels)
+        R = pose.R_zyx(x_t.orientation)          # Rz(yaw) @ Ry(pitch) @ Rx(roll)
+        t = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
+        return lidarScan3D(self.points3D @ R.T + t, self.labels)
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point

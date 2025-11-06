@@ -50,12 +50,20 @@ class orientation:
     def __add__(self, other):
         if not isinstance(other, orientation):
             return NotImplemented
-        return orientation(self.roll + other.roll, self.pitch + other.pitch, self.yaw + other.yaw)
+        two_pi = 2 * np.pi
+        r = (self.roll + other.roll) % two_pi
+        p = (self.pitch + other.pitch) % two_pi
+        y = (self.yaw + other.yaw) % two_pi
+        return orientation(r, p, y)
     
     def __sub__(self, other):
         if not isinstance(other, orientation):
             return NotImplemented
-        return orientation(self.roll - other.roll, self.pitch - other.pitch, self.yaw - other.yaw)
+        two_pi = 2 * np.pi
+        r = (self.roll - other.roll) % two_pi
+        p = (self.pitch - other.pitch) % two_pi
+        y = (self.yaw - other.yaw) % two_pi
+        return orientation(r, p, y)
 
 class pose:
     def __init__(self, pose_position: position, pose_orientation: orientation):
@@ -77,6 +85,69 @@ class pose:
         new_position = self.position - other.position
         new_orientation = self.orientation - other.orientation
         return pose(new_position, new_orientation)
+    
+    @staticmethod
+    def _euler_zyx_to_R(o: 'orientation') -> np.ndarray:
+        cr, sr = np.cos(o.roll), np.sin(o.roll)
+        cp, sp = np.cos(o.pitch), np.sin(o.pitch)
+        cy, sy = np.cos(o.yaw), np.sin(o.yaw)
+        # Rz(yaw) * Ry(pitch) * Rx(roll)
+        return np.array([
+            [cy*cp,                cy*sp*sr - sy*cr,  cy*sp*cr + sy*sr],
+            [sy*cp,                sy*sp*sr + cy*cr,  sy*sp*cr - cy*sr],
+            [-sp,                  cp*sr,             cp*cr           ]
+        ])
+    
+    @staticmethod
+    def R_zyx(o: 'orientation') -> np.ndarray:
+        # Alias to your existing implementation
+        return pose._euler_zyx_to_R(o)
+
+    @staticmethod
+    def _R_to_euler_zyx(R: np.ndarray) -> 'orientation':
+        # Robust ZYX extraction with gimbal-lock handling
+        sy = np.sqrt(R[0, 0]**2 + R[1, 0]**2)
+        eps = 1e-9
+        if sy > eps:
+            roll = np.arctan2(R[2, 1], R[2, 2])
+            pitch = np.arctan2(-R[2, 0], sy)
+            yaw = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            # Gimbal lock: yaw set to 0, roll absorbs heading
+            roll = np.arctan2(-R[1, 2], R[1, 1])
+            pitch = np.arctan2(-R[2, 0], sy)  # = ±pi/2
+            yaw = 0.0
+        return orientation(roll, pitch, yaw)
+
+    def transform(self, other: 'pose') -> 'pose':
+        """Compose poses: result = other ⊕ self (apply 'other' to 'self')."""
+        # Rotation/translation of 'other'
+        R_other = self._euler_zyx_to_R(other.orientation)
+        t_other = np.array([other.position.x, other.position.y, other.position.z])
+
+        # Rotate and translate position
+        p_self = np.array([self.position.x, self.position.y, self.position.z])
+        p_out = R_other @ p_self + t_other
+
+        # Compose orientations: R_out = R_other @ R_self
+        R_self = self._euler_zyx_to_R(self.orientation)
+        R_out = R_other @ R_self
+        o_out = self._R_to_euler_zyx(R_out)
+
+        return pose(position(p_out[0], p_out[1], p_out[2]), o_out)
+    
+    def compose(self, right: 'pose') -> 'pose':
+        """
+        Return self ⊕ right (apply self, then right). Matches matrix A @ B semantics.
+        Implemented via the existing left-multiply transform to stay consistent.
+        """
+        return right.transform(self)
+
+    def __matmul__(self, right: 'pose') -> 'pose':
+        """
+        Python @ operator: A @ B == A ⊕ B
+        """
+        return self.compose(right)
 
 class origin:
     def __init__(self, x: int, y: int, z: int = 0):
@@ -564,6 +635,21 @@ def main() -> None:
     grid.crop(newFrame).plot(isPause=True)
     grid.crop(newFrame).plot3D_scatter(isPause=True)
     grid.crop(newFrame).plot3D_cubes(isPause=True)
+
+    # Test pose transformations
+    p1 = pose(position(1.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/2))
+    p2 = pose(position(3.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/4))
+    p3 = p2.transform(p1)
+
+    print(f"Transformed Position: x={p3.position.x}, y={p3.position.y}, z={p3.position.z}")
+    print(f"Transformed Orientation: roll={p3.orientation.roll}, pitch={p3.orientation.pitch}, yaw={p3.orientation.yaw}")
+
+    x_t = pose(position(2.5, 2.5, 2.5), orientation(0.0, 0.0, 0.0))
+    link_base_sensor = pose(position(0.22, 0.0, -0.15), orientation(0.0, -3.14159/6, 0.0))
+    x_t = link_base_sensor.transform(x_t)
+
+    print(f"Transformed Position: x={x_t.position.x}, y={x_t.position.y}, z={x_t.position.z}")
+    print(f"Transformed Orientation: roll={x_t.orientation.roll}, pitch={x_t.orientation.pitch}, yaw={x_t.orientation.yaw}")
 
 if __name__ == '__main__':
     main()

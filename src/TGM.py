@@ -384,6 +384,97 @@ class TGM:
         if self.x_t is not None:
             ax.scatter(self.x_t.position.x, self.x_t.position.y, self.x_t.position.z, c='red', marker='o', s=50)
 
+        # Plot field of view of the sensor (90 degrees horizontal, 40 degrees vertical and 15 m range)
+        # The plot displays the sides of the pyramid
+        if self.x_t is not None:
+            sensor_x = self.x_t.position.x
+            sensor_y = self.x_t.position.y
+            sensor_z = self.x_t.position.z
+            sensor_roll = self.x_t.orientation.roll
+            sensor_pitch = self.x_t.orientation.pitch
+            sensor_yaw = self.x_t.orientation.yaw
+
+            fov_range = 3.0
+            fov_hfov = np.deg2rad(45.0)  # Half horizontal FOV
+            fov_vfov = np.deg2rad(20.0)  # Half vertical FOV
+
+            # Rotation matrix from sensor to world frame
+            R_yaw = np.array([[np.cos(sensor_yaw), -np.sin(sensor_yaw), 0],
+                              [np.sin(sensor_yaw), np.cos(sensor_yaw), 0],
+                              [0, 0, 1]])
+            R_pitch = np.array([[np.cos(sensor_pitch), 0, np.sin(sensor_pitch)],
+                                [0, 1, 0],
+                                [-np.sin(sensor_pitch), 0, np.cos(sensor_pitch)]])
+
+            R_roll = np.array([[1, 0, 0],
+                               [0, np.cos(sensor_roll), -np.sin(sensor_roll)],
+                               [0, np.sin(sensor_roll), np.cos(sensor_roll)]])
+            R = R_yaw @ R_pitch @ R_roll
+
+            # Define the 4 corner rays in the sensor frame (yaw/pitch offsets)
+            # Order: top-left, top-right, bottom-right, bottom-left
+            angles = [(-fov_hfov,  fov_vfov),
+                      ( fov_hfov,  fov_vfov),
+                      ( fov_hfov, -fov_vfov),
+                      (-fov_hfov, -fov_vfov)]
+            corners_sensor = []
+            for yaw_off, pitch_off in angles:
+                cp = np.cos(pitch_off)
+                dir_sensor = np.array([cp * np.cos(yaw_off), cp * np.sin(yaw_off), np.sin(pitch_off)])
+                corners_sensor.append(fov_range * dir_sensor)
+            corners = np.vstack(corners_sensor)
+
+            # Rotate and translate corners to world frame
+            world_corners = (R @ corners.T).T + np.array([sensor_x, sensor_y, sensor_z])
+
+            # Plot the 4 sides of the pyramid
+            for i in range(4):
+                x_vals = [sensor_x, world_corners[i, 0]]
+                y_vals = [sensor_y, world_corners[i, 1]]
+                z_vals = [sensor_z, world_corners[i, 2]]
+                ax.plot(x_vals, y_vals, z_vals, color='blue', linestyle='--', linewidth=1)
+            
+            # Plot the base of the pyramid
+            for i in range(4):
+                x_vals = [world_corners[i, 0], world_corners[(i+1)%4, 0]]
+                y_vals = [world_corners[i, 1], world_corners[(i+1)%4, 1]]
+                z_vals = [world_corners[i, 2], world_corners[(i+1)%4, 2]]
+                ax.plot(x_vals, y_vals, z_vals, color='blue', linestyle='--', linewidth=1)
+
+        # Plot the coordinate frame of the sensor at the ego position
+        if self.x_t is not None:
+            sensor_x = self.x_t.position.x
+            sensor_y = self.x_t.position.y
+            sensor_z = self.x_t.position.z
+            sensor_roll = self.x_t.orientation.roll
+            sensor_pitch = self.x_t.orientation.pitch
+            sensor_yaw = self.x_t.orientation.yaw
+
+            # Rotation matrix from sensor to world frame
+            R_yaw = np.array([[np.cos(sensor_yaw), -np.sin(sensor_yaw), 0],
+                              [np.sin(sensor_yaw), np.cos(sensor_yaw), 0],
+                              [0, 0, 1]])
+            R_pitch = np.array([[np.cos(sensor_pitch), 0, np.sin(sensor_pitch)],
+                                [0, 1, 0],
+                                [-np.sin(sensor_pitch), 0, np.cos(sensor_pitch)]])
+
+            R_roll = np.array([[1, 0, 0],
+                               [0, np.cos(sensor_roll), -np.sin(sensor_roll)],
+                               [0, np.sin(sensor_roll), np.cos(sensor_roll)]])
+            R = R_yaw @ R_pitch @ R_roll
+
+            # Define the axes in the sensor frame
+            axis_length = 1.0
+            axes_sensor = np.array([[axis_length, 0, 0],
+                                    [0, axis_length, 0],
+                                    [0, 0, axis_length]])
+            axes_world = (R @ axes_sensor.T).T + np.array([sensor_x, sensor_y, sensor_z])
+
+            # Plot the axes
+            ax.plot([sensor_x, axes_world[0, 0]], [sensor_y, axes_world[0, 1]], [sensor_z, axes_world[0, 2]], color='red', linewidth=2)   # X-axis
+            ax.plot([sensor_x, axes_world[1, 0]], [sensor_y, axes_world[1, 1]], [sensor_z, axes_world[1, 2]], color='green', linewidth=2) # Y-axis
+            ax.plot([sensor_x, axes_world[2, 0]], [sensor_y, axes_world[2, 1]], [sensor_z, axes_world[2, 2]], color='blue', linewidth=2)  # Z-axis
+            
         plt.show(block=isPause)
         plt.pause(0.01)
 
