@@ -2,16 +2,14 @@ import numpy as np
 import cupy as cp
 import scipy.signal as sp
 import cupyx.scipy.signal as csp
-
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
-from gridMap import gridMap, frame, orientation, origin, position, size, pose
 from skimage.morphology import disk
 import matplotlib
 
-from lidarScan import lidarScan, lidarScan3D
-from sensorModel import sensorModel3D
-from utilities import read3DLidarCSV
+from gridMap import gridMap
+from spatial import frame, origin, size, pose, position, orientation
+
 matplotlib.use('Qt5Agg')
 
 class TGM:
@@ -552,6 +550,9 @@ def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     return conv
 
 if __name__ == '__main__':
+    from lidarScan import lidarScan3D
+    from utilities import read3DLidarCSV
+    from sensorModel import sensorModel3D
     # Example of usage
     # Create a TGM
     tgmOrigin = origin(10, 10, 0)

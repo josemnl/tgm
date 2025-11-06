@@ -1,10 +1,11 @@
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
-from scipy.interpolate import RectBivariateSpline
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
+
 from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap, pose, position, orientation
+from gridMap import gridMap
+from spatial import pose, position, orientation
 
 def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range):
     # Remove the no-return scans from scan

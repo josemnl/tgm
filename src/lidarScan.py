@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from GroundSeg import ground_seg
-from gridMap import pose, position, orientation
+from spatial import pose, orientation
 
 class lidarScan:
     def __init__(self, angles, ranges, labels=None):

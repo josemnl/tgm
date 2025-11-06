@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
-from gridMap import gridMap, frame, origin, size, position, pose, orientation
+from spatial import frame, origin, size, position, pose, orientation
 
 def run(logID, conf):
     # Print logID

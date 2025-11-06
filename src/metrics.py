@@ -1,5 +1,6 @@
-from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap, pose, position, orientation, size, frame, origin
+from lidarScan import lidarScan
+from gridMap import gridMap
+from spatial import pose, position, orientation, size, frame, origin
 import numpy as np
 from utilities import read3DLabledLidarBIN, loadConfigAsDict
 from sensorModel import sensorModel

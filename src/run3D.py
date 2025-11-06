@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
 from sensorModel import sensorModel3D
 from TGM import TGM
 from SLAM import lsqnl_matching3D
-from gridMap import gridMap, frame, origin, size, position, pose, orientation
+from spatial import position, orientation, pose, frame, origin, size
 
 def run3D(logID, conf):
     # Print logID

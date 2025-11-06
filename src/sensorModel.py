@@ -1,6 +1,6 @@
-from typing import Optional
 import numpy as np
-from gridMap import gridMap, frame, origin, size, pose, position, orientation
+from gridMap import gridMap
+from spatial import frame, origin, size, pose, position, orientation
 from lidarScan import lidarScan, lidarScan3D
 import time
 from utilities import read3DLidarCSV
