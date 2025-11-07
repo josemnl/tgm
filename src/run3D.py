@@ -4,7 +4,7 @@ import time
 import os
 
 from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel3D
+from sensorModel import sensorModel3D, sensorModel3DGPU
 from TGM import TGM
 from SLAM import lsqnl_matching3D
 from spatial import position, orientation, pose, frame, origin, size
@@ -27,7 +27,7 @@ def run3D(logID, conf):
     smOrigin = origin(conf.origin[0], conf.origin[1], conf.origin[2])
     # Create the frame around the initial position
     smFrame = frame.frameAroundPosition(x_0.position, sMsize, conf.resolution)
-    sM = sensorModel3D(smFrame, conf.invModel, conf.occPrior)
+    sM = sensorModel3DGPU(smFrame, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], conf.origin[2])
     tgmSize = size(conf.width, conf.height, conf.depth)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
@@ -46,6 +46,7 @@ def run3D(logID, conf):
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
 
         # IMPORT SENSOR DATA
+        time_1 = time.time()
         if conf.lidarFormat == 'CSV':
             z_t_3D = read3DLidarCSV(conf.lidarPath + "z_" + str(i) + ".csv")
         elif conf.lidarFormat == 'BIN':
@@ -53,16 +54,8 @@ def run3D(logID, conf):
         else:
             raise ValueError('Invalid lidar format')
 
-        # Convert point cloud to adjust for coordinate frame:
-        # In the original data, the sensor faces towards +X, +Y is right, +Z is downward
-        # We want the sensor to face towards +X, +Y to be left, +Z to be upward
-        #z_t_3D.points3D[:, 0] = -z_t_3D.points3D[:, 0]
-        #z_t_3D.points3D[:, 1] = -z_t_3D.points3D[:, 1]
-        #z_t_3D.points3D[:, 2] = -z_t_3D.points3D[:, 2]
-
-        #z_t_3D.plot()
-
         # FILTER POINT CLOUD
+        time_2 = time.time()
         z_t_3D.removeClosePoints(conf.minDistance)
         z_t_3D.removeFarPoints(conf.maxDistance)
         print(conf.skyThreshold)
@@ -73,7 +66,8 @@ def run3D(logID, conf):
         if conf.isVoxelGridFilter:
             z_t_3D.voxelGridFilter(conf.voxelGridSize)
 
-        # Compute robot pose with SLAM or get it from log
+        # COMPUTE CURRENT POSE x_t
+        time_3 = time.time()
         if not conf.isSLAM:
             x_t = readPose(conf.lidarPath + str(i).zfill(6) + ".csv")
             # Apply transformation from world to base link and from base link to sensor
@@ -98,7 +92,8 @@ def run3D(logID, conf):
         
         print('Current pose at time step ' + str(i) + ': (' + str(x_t.position.x) + ', ' + str(x_t.position.y) + ', ' + str(x_t.position.z) + '), with orientation (' + str(x_t.orientation.roll) + ', ' + str(x_t.orientation.pitch) + ', ' + str(x_t.orientation.yaw) + ')')
 
-        # Compute instantaneous grid map with inverse sensor model
+        # GENERATE GRID MAP FROM POINT CLOUD
+        time_4 = time.time()
         sM.updateBasedOnPose(x_t)
         gm = sM.generateGridMap(z_t_3D, x_t)
 
@@ -111,10 +106,12 @@ def run3D(logID, conf):
             print('New TGM frame: origin (' + str(newFrame.origin.x) + ', ' + str(newFrame.origin.y) + ', ' + str(newFrame.origin.z) + ') with size (' + str(newFrame.size.w) + ', ' + str(newFrame.size.h) + ', ' + str(newFrame.size.d) + ') and resolution ' + str(newFrame.r))
             tgm.reshape(newFrame)
 
-        # Update TGM
+        # UPDATE TGM WITH THE NEW GRID MAP
+        time_5 = time.time()
         tgm.update(gm, x_t)
 
-        # Plot maps
+        # PLOT CURRENT FRAME
+        time_6 = time.time()
         fig.clear()
         # Compute the frame for the plot
         if conf.videoSection == 'Full':
@@ -129,6 +126,20 @@ def run3D(logID, conf):
             plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
         print('Plotting frame at origin (' + str(plotFrame.origin.x) + ', ' + str(plotFrame.origin.y) + ', ' + str(plotFrame.origin.z) + ') with size (' + str(plotFrame.size.w) + ', ' + str(plotFrame.size.h) + ', ' + str(plotFrame.size.d) + ') and resolution ' + str(plotFrame.r))
         tgm.plot3D(fig, plotFrame, isPause=False, value_min = 0.7, value_max = 1.0)
+        time_7 = time.time()
+
+        # Print timing information
+        print('Timing information for time step ' + str(i) + ':')
+        print('Time taken for each step:')
+        print('1. Point cloud import: ' + str(time_2 - time_1) + ' seconds')
+        print('2. Point cloud filtering: ' + str(time_3 - time_2) + ' seconds')
+        print('3. Pose computation: ' + str(time_4 - time_3) + ' seconds')
+        print('4. Grid map generation: ' + str(time_5 - time_4) + ' seconds')
+        print('5. TGM update: ' + str(time_6 - time_5) + ' seconds')
+        print('6. Plotting: ' + str(time_7 - time_6) + ' seconds')
+        print('Total time for time step ' + str(i) + ': ' + str(time_7 - time_1) + ' seconds')
+        print('Total time without plotting for time step ' + str(i) + ': ' + str(time_6 - time_1) + ' seconds')
+        print('-------------------------------------')
 
         # Pause indefinitely for every i multiple of 50
         if (i - conf.initialTimeStep) % 100 == 0 and i != conf.initialTimeStep:

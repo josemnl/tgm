@@ -1,4 +1,5 @@
 import numpy as np
+import cupy as cp
 from gridMap import gridMap
 from spatial import frame, origin, size, pose, position, orientation
 from lidarScan import lidarScan, lidarScan3D
@@ -196,7 +197,6 @@ class sensorModel3D:
         if not self.frame.in_bounds(sx, sy, sz):
             # Error: sensor origin out of bounds
             raise ValueError("Sensor origin out of bounds of the grid map.")
-
         # Transform 3D points from world to grid indices using world_to_idx
         grid_pts = np.array([self.frame.world_to_idx(p[0], p[1], p[2]) for p in z_t_world.points3D])
 
@@ -207,9 +207,8 @@ class sensorModel3D:
         # Mark free cells along the rays
         for p in grid_pts:
             ex, ey, ez = p
-            # Vectorized, dominant-axis integer-index line (like your 2D insertRay)
             self.insertRay3D((sx, sy, sz), (ex, ey, ez), self.invModel[0])
-            
+
         # Mark occupied endpoints
         self.data[grid_pts[:, 0], grid_pts[:, 1], grid_pts[:, 2]] = self.invModel[1]
 
@@ -222,21 +221,20 @@ class sensorModel3D:
         dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
         adx, ady, adz = abs(dx), abs(dy), abs(dz)
 
-        # Choose dominant axis
+        # Choose dominant axis and compute coordinates by proportional mapping with floor
         if adx >= ady and adx >= adz:
-            # March in x (vectorized)
+            # March in x
             if dx == 0:
                 x_coords = np.array([x1], dtype=int)
             else:
                 step = 1 if dx > 0 else -1
                 x_coords = np.arange(x1, x2 + step, step, dtype=int)
-            # y,z by integer division (floor) to avoid floating drift
             if dx != 0:
                 y_coords = np.floor(y1 + (dy * (x_coords - x1) / dx)).astype(int)
                 z_coords = np.floor(z1 + (dz * (x_coords - x1) / dx)).astype(int)
             else:
-                y_coords = np.array([y1], dtype=int).repeat(len(x_coords))
-                z_coords = np.array([z1], dtype=int).repeat(len(x_coords))
+                y_coords = np.array([y1], dtype=int).repeat(x_coords.size)
+                z_coords = np.array([z1], dtype=int).repeat(x_coords.size)
         elif ady >= adx and ady >= adz:
             # March in y
             if dy == 0:
@@ -248,8 +246,8 @@ class sensorModel3D:
                 x_coords = np.floor(x1 + (dx * (y_coords - y1) / dy)).astype(int)
                 z_coords = np.floor(z1 + (dz * (y_coords - y1) / dy)).astype(int)
             else:
-                x_coords = np.array([x1], dtype=int).repeat(len(y_coords))
-                z_coords = np.array([z1], dtype=int).repeat(len(y_coords))
+                x_coords = np.array([x1], dtype=int).repeat(y_coords.size)
+                z_coords = np.array([z1], dtype=int).repeat(y_coords.size)
         else:
             # March in z
             if dz == 0:
@@ -261,24 +259,182 @@ class sensorModel3D:
                 x_coords = np.floor(x1 + (dx * (z_coords - z1) / dz)).astype(int)
                 y_coords = np.floor(y1 + (dy * (z_coords - z1) / dz)).astype(int)
             else:
-                x_coords = np.array([x1], dtype=int).repeat(len(z_coords))
-                y_coords = np.array([y1], dtype=int).repeat(len(z_coords))
+                x_coords = np.array([x1], dtype=int).repeat(z_coords.size)
+                y_coords = np.array([y1], dtype=int).repeat(z_coords.size)
 
-        # Bounds mask (avoid IndexError)
+        # Bounds mask
         inb = (
             (0 <= x_coords) & (x_coords < self.frame.size.w) &
             (0 <= y_coords) & (y_coords < self.frame.size.h) &
             (0 <= z_coords) & (z_coords < self.frame.size.d)
         )
-
         xi, yi, zi = x_coords[inb], y_coords[inb], z_coords[inb]
 
         if valueCondition is None:
             self.data[xi, yi, zi] = value
         else:
-            # Only write if none of the traversed cells equal valueCondition (as in 2D)
             if np.all(self.data[xi, yi, zi] != valueCondition):
                 self.data[xi, yi, zi] = value
+
+class sensorModel3DGPU:
+    def __init__(self, smFrame: frame, invModel, occPrior: float):
+        assert isinstance(smFrame, frame)
+        assert smFrame.size.d > 0
+        self.frame = smFrame
+        self.invModel = invModel          # [free_val, occ_val]
+        self.occPrior = occPrior
+        self.data = cp.ones(
+            (self.frame.size.w, self.frame.size.h, self.frame.size.d), dtype=cp.float32
+        ) * self.occPrior
+
+        # Raw CUDA kernel: each thread carves one ray using dominant-axis parametric stepping
+        self._carve_kernel = cp.RawKernel(r'''
+        extern "C" __global__
+        void carve(int N,
+                   const int sx, const int sy, const int sz,
+                   const int* __restrict__ ex,
+                   const int* __restrict__ ey,
+                   const int* __restrict__ ez,
+                   float* __restrict__ grid,
+                   const int W, const int H, const int D,
+                   const float free_val)
+        {
+            int i = blockDim.x * blockIdx.x + threadIdx.x;
+            if (i >= N) return;
+
+            int x0 = sx, y0 = sy, z0 = sz;
+            int x1 = ex[i], y1 = ey[i], z1 = ez[i];
+
+            int dx = x1 - x0;
+            int dy = y1 - y0;
+            int dz = z1 - z0;
+            int adx = dx >= 0 ? dx : -dx;
+            int ady = dy >= 0 ? dy : -dy;
+            int adz = dz >= 0 ? dz : -dz;
+
+            if (adx >= ady && adx >= adz) {
+                int step = (dx > 0) ? 1 : (dx < 0 ? -1 : 0);
+                if (step == 0) {
+                    // Single voxel ray
+                    if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && z0 >= 0 && z0 < D) {
+                        int idx = ((x0 * H) + y0) * D + z0;
+                        grid[idx] = free_val;
+                    }
+                } else {
+                    for (int x = x0;; x += step) {
+                        double ry = ((double)dy * (double)(x - x0)) / (double)dx;
+                        double rz = ((double)dz * (double)(x - x0)) / (double)dx;
+                        int y = (int)floor((double)y0 + ry);
+                        int z = (int)floor((double)z0 + rz);
+                        if (x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < D) {
+                            int idx = ((x * H) + y) * D + z;
+                            grid[idx] = free_val;
+                        }
+                        if (x == x1) break;
+                    }
+                }
+            } else if (ady >= adx && ady >= adz) {
+                int step = (dy > 0) ? 1 : (dy < 0 ? -1 : 0);
+                if (step == 0) {
+                    if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && z0 >= 0 && z0 < D) {
+                        int idx = ((x0 * H) + y0) * D + z0;
+                        grid[idx] = free_val;
+                    }
+                } else {
+                    for (int y = y0;; y += step) {
+                        double rx = ((double)dx * (double)(y - y0)) / (double)dy;
+                        double rz = ((double)dz * (double)(y - y0)) / (double)dy;
+                        int x = (int)floor((double)x0 + rx);
+                        int z = (int)floor((double)z0 + rz);
+                        if (x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < D) {
+                            int idx = ((x * H) + y) * D + z;
+                            grid[idx] = free_val;
+                        }
+                        if (y == y1) break;
+                    }
+                }
+            } else {
+                int step = (dz > 0) ? 1 : (dz < 0 ? -1 : 0);
+                if (step == 0) {
+                    if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && z0 >= 0 && z0 < D) {
+                        int idx = ((x0 * H) + y0) * D + z0;
+                        grid[idx] = free_val;
+                    }
+                } else {
+                    for (int z = z0;; z += step) {
+                        double rx = ((double)dx * (double)(z - z0)) / (double)dz;
+                        double ry = ((double)dy * (double)(z - z0)) / (double)dz;
+                        int x = (int)floor((double)x0 + rx);
+                        int y = (int)floor((double)y0 + ry);
+                        if (x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < D) {
+                            int idx = ((x * H) + y) * D + z;
+                            grid[idx] = free_val;
+                        }
+                        if (z == z1) break;
+                    }
+                }
+            }
+        }
+        ''', 'carve')
+
+    def updateBasedOnPose(self, x_t: pose):
+        ox = int((x_t.position.x / self.frame.r) - (self.frame.size.w / 2))
+        oy = int((x_t.position.y / self.frame.r) - (self.frame.size.h / 2))
+        oz = int((x_t.position.z / self.frame.r) - (self.frame.size.d / 2))
+        self.frame.origin = origin(ox, oy, oz)
+
+    def generateGridMap(self, z_t: lidarScan3D, x_t: pose) -> gridMap:
+        # Reset
+        self.data.fill(self.occPrior)
+
+        # Transform points (ensure CuPy)
+        pts_world = z_t.transform(x_t).points3D
+        if not isinstance(pts_world, cp.ndarray):
+            pts_world = cp.asarray(pts_world)
+
+        # Convert to voxel indices
+        rx = (pts_world[:, 0] / self.frame.r) - self.frame.origin.x
+        ry = (pts_world[:, 1] / self.frame.r) - self.frame.origin.y
+        rz = (pts_world[:, 2] / self.frame.r) - self.frame.origin.z
+
+        # Match CPU indexing (frame.world_to_idx uses np.round), so use cp.rint here
+        ix = cp.rint(rx).astype(cp.int32)
+        iy = cp.rint(ry).astype(cp.int32)
+        iz = cp.rint(rz).astype(cp.int32)
+
+        inb = (ix >= 0) & (ix < self.frame.size.w) & \
+              (iy >= 0) & (iy < self.frame.size.h) & \
+              (iz >= 0) & (iz < self.frame.size.d)
+
+        ix = ix[inb]
+        iy = iy[inb]
+        iz = iz[inb]
+
+        if ix.size == 0:
+            return gridMap(self.frame, self.data)
+
+        sx, sy, sz = self.frame.world_to_idx(x_t.position.x, x_t.position.y, x_t.position.z)
+        if not self.frame.in_bounds(sx, sy, sz):
+            raise ValueError("Sensor origin out of bounds.")
+
+        # Launch carve kernel
+        N = ix.size
+        threads = 256
+        blocks = (N + threads - 1) // threads
+        self._carve_kernel((blocks,), (threads,),
+                           (N,
+                            cp.int32(sx), cp.int32(sy), cp.int32(sz),
+                            ix, iy, iz,
+                            self.data.ravel(),
+                            cp.int32(self.frame.size.w),
+                            cp.int32(self.frame.size.h),
+                            cp.int32(self.frame.size.d),
+                            cp.float32(self.invModel[0])))
+
+        # Mark endpoints occupied (scatter)
+        self.data[ix, iy, iz] = cp.float32(self.invModel[1])
+
+        return gridMap(self.frame, self.data)
 
 def main():
     # Test 2D sensor model
@@ -317,13 +473,39 @@ def main():
 
     z_t_3D.voxelGridFilter(resolution)
 
+    # print number of points
+    print("Number of points after voxel grid filter:", z_t_3D.points3D.shape[0])
+
     z_t_3D.plot()
 
     x_t = pose(position(25, 25, 2.0), orientation(0.0, 0.0, 0.0))
     start = time.time()
     gm = sM.generateGridMap(z_t_3D, x_t)
-    print(time.time() - start)
+    print('Time taken (CPU):', time.time() - start)
     gm.plot3D_scatter(isPause=True, value_min=0.6, value_max=1.0)
+
+    # Test 3D sensor model on GPU
+    sM_gpu = sensorModel3DGPU(frame(smOrigin, smSize, resolution), invModel, occPrior)
+
+    start = time.time()
+    gm_gpu = sM_gpu.generateGridMap(z_t_3D, x_t)
+    print('Time taken (GPU):', time.time() - start)
+    gm_gpu.plot3D_scatter(isPause=True, value_min=0.6, value_max=1.0)
+
+    # Compute the difference between CPU and GPU results
+    diff = np.abs(gm.data - cp.asnumpy(gm_gpu.data))
+    print('Max difference between CPU and GPU results:', np.max(diff))
+    # Diagnostic counts
+    cpu_grid = gm.data
+    gpu_grid = cp.asnumpy(gm_gpu.data)
+    differing = np.where(np.abs(cpu_grid - gpu_grid) > 1e-6)
+    print('Total differing voxels:', differing[0].size)
+    if differing[0].size > 0:
+        # Show distribution of CPU values where they differ
+        unique_cpu, counts_cpu = np.unique(cpu_grid[differing], return_counts=True)
+        unique_gpu, counts_gpu = np.unique(gpu_grid[differing], return_counts=True)
+        print('CPU differing value counts:', dict(zip(unique_cpu, counts_cpu)))
+        print('GPU differing value counts:', dict(zip(unique_gpu, counts_gpu)))
 
 if __name__ == '__main__':
     main()
