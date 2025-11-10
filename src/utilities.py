@@ -5,8 +5,7 @@ from lidarScan import lidarScan, lidarScan3D
 import yaml
 import pandas as pd
 from types import SimpleNamespace
-from gridMap import pose
-from spatial import position, orientation
+from spatial import position, orientation, pose
 
 def readPose(file):
     """Read a single-line pose CSV file.
