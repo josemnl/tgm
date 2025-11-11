@@ -14,7 +14,7 @@ def run(logID, conf):
     # Print logID
     print('Running ' + logID)
     # Paths
-    videoPath = '/media/jmgs/T7-Jose/FINAL-results/' + logID + '/'
+    videoPath = './results/' + logID + '/'
 
     # Create results folder if it does not exist
     if not os.path.exists(videoPath):
@@ -280,18 +280,6 @@ def run(logID, conf):
 
             # Compute the snow cells that had been removed by the baseline + TGM
             gm_removed_by_baseline_and_tgm = gm_removed_by_baseline.union(gm_removed_by_tgm)
-
-            '''
-            # Plot the grids
-            fig.clear()
-            # Redraw the figure
-            plt.show()
-            print('Snow original')
-            gm_original_snow.plot(isPause=True)
-            fig.clear()
-            print('Snow removed baseline')
-            gm_removed_by_baseline.plot(isPause=True)
-            '''
 
             # Compute metrics baseline / original
             intersection_b, union_b, IoU_b, precision_b, recall_b, f1_b = classificationMetrics(gm_original_snow, gm_removed_by_baseline)

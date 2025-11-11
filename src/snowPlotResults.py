@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from utilities import loadConfigAsDict
 
-RESULTS_ROOT = 'D:/FINAL-results/'
-META_RESULTS_FOLDER = 'D:/FINAL-meta/'
+RESULTS_ROOT = './results/'
+META_RESULTS_FOLDER = './meta results/'
 
 VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
 
@@ -43,28 +43,6 @@ def detailedPlot():
 
             # Define the folder
             folder = RESULTS_ROOT + logID + '/'
-            
-            '''
-            # Load files
-            with open(folder + 'nWrongSnowGrids_original.csv') as f:
-                nWrongSnowGrids_original = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'nWrongSnowGrids_baseline.csv') as f:
-                nWrongSnowGrids_baseline = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'nWrongSnowGrids_tgm.csv') as f:
-                nWrongSnowGrids_TGM = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'IoU.csv') as f:
-                IoU = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'Intersection.csv') as f:
-                Intersection = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'Union.csv') as f:
-                Union = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'Precision.csv') as f:
-                Precision = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'Recall.csv') as f:
-                Recall = np.array([line.split(",") for line in f]).astype(float)
-            with open(folder + 'F1.csv') as f:
-                F1 = np.array([line.split(",") for line in f]).astype(float)
-            '''
 
             # Load files
             with open(folder + 'IoU_b.csv') as f:
@@ -85,60 +63,6 @@ def detailedPlot():
                 F1_t = np.array([line.split(",") for line in f]).astype(float)
             with open(folder + 'IoU_t_b.csv') as f:
                 IoU_t_b = np.array([line.split(",") for line in f]).astype(float)
-
-            '''
-            # Plot the nWrongSnowGrids
-            plt.plot(nWrongSnowGrids_original, label='Unfiltered')
-            plt.plot(nWrongSnowGrids_baseline, label=str(filter))
-            plt.plot(nWrongSnowGrids_TGM, label=str(filter) + ' + TGM')
-            plt.legend()
-            plt.ylim(0, max(max(nWrongSnowGrids_original), max(nWrongSnowGrids_baseline), max(nWrongSnowGrids_TGM)))
-            plt.xlim(0, len(nWrongSnowGrids_original))
-            plt.gcf().set_size_inches(20, 2.5)
-            plt.savefig(META_RESULTS_FOLDER + logID + '_nWrongSnowGrids.png')
-            plt.savefig(META_RESULTS_FOLDER + logID + '_nWrongSnowGrids.svg', format='svg', dpi=1200)
-
-            # Clear the plot
-            plt.clf()
-            
-            # Plot the IoU
-            plt.plot(IoU, color='black')
-            plt.ylim(0, 1)
-            plt.xlim(0, len(IoU))
-            plt.gcf().set_size_inches(20, 2.5)
-            plt.savefig(META_RESULTS_FOLDER + logID + '_IoU.png')
-            plt.savefig(META_RESULTS_FOLDER + logID + '_IoU.svg', format='svg', dpi=1200)
-
-            # Clear the plot
-            plt.clf()
-
-            # Plot precision, recall and F1
-            plt.plot(Precision, label='Precision')
-            plt.plot(Recall, label='Recall')
-            plt.plot(F1, label='F1')
-            plt.legend()
-            plt.ylim(0, 1)
-            plt.xlim(0, len(Precision))
-            plt.gcf().set_size_inches(20, 2.5)
-            plt.savefig(META_RESULTS_FOLDER + logID + '_metrics.png')
-            plt.savefig(META_RESULTS_FOLDER + logID + '_metrics.svg', format='svg', dpi=1200)
-
-            # clear the plot
-            plt.clf()
-
-            # Plot f1 and IoU
-            plt.plot(F1, label='F1')
-            plt.plot(IoU, label='IoU')
-            plt.legend()
-            plt.ylim(0, 1)
-            plt.xlim(0, len(F1))
-            plt.gcf().set_size_inches(20, 2.5)
-            plt.savefig(META_RESULTS_FOLDER + logID + '_f1_iou.png')
-            plt.savefig(META_RESULTS_FOLDER + logID + '_f1_iou.svg', format='svg', dpi=1200)
-
-            # Clear the plot
-            plt.clf()
-            '''
 
             # NEW METRICS
             # IoU baseline/unfiltered vs IoU TGM/unfiltered

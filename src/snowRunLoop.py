@@ -4,9 +4,7 @@ import os
 import copy
 import concurrent.futures
 
-#DATASET_ROOT = './snowyKITTI/dataset/sequences/'
-#DATASET_ROOT = 'D:/snowyKITTI/dataset/sequences/'
-DATASET_ROOT = '/media/jmgs/T7-Jose/snowyKITTI/dataset/sequences/'
+DATASET_ROOT = './snowyKITTI/dataset/sequences/'
 
 VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
 
@@ -14,7 +12,7 @@ FILTERS = ['ROR', 'SOR', 'DROR']
 
 MAX_WORKERS = 12
 
-IS_PARALLEL = True
+IS_PARALLEL = False
 
 def snowRunLoop():
     configPath = './config/'
