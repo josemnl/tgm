@@ -391,10 +391,6 @@ def sensitivityPlot():
         # PRECISION RECALL PLOT
         ##############################################################################################################
 
-        # Swap the mean precision for mean recall and vice versa due to previous code
-        meanPrecision_t, meanRecall_t = meanRecall_t, meanPrecision_t
-        meanPrecision_b, meanRecall_b = meanRecall_b, meanPrecision_b
-
         # Plot precision vs recall
         plt.plot(meanRecall_t, meanPrecision_t, label=filter + ' + TGM / unfiltered', marker='s', color='red')
         plt.plot(meanRecall_b, meanPrecision_b, label=filter + ' / unfiltered', marker='o', color='blue')

@@ -51,8 +51,8 @@ def classificationMetrics(gM1, gM2, verbose=False):
     IoU = intersection_sum / union_sum
 
     # Compute precision and recall (gM1 is the ground truth)
-    precision = intersection_sum / np.sum(gM1.data)
-    recall = intersection_sum / np.sum(gM2.data)
+    precision = intersection_sum / np.sum(gM2.data)
+    recall = intersection_sum / np.sum(gM1.data)
 
     # Compute F1 score
     f1 = 2 * (precision * recall) / (precision + recall)
