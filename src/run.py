@@ -124,7 +124,7 @@ def run(logID, conf):
 
         # Compute robot pose with SLAM or get it from log
         if not conf.isSLAM:
-            x_t = readPose(conf.lidarPath + "../snow_pose/" + "x_" + str(i).zfill(6) + ".csv")
+            x_t = readPose(conf.posePath + "x_" + str(i).zfill(6) + ".csv")
         elif i <= conf.initialTimeStep + conf.numTimeStepsSLAM:
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")

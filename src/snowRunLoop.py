@@ -5,6 +5,7 @@ import copy
 import concurrent.futures
 
 DATASET_ROOT = './snowyKITTI/dataset/sequences/'
+POSES_ROOT = './snowyKITTI_poses/'
 
 VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
 
@@ -33,6 +34,7 @@ def snowRunLoop():
         # Update the paths for the lidar and the labels
         conf.lidarPath = DATASET_ROOT + str(log).zfill(2) + '/snow_velodyne/'
         conf.labelPath = DATASET_ROOT + str(log).zfill(2) + '/snow_labels/'
+        conf.posePath = POSES_ROOT + str(log).zfill(2) + '/snow_pose/'
 
         # Update the simulation horizon
         files = [f for f in os.listdir(conf.lidarPath) if f.endswith('.bin')]
