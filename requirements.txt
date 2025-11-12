@@ -1,6 +1,11 @@
-numpy
-cupy
-scipy
-matplotlib
-scikit-image
+numpy<2.3.0          # Compatible with opencv-python wheels; 2.2.x tested
+scipy>=1.10          # Signal/optimize/interpolate used; 1.16.x tested
+matplotlib>=3.8
+PyQt5>=5.15.11       # Qt5Agg backend
+scikit-image>=0.22
 opencv-python
+PyYAML
+pandas
+# CuPy NOT pinned: install matching wheel separately, e.g.:
+#   pip install cupy-cuda12x   (for CUDA 12.x)
+#   pip install cupy-cuda11x   (for CUDA 11.x)
