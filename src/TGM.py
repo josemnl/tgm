@@ -4,9 +4,16 @@ from matplotlib.image import imsave
 from gridMap import gridMap, frame
 from skimage.morphology import disk
 from scipy.signal import convolve2d, fftconvolve
-from cupyx.scipy.signal import convolve2d as cp_convolve2d
-from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
-import cupy as cp
+try:
+    from cupyx.scipy.signal import convolve2d as cp_convolve2d
+    from cupyx.scipy.signal import fftconvolve as cp_fftconvolve
+    import cupy as cp
+    _cupy_available = True
+except ImportError:
+    cp = None
+    cp_convolve2d = None
+    cp_fftconvolve = None
+    _cupy_available = False
 import matplotlib
 matplotlib.use('Qt5Agg')
 
@@ -38,7 +45,7 @@ class TGM:
         self.x_t = []
         self.prev_region = [0, 0, 0, 0]
 
-        self.GPU = isGPU
+        self.GPU = isGPU and _cupy_available
         if self.GPU:
             self.staticMap.data = cp.asarray(self.staticMap.data)
             self.dynamicMap.data = cp.asarray(self.dynamicMap.data)

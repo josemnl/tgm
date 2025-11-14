@@ -2,8 +2,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import cv2
-import cupy as cp
-from typing import Tuple, Union
+try:
+    import cupy as cp
+    _cupy_available = True
+except ImportError:
+    cp = None
+    _cupy_available = False
+from typing import Tuple, Union, Any
 
 class frame:
     def __init__(self, origin_x: int, origin_y: int, width: int, height: int, resolution: float):
@@ -49,7 +54,7 @@ class frame:
         return cls(origin_x, origin_y, width, height, resolution)
 
 class gridMap:
-    def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
+    def __init__(self, gridFrame: frame, data: Union[np.ndarray, Any]):
         """
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
@@ -59,14 +64,14 @@ class gridMap:
 
     @property
     def isGPU(self) -> bool:
-        return isinstance(self.data, cp.ndarray)
+        return _cupy_available and isinstance(self.data, cp.ndarray)
     
     @property
     def isBool(self) -> bool:
         return self.data.dtype == bool
 
     def toCPU(self) -> 'gridMap':
-        if self.isGPU:
+        if self.isGPU and cp is not None:
             return gridMap(self.frame, cp.asnumpy(self.data))
         return self
     

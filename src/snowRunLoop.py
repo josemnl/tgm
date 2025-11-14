@@ -4,6 +4,13 @@ import os
 import copy
 import concurrent.futures
 
+# Check if CuPy is available
+try:
+    import cupy as cp
+    _cupy_available = True
+except ImportError:
+    _cupy_available = False
+
 DATASET_ROOT = './snowyKITTI/dataset/sequences/'
 POSES_ROOT = './snowyKITTI_poses/'
 
@@ -27,6 +34,12 @@ def snowRunLoop():
 
     # Update default config file with specific config file
     conf.__dict__.update(specificConf.__dict__)
+    
+    # Check for GPU configuration mismatch
+    if hasattr(conf, 'isGPU') and conf.isGPU and not _cupy_available:
+        print("⚠ WARNING: Config has isGPU=True but CuPy is not installed.")
+        print("  → Code will run in CPU mode. Install CuPy for GPU acceleration.")
+        print()
 
     tasks = []
 
