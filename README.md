@@ -66,9 +66,16 @@ python -c "import matplotlib; matplotlib.use('Qt5Agg'); import matplotlib.pyplot
 
 ## Run
 
+Run the main processing loop (generates TGM maps and applies snow filters):
 ```powershell
 python .\src\snowRunLoop.py
 ```
+
+Generate analysis plots and metrics from results:
+```powershell
+python .\src\snowPlotResults.py
+```
+This produces detailed plots, sensitivity analysis, and summary tables from the data in `./results/`.
 
 **Note**: If config has `isGPU: true` but CuPy is not installed, the code will automatically fall back to CPU mode with a warning.
 
