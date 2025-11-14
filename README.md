@@ -21,8 +21,8 @@ pip install -r requirements.txt
 ```
 
 ### GPU (recommended) vs CPU
-- GPU requires NVIDIA driver with CUDA 12.x support and CUDA Toolkit 12.8 installed (Math Libraries).
-- CPU mode works without CUDA/CuPy (slower). Set `isGPU: false` in your config.
+- **GPU mode** requires NVIDIA driver with CUDA 12.x support and CUDA Toolkit 12.8 installed (Math Libraries), plus CuPy.
+- **CPU mode** works without CUDA/CuPy (slower). Set `isGPU: false` in your config and skip GPU Setup steps.
 
 ## GPU Setup (Windows)
 
@@ -57,11 +57,13 @@ python -c "import matplotlib; matplotlib.use('Qt5Agg'); import matplotlib.pyplot
 
 ## Dataset & Config
 
-- Place the SnowyKITTI data under `snowyKITTI/dataset/sequences/` and poses under `snowyKITTI_poses/<sequence>/`.
-- Use `config/config.yaml` (and any experiment-specific yaml) to set:
-	- `isGPU: true|false` to select GPU/CPU
-	- LiDAR paths (`lidarPath`, `labelPath`) and video/output settings
-	- Snow filters (ROR/SOR/DROR/DSOR) parameters
+- Download and extract the SnowyKITTI dataset to the repository root (the first point cloud is expected at `./snowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin`).
+- Place pose data under `snowyKITTI_poses/<sequence>/` in the repository root.
+- Configure via `config/config.yaml` (and experiment-specific YAML like `config/snowyKitti.yaml`):
+	- `isGPU: true|false` — GPU acceleration (requires CuPy) or CPU mode
+	- LiDAR paths (`lidarPath`, `labelPath`, `posePath`)
+	- Video/output settings (`saveVideo`, `saveSvg`, `videoSection`)
+	- Snow filter parameters (ROR/SOR/DROR/DSOR: `k`, `r`, `s`, `rho`)
 
 ## Run
 
@@ -69,7 +71,7 @@ python -c "import matplotlib; matplotlib.use('Qt5Agg'); import matplotlib.pyplot
 python .\src\snowRunLoop.py
 ```
 
-If you want CPU mode only (no CUDA/CuPy install): set `isGPU: false` in your config and skip the GPU Setup and CuPy install.
+**Note**: If config has `isGPU: true` but CuPy is not installed, the code will automatically fall back to CPU mode with a warning.
 
 ## Troubleshooting
 
@@ -98,5 +100,6 @@ If you want CPU mode only (no CUDA/CuPy install): set `isGPU: false` in your con
 
 ## Notes
 
-- Do not pin `cupy` in `requirements.txt`. Users must select the correct wheel for their CUDA version.
-- For CI or headless servers, consider CPU mode (`isGPU: false`) or add a small launcher that calls `os.add_dll_directory(CUDA_BIN)` before CuPy imports on Windows.
+- **CuPy is not in `requirements.txt`** — users must install the correct wheel for their CUDA version (e.g., `cupy-cuda12x` for CUDA 12.x).
+- The code automatically falls back to CPU mode if CuPy is unavailable, even when `isGPU: true` is set.
+- For CI or headless servers, use CPU mode (`isGPU: false`) or ensure CUDA DLLs are on PATH before imports.
