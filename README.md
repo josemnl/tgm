@@ -58,7 +58,6 @@ python -c "import matplotlib; matplotlib.use('Qt5Agg'); import matplotlib.pyplot
 ## Dataset & Config
 
 - Download and extract the SnowyKITTI dataset to the repository root (the first point cloud is expected at `./snowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin`).
-- Place pose data under `snowyKITTI_poses/<sequence>/` in the repository root.
 - Configure via `config/config.yaml` (and experiment-specific YAML like `config/snowyKitti.yaml`):
 	- `isGPU: true|false` — GPU acceleration (requires CuPy) or CPU mode
 	- LiDAR paths (`lidarPath`, `labelPath`, `posePath`)
