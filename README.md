@@ -8,7 +8,7 @@ Supported OS: Windows 11 (tested). Python: 3.12.
 
 ### Clone
 ```powershell
-git clone <your-public-repo-url>
+git clone https://github.com/josemnl/TGMw.git
 cd TGMp
 ```
 
