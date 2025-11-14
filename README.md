@@ -4,7 +4,9 @@ Probabilistic multi‑layer occupancy mapping for static, dynamic, and weather (
 
 ## Quickstart
 
-Supported OS: Windows 11 (tested). Python: 3.12.
+**Supported OS**: Windows 11 (tested), compatible with Linux/Ubuntu with appropriate CUDA setup. Python: 3.12.
+
+**Note**: The following instructions are Windows-specific. Linux users should adapt commands accordingly (e.g., use `source .venv/bin/activate` instead of PowerShell activation).
 
 ### Clone
 ```powershell
