@@ -26,7 +26,7 @@ def run():
     tgmOrigin = origin(0, 0, 0)
     tgmSize = size(20, 10, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, 1.0)
-    tgm = TGM(tgmFrame, [0.25, 0.25, 0.0], 1, [0, 1, 0, 1], False, False)
+    tgm = TGM(tgmFrame, [0.25, 0.25, 0.0], 1, [0, 1, 0, 1], False, True)
 
     # Initial cardinality distribution
     cadinalityDist = tgm.dynamicCardinality
@@ -38,6 +38,17 @@ def run():
 
     # Main loop
     fig= plt.figure()
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax2 = fig.add_subplot(1, 2, 2)
+
+    # Initial plots
+    cadinalityDist.plot(fig, ax2)
+    plotFrame = tgm.frame
+    tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
+
+    # Pause to view initial plots
+    plt.pause(2)
+
     for i in range(1, 106):
 
         # Load instantaneous grid map
@@ -75,10 +86,12 @@ def run():
         if isCardinality:
             tgm.dynamicRebalance(cadinalityDist)
 
-        # Plot maps
-        fig.clear()
+        # Plot cardinality distribution
+        cadinalityDist.plot(fig, ax2)
+
+        # Plot map
         plotFrame = tgm.frame
-        tgm.plot(fig, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
+        tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
 
         # Print progress
         print('Frame:   ' + str(i) + ' / ' + '106')

@@ -276,13 +276,15 @@ class TGM:
         self.dynamicMap = new_dynamic_map
 
     
-    def plot(self, fig=None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
+    def plot(self, fig=None, ax = None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
         assert style in ['combined', 'static', 'dynamic', 'weather']
         assert egoStyle in ['none', 'dot', 'rectangle']
         if frame is None:
             frame = self.frame
         if fig is None:
             fig = plt.figure()
+        if ax is None:
+            ax = fig.add_subplot(1, 1, 1)
         overlap = self.frame.computeOverlap(frame)
         staticMap = self.staticMap.crop(overlap).toCPU().data
         dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
@@ -302,7 +304,7 @@ class TGM:
             I = 1 - np.transpose(dynamicMap)
         elif style == 'weather':
             I = 1 - np.transpose(weatherMap)
-        ax = fig.add_subplot(1, 1, 1)
+        ax.clear()
         ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                 extent=(overlap.origin.x*self.frame.r, (overlap.origin.x + overlap.size.w)*self.frame.r,
                         overlap.origin.y*self.frame.r, (overlap.origin.y + overlap.size.h)*self.frame.r))

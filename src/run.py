@@ -70,6 +70,7 @@ def run(logID, conf):
 
     # Main loop
     fig= plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
         timeStart = time.time()
 
@@ -172,7 +173,7 @@ def run(logID, conf):
         timeTGM = time.time()
 
         # Plot maps
-        fig.clear()
+        #fig.clear()
         # Compute the frame for the plot
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
@@ -183,7 +184,7 @@ def run(logID, conf):
             plotOrigin = origin(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), 0)
             plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), 1)
             plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
-        tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
+        tgm.plot(fig, ax, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
         timePlot = time.time()
 
         # Special plots for snow
@@ -195,15 +196,15 @@ def run(logID, conf):
             # Create a new unfiltered tgm with the same frame
             tgm_unfiltered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_unfiltered.update(gm_unfiltered, x_t)
-            tgm_unfiltered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
+            tgm_unfiltered.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
             
             gm_filtered = sM.generateGridMap(z_t, x_t)
             fig.clear()
             tgm_filtered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_filtered.update(gm_filtered, x_t)
-            tgm_filtered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
+            tgm_filtered.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
 
-            tgm.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_tgm', style=conf.style)
+            tgm.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_tgm', style=conf.style)
 
 
         # Print progress
@@ -373,19 +374,18 @@ def run(logID, conf):
 
     # Save last frame
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID)
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID)
 
     # Save static grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_static', style='static')
-
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_static', style='static')
     # Save dynamic grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
 
     # Save weather grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
 
 if __name__ == '__main__':
     # Config file

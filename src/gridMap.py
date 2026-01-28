@@ -45,6 +45,26 @@ class discreteDist:
         else:
             normalized_probs = self.probabilities
         return discreteDist(normalized_probs, self.values)
+    
+    def plot(self, fig=None, ax=None) -> None:
+        if fig is None:
+            fig = plt.figure()
+        if ax is None:
+            ax = fig.add_subplot(1, 1, 1)
+        ax.clear()
+        # Use full-width bars without edges to avoid aliasing gaps in PNGs
+        ax.bar(
+            self.values,
+            self.probabilities,
+            width=1.0,
+            align='center',
+            alpha=1.0,
+            edgecolor='none',
+            linewidth=0,
+            antialiased=False,
+        )
+        ax.set_title('P(S = s)')
+        plt.show(block=False)
 
 class gridMap:
     def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
@@ -384,19 +404,44 @@ class gridMap:
         It is computed as a Poisson Binomial distribution, using a dynamic programming approach.
         """
         if self.isGPU:
-            p = self.data.flatten()
-            N = p.size
-            print(f"Computing cardinality for N={N} cells (GPU).")
-            cardinality = cp.zeros(N + 1, dtype=cp.float64)
-            cardinality[0] = 1.0
+            p = self.data.flatten().astype(cp.float64)
+            N = int(p.size)
+            print(f"Computing cardinality for N={N} cells (GPU, FFT).")
 
+            if N == 0:
+                return discreteDist(np.array([1.0], dtype=np.float64))
+
+            polys = []
+            one = cp.ones((), dtype=cp.float64)
             for i in range(N):
-                p_i = p[i]
-                for s in range(i + 1, 0, -1):
-                    cardinality[s] = cardinality[s] * (1 - p_i) + cardinality[s - 1] * p_i
-                cardinality[0] = cardinality[0] * (1 - p_i)
+                pi = p[i]
+                polys.append(cp.stack([one - pi, pi]).astype(cp.float64))
 
-            return discreteDist(cp.asnumpy(cardinality))
+            def fft_convolve(a: cp.ndarray, b: cp.ndarray) -> cp.ndarray:
+                total_len = int(a.size + b.size - 1)
+                n = 1 << (total_len - 1).bit_length()
+                fa = cp.fft.rfft(a, n)
+                fb = cp.fft.rfft(b, n)
+                fc = fa * fb
+                c = cp.fft.irfft(fc, n)
+                return c[:total_len]
+
+            while len(polys) > 1:
+                new_polys = []
+                for i in range(0, len(polys), 2):
+                    if i + 1 < len(polys):
+                        new_polys.append(fft_convolve(polys[i], polys[i + 1]))
+                    else:
+                        new_polys.append(polys[i])
+                polys = new_polys
+
+            cardinality_gpu = polys[0]
+            cardinality_gpu = cp.clip(cardinality_gpu, 0.0, 1.0)
+            s = cp.sum(cardinality_gpu)
+            if s > 0:
+                cardinality_gpu = cardinality_gpu / s
+
+            return discreteDist(cp.asnumpy(cardinality_gpu))
         else:
             p = self.data.flatten()
             N = p.size
