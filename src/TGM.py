@@ -7,7 +7,7 @@ from matplotlib.image import imsave
 from skimage.morphology import disk
 import matplotlib
 
-from gridMap import gridMap
+from gridMap import discreteDist, gridMap
 from spatial import frame, origin, size, pose, position, orientation
 
 matplotlib.use('Qt5Agg')
@@ -65,7 +65,7 @@ class TGM:
         self.prev_region = [0, 0, 0, 0, 0, 0]
 
     @property
-    def freeMap(self):
+    def freeMap(self) -> gridMap:
         return gridMap(self.frame, 1 - self.staticMap.data - self.dynamicMap.data - self.weatherMap.data)
 
     @property
@@ -75,6 +75,10 @@ class TGM:
     @property
     def is3D(self) -> bool:
         return self.frame.is3D
+    
+    @property
+    def dynamicCardinality(self) -> discreteDist:
+        return self.dynamicMap.cardinality()
 
     def update(self, instGridMap: gridMap, x_t: pose | None):
         assert isinstance(instGridMap, gridMap)
@@ -229,13 +233,58 @@ class TGM:
         combined_data = self.staticMap.data + self.dynamicMap.data
         return gridMap(self.frame, combined_data)
     
-    def plot(self, fig=None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
+    def dynamicRebalance(self, targetDynamicCardinality: discreteDist):
+        """
+        Rebalance the dynamic map to match the target dynamic cardinality distribution.
+        This is done without changing the static map and weather map, by adjusting only the ratio
+        between dynamic and free space in each cell. I.e., we adjust p(dynamic) / (p(dynamic) + p(free)).
+        Uses an iterative approach to adjust the value of the shift applied to the log-odds.
+        """
+        shift_low = -10.0
+        shift_high = 10.0
+        tolerance = 1e-3
+        max_iterations = 20
+
+        expected_target = targetDynamicCardinality.expected_value()
+        
+        dynamic_map = self.dynamicMap.data
+        free_map = self.freeMap.data
+        
+        for _ in range(max_iterations):
+            shift = (shift_low + shift_high) / 2.0
+            denom = dynamic_map + free_map
+            if self.GPU:
+                denom = cp.where(denom <= 0, 1e-12, denom)
+            else:
+                denom = np.where(denom <= 0, 1e-12, denom)
+            dynamic_free_ratio_map = gridMap(self.frame, dynamic_map / denom)
+            new_dynamic_free_ratio_map = dynamic_free_ratio_map.logOddShift(shift).data
+            new_dynamic_map = new_dynamic_free_ratio_map * (dynamic_map + free_map)
+
+            # Compute the cardinality distribution of the new dynamic map
+            new_dynamic_map = gridMap(self.dynamicMap.frame, new_dynamic_map)
+            expected_dynamic = new_dynamic_map.cardinality().expected_value()
+
+            if abs(expected_dynamic - expected_target) < tolerance:
+                break
+            elif expected_dynamic < expected_target:
+                shift_low = shift
+            else:
+                shift_high = shift
+
+        # Update the dynamic map
+        self.dynamicMap = new_dynamic_map
+
+    
+    def plot(self, fig=None, ax = None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
         assert style in ['combined', 'static', 'dynamic', 'weather']
         assert egoStyle in ['none', 'dot', 'rectangle']
         if frame is None:
             frame = self.frame
         if fig is None:
             fig = plt.figure()
+        if ax is None:
+            ax = fig.add_subplot(1, 1, 1)
         overlap = self.frame.computeOverlap(frame)
         staticMap = self.staticMap.crop(overlap).toCPU().data
         dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
@@ -255,7 +304,7 @@ class TGM:
             I = 1 - np.transpose(dynamicMap)
         elif style == 'weather':
             I = 1 - np.transpose(weatherMap)
-        ax = fig.add_subplot(1, 1, 1)
+        ax.clear()
         ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                 extent=(overlap.origin.x*self.frame.r, (overlap.origin.x + overlap.size.w)*self.frame.r,
                         overlap.origin.y*self.frame.r, (overlap.origin.y + overlap.size.h)*self.frame.r))
@@ -632,3 +681,21 @@ if __name__ == '__main__':
     testTGM.plot3D(isPause=True, value_min=0.01, value_max=1.0)
 
     print("data after prediction", np.array2string(np.asarray(testTGM.dynamicMap.data[:, :, 5]), formatter={'float_kind': lambda x: f"{x:.4f}"}))
+
+
+    # Test the dynamic rebalance function
+    cframe = frame(origin(0, 0, 0), size(2, 2, 1), 1.0)
+    ddata = np.array([[[0.0], [0.5]],
+                      [[0.0], [1.0]]])
+    sdata = np.array([[[0.0], [0.2]],
+                      [[0.0], [0.0]]])
+    wdata = np.array([[[0.0], [0.0]],
+                      [[0.0], [0.0]]])
+    testTGM = TGM(cframe, priors, maxVelocity=1, saturationLimits=saturationLimits, fftConv=False, isGPU=False)
+    testTGM.dynamicMap = gridMap(cframe, ddata)
+    testTGM.staticMap = gridMap(cframe, sdata)
+    testTGM.weatherMap = gridMap(cframe, wdata)
+    print("Before rebalance dynamic map data:", testTGM.dynamicMap.data[:,:,0])
+    targetDist = discreteDist([0.0, 0.0, 1.0, 0.0, 0.0])
+    testTGM.dynamicRebalance(targetDist)
+    print("After rebalance dynamic map data:", testTGM.dynamicMap.data[:,:,0])

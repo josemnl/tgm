@@ -8,6 +8,64 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from spatial import position, orientation, pose, frame, origin, size
 
+class discreteDist:
+    """
+    Base class for discrete probability distributions.
+    """
+    def __init__(self, probabilities: np.ndarray, values: np.ndarray = None):
+        # Set attributes
+        self.probabilities = probabilities
+        if values is None:
+            self.values = np.arange(len(probabilities))
+        else:
+            self.values = values
+
+    def expected_value(self) -> float:
+        """
+        Compute the expected value of the distribution.
+        E[S] = sum(s * p(S = s)) for s = 0..N
+        """
+        return np.sum(self.values * self.probabilities)
+    
+    def updateLikelihood(self, likelihoods: np.ndarray) -> 'discreteDist':
+        """
+        Update the distribution with new likelihoods using Bayes' rule.
+        p_new(S = s) = p_old(S = s) * p(likelihood | S = s) / normalization
+        """
+        updated_probs = self.probabilities * likelihoods
+        normalization = np.sum(updated_probs)
+        if normalization > 0:
+            updated_probs /= normalization
+        return discreteDist(updated_probs, self.values)
+    
+    def normalize(self) -> 'discreteDist':
+        normalization = np.sum(self.probabilities)
+        if normalization > 0:
+            normalized_probs = self.probabilities / normalization
+        else:
+            normalized_probs = self.probabilities
+        return discreteDist(normalized_probs, self.values)
+    
+    def plot(self, fig=None, ax=None) -> None:
+        if fig is None:
+            fig = plt.figure()
+        if ax is None:
+            ax = fig.add_subplot(1, 1, 1)
+        ax.clear()
+        # Use full-width bars without edges to avoid aliasing gaps in PNGs
+        ax.bar(
+            self.values,
+            self.probabilities,
+            width=1.0,
+            align='center',
+            alpha=1.0,
+            edgecolor='none',
+            linewidth=0,
+            antialiased=False,
+        )
+        ax.set_title('P(S = s)')
+        plt.show(block=False)
+
 class gridMap:
     def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
         """
@@ -339,12 +397,136 @@ class gridMap:
         plt.show(block=isPause)
         plt.pause(0.0001)
 
+    def cardinality(self) -> discreteDist:
+        """
+        Return a vector with the probability of the sum of the occupied cells being equal to each index.
+        p(S = s) for s = 0..N where N is the number of cells.
+        It is computed as a Poisson Binomial distribution, using a dynamic programming approach.
+        """
+        if self.isGPU:
+            p = self.data.flatten().astype(cp.float64)
+            N = int(p.size)
+            print(f"Computing cardinality for N={N} cells (GPU, FFT).")
+
+            if N == 0:
+                return discreteDist(np.array([1.0], dtype=np.float64))
+
+            polys = []
+            one = cp.ones((), dtype=cp.float64)
+            for i in range(N):
+                pi = p[i]
+                polys.append(cp.stack([one - pi, pi]).astype(cp.float64))
+
+            def fft_convolve(a: cp.ndarray, b: cp.ndarray) -> cp.ndarray:
+                total_len = int(a.size + b.size - 1)
+                n = 1 << (total_len - 1).bit_length()
+                fa = cp.fft.rfft(a, n)
+                fb = cp.fft.rfft(b, n)
+                fc = fa * fb
+                c = cp.fft.irfft(fc, n)
+                return c[:total_len]
+
+            while len(polys) > 1:
+                new_polys = []
+                for i in range(0, len(polys), 2):
+                    if i + 1 < len(polys):
+                        new_polys.append(fft_convolve(polys[i], polys[i + 1]))
+                    else:
+                        new_polys.append(polys[i])
+                polys = new_polys
+
+            cardinality_gpu = polys[0]
+            cardinality_gpu = cp.clip(cardinality_gpu, 0.0, 1.0)
+            s = cp.sum(cardinality_gpu)
+            if s > 0:
+                cardinality_gpu = cardinality_gpu / s
+
+            return discreteDist(cp.asnumpy(cardinality_gpu))
+        else:
+            p = self.data.flatten()
+            N = p.size
+            print(f"Computing cardinality for N={N} cells.")
+            cardinality = np.zeros(N + 1, dtype=np.float64)
+            cardinality[0] = 1.0
+
+            for i in range(N):
+                p_i = p[i]
+                for s in range(i + 1, 0, -1):
+                    cardinality[s] = cardinality[s] * (1 - p_i) + cardinality[s - 1] * p_i
+                cardinality[0] = cardinality[0] * (1 - p_i)
+
+        return discreteDist(cardinality)
+    
+    def logOddShift(self, shift: float) -> 'gridMap':
+        """
+        Apply a log-odds shift to the occupancy probabilities.
+        New probability p' = 1 - 1 / (1 + exp(logit(p) + shift))
+        where logit(p) = log(p / (1 - p))
+        """
+        eps = 1e-12
+        if self.isGPU:
+            p = cp.clip(self.data, eps, 1.0 - eps)
+            logit = cp.log(p / (1 - p))
+            logit_shifted = logit + shift
+            p_new = 1 - 1 / (1 + cp.exp(logit_shifted))
+            return gridMap(self.frame, p_new)
+        else:
+            p = np.clip(self.data, eps, 1.0 - eps)
+            logit = np.log(p / (1 - p))
+            logit_shifted = logit + shift
+            p_new = 1 - 1 / (1 + np.exp(logit_shifted))
+            return gridMap(self.frame, p_new)
+        
+    def rebalance(self, target_cardinality: discreteDist) -> 'gridMap':
+        """
+        Rebalance the grid map to match a target cardinality distribution.
+        Uses an iterative approach to adjust the value of the shift applied to the log-odds.
+        """
+        shift_low = -10.0
+        shift_high = 10.0
+        tolerance = 1e-3
+        max_iterations = 20
+
+        expected_target = target_cardinality.expected_value()
+
+        for iteration in range(max_iterations):
+            shift_mid = (shift_low + shift_high) / 2.0
+            gm_shifted = self.logOddShift(shift_mid)
+            cardinality_shifted = gm_shifted.cardinality()
+            expected_shifted = cardinality_shifted.expected_value()
+
+            if abs(expected_shifted - expected_target) < tolerance:
+                return gm_shifted
+
+            if expected_shifted < expected_target:
+                shift_low = shift_mid
+            else:
+                shift_high = shift_mid
+
+        return self.logOddShift(shift_mid)
+
     @classmethod
     def loadState(cls, filename: str, data_type: np.dtype = np.float64) -> 'gridMap':
         with open(filename, 'rb') as file:
             obj = pickle.load(file)
             obj.data = obj.data.astype(data_type)
             return obj
+        
+    @classmethod
+    def loadFromPNG(cls, filename: str, gridOrigin: origin, resolution: float) -> 'gridMap':
+        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            raise ValueError(f"Failed to load image from {filename}")
+        img = cv2.flip(img, 0)
+        img_normalized = img.astype(np.float32) / 255.0
+        # Transpose to have shape (width, height)
+        img_normalized = np.transpose(img_normalized)
+        width, height = img_normalized.shape
+        print(f"Loaded PNG '{filename}' with size: width={width}, height={height}")
+        grid_frame = frame(gridOrigin, size(width, height), resolution)
+        data = 1.0 - img_normalized
+        data_3d = data[:, :, np.newaxis]
+        return cls(grid_frame, data_3d)
 
 def main() -> None:
     width = 10*2
@@ -363,6 +545,7 @@ def main() -> None:
     grid.plot(0, isPause=True)
     grid.plot3D_scatter(isPause=True) # Balls
     grid.plot3D_cubes(isPause=True)
+    cardinality = grid.cardinality()
 
     newFrame = frame(origin(10, 0, 0), size(10, 6, 2), 0.5)
     
@@ -373,17 +556,28 @@ def main() -> None:
     # Test pose transformations
     p1 = pose(position(1.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/2))
     p2 = pose(position(3.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/4))
-    p3 = p2.transform(p1)
+    p3 = p2.compose(p1)
 
     print(f"Transformed Position: x={p3.position.x}, y={p3.position.y}, z={p3.position.z}")
     print(f"Transformed Orientation: roll={p3.orientation.roll}, pitch={p3.orientation.pitch}, yaw={p3.orientation.yaw}")
 
     x_t = pose(position(2.5, 2.5, 2.5), orientation(0.0, 0.0, 0.0))
     link_base_sensor = pose(position(0.22, 0.0, -0.15), orientation(0.0, -3.14159/6, 0.0))
-    x_t = link_base_sensor.transform(x_t)
+    x_t = link_base_sensor.compose(x_t)
 
     print(f"Transformed Position: x={x_t.position.x}, y={x_t.position.y}, z={x_t.position.z}")
     print(f"Transformed Orientation: roll={x_t.orientation.roll}, pitch={x_t.orientation.pitch}, yaw={x_t.orientation.yaw}")
+
+    # Testing cardinality
+    cframe = frame(origin(0, 0, 0), size(2, 2, 1), 1.0)
+    cdata = np.array([[[0.0], [0.5]],
+                      [[0.0], [1.0]]])
+    cgrid = gridMap(cframe, cdata)
+    ccardinality = cgrid.cardinality()
+    print(f"Cardinality: {ccardinality}")
+    target_cardinality = discreteDist(np.array([0.0, 0.0, 1.0, 0.0]))
+    rebalanced_grid = cgrid.rebalance(target_cardinality)
+    print(f"Rebalanced Grid Data:\n{rebalanced_grid.data}")
 
 if __name__ == '__main__':
     main()
