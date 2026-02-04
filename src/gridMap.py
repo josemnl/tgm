@@ -238,8 +238,15 @@ class gridMap:
 
         Drawn per z-slice back-to-front to improve blending.
         """
-        data = cp.asnumpy(self.data) if self.isGPU else self.data
-        values = np.clip(data.astype(float), 0.0, 1.0)
+        # Keep data on GPU if available, use xp abstraction for all operations
+        if self.isGPU:
+            data = self.data
+            xp = cp
+        else:
+            data = self.data
+            xp = np
+            
+        values = xp.clip(data.astype(float), 0.0, 1.0)
         inten = 1.0 - values
         alpha = alpha_min + (alpha_max - alpha_min) * values
         sizes = s_min + (s_max - s_min) * values
@@ -253,32 +260,46 @@ class gridMap:
         ax.view_init(elev=elev, azim=azim)
 
         # Compute centers in index units (can scale to meters if desired)
-        xs = self.frame.origin.x + np.arange(self.frame.size.w) + 0.5
-        ys = self.frame.origin.y + np.arange(self.frame.size.h) + 0.5
-        zs = self.frame.origin.z + np.arange(self.frame.size.d) + 0.5
+        xs = self.frame.origin.x + xp.arange(self.frame.size.w) + 0.5
+        ys = self.frame.origin.y + xp.arange(self.frame.size.h) + 0.5
+        zs = self.frame.origin.z + xp.arange(self.frame.size.d) + 0.5
 
         # Shapes
         nx, ny, nz = len(xs), len(ys), len(zs)
 
         # 1D coordinates consistent with arr.ravel(order='C') for shape (nx, ny, nz)
-        X = np.repeat(xs, ny * nz)
-        Y = np.tile(np.repeat(ys, nz), nx)
-        Z = np.tile(zs, nx * ny)
+        X = xp.repeat(xs, ny * nz)
+        Y = xp.tile(xp.repeat(ys, nz), nx)
+        Z = xp.tile(zs, nx * ny)
 
         # Per-point RGBA and sizes
-        rgba = np.zeros(inten.shape + (4,), dtype=float)
+        rgba = xp.zeros(inten.shape + (4,), dtype=float)
         rgba[..., 0] = inten
         rgba[..., 1] = inten
         rgba[..., 2] = inten
         rgba[..., 3] = alpha
 
-        # Mask out low and high values
+        # Mask out low and high values (on GPU if available)
         mask = (values >= value_min) & (values <= value_max)
         mask = mask.ravel()
 
-        ax.scatter(X[mask], Y[mask], Z[mask],
-                   s=sizes.ravel()[mask],
-                   c=rgba.reshape(-1, 4)[mask],
+        # Transfer to CPU only after masking (only the filtered results)
+        if self.isGPU:
+            X = cp.asnumpy(X[mask])
+            Y = cp.asnumpy(Y[mask])
+            Z = cp.asnumpy(Z[mask])
+            sizes_masked = cp.asnumpy(sizes.ravel()[mask])
+            rgba_masked = cp.asnumpy(rgba.reshape(-1, 4)[mask])
+        else:
+            X = X[mask]
+            Y = Y[mask]
+            Z = Z[mask]
+            sizes_masked = sizes.ravel()[mask]
+            rgba_masked = rgba.reshape(-1, 4)[mask]
+
+        ax.scatter(X, Y, Z,
+                   s=sizes_masked,
+                   c=rgba_masked,
                    marker='o',
                    depthshade=False)
 

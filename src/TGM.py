@@ -360,20 +360,28 @@ class TGM:
         if fig is None:
             fig = plt.figure()
         overlap = self.frame.computeOverlap(frame)
-        staticMap = self.staticMap.crop(overlap).toCPU().data
-        dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
-        weatherMap = self.weatherMap.crop(overlap).toCPU().data
+
+        # Crop the maps to the overlapping region
+        staticMap = self.staticMap.crop(overlap).data
+        dynamicMap = self.dynamicMap.crop(overlap).data
+        weatherMap = self.weatherMap.crop(overlap).data
+        
+        # Keep data on GPU if using cupy, otherwise use numpy (optimized like plot3D_open3d)
+        if self.GPU:
+            xp = cp
+        else:
+            xp = np
 
         # Create a 3D axis
         ax = fig.add_subplot(111, projection='3d')
 
-        # Create a meshgrid for the coordinates
-        x = np.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * self.frame.r
-        y = np.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * self.frame.r
-        z = np.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * self.frame.r
-        X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
+        # Create a meshgrid for the coordinates (on GPU if available)
+        x = xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * self.frame.r
+        y = xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * self.frame.r
+        z = xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * self.frame.r
+        X, Y, Z = xp.meshgrid(x, y, z, indexing='ij')
 
-        # Flatten the arrays for plotting
+        # Flatten the arrays for plotting (still on GPU if applicable)
         X = X.flatten()
         Y = Y.flatten()
         Z = Z.flatten()
@@ -381,22 +389,30 @@ class TGM:
         dynamicMap = dynamicMap.flatten()
         weatherMap = weatherMap.flatten()
 
-        # Create a color array based on the probabilities
-        colors = np.zeros((len(X), 3))
+        # Create a color array based on the probabilities (on GPU if applicable)
+        colors = xp.zeros((len(X), 3))
         # Same color coding as in the 2D case
-        colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))  # Red channel
-        colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/np.square(1-weatherMap))  # Green channel
-        colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))  # Blue channel
+        colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Red channel
+        colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))  # Green channel
+        colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Blue channel
 
-        # Normalize colors to be between 0 and 1
-        colors = np.clip(colors, 0, 1)
+        # Normalize colors to be between 0 and 1 (on GPU if applicable)
+        colors = xp.clip(colors, 0, 1)
 
-        # Mask out low and high values
+        # Mask out low and high values (on GPU if applicable)
         mask = (staticMap + dynamicMap + weatherMap > value_min) & (staticMap + dynamicMap + weatherMap < value_max)
-        X = X[mask]
-        Y = Y[mask]
-        Z = Z[mask]
-        colors = colors[mask]
+        
+        # Apply mask and transfer to CPU only once at the end (if using GPU)
+        if self.GPU:
+            X = cp.asnumpy(X[mask])
+            Y = cp.asnumpy(Y[mask])
+            Z = cp.asnumpy(Z[mask])
+            colors = cp.asnumpy(colors[mask])
+        else:
+            X = X[mask]
+            Y = Y[mask]
+            Z = Z[mask]
+            colors = colors[mask]
 
         # Before plotting, enforce equal data scale across X/Y/Z using the true extents (in meters)
         # Compute extents from the overlap frame (not from masked points)
@@ -466,8 +482,8 @@ class TGM:
                       (-fov_hfov, -fov_vfov)]
             corners_sensor = []
             for yaw_off, pitch_off in angles:
-                cp = np.cos(pitch_off)
-                dir_sensor = np.array([cp * np.cos(yaw_off), cp * np.sin(yaw_off), np.sin(pitch_off)])
+                cpp = np.cos(pitch_off)
+                dir_sensor = np.array([cpp * np.cos(yaw_off), cpp * np.sin(yaw_off), np.sin(pitch_off)])
                 corners_sensor.append(fov_range * dir_sensor)
             corners = np.vstack(corners_sensor)
 
