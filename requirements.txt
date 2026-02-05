@@ -6,6 +6,7 @@ scikit-image>=0.22
 opencv-python
 PyYAML
 pandas
+open3d>=0.19.0        # The version is not a hard requirement, but the code has been tested with this version.
 # CuPy NOT pinned: install matching wheel separately, e.g.:
 #   pip install cupy-cuda12x   (for CUDA 12.x)
 #   pip install cupy-cuda11x   (for CUDA 11.x)

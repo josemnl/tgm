@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.image import imsave
 from skimage.morphology import disk
 import matplotlib
+import open3d as o3d
 
 from gridMap import discreteDist, gridMap
 from spatial import frame, origin, size, pose, position, orientation
@@ -63,6 +64,15 @@ class TGM:
 
         self.x_t = None
         self.prev_region = [0, 0, 0, 0, 0, 0]
+
+        # Open3D persistent visualization state
+        self._o3d_vis = None
+        self._o3d_pcd = None
+        self._o3d_ego = None
+        self._o3d_frame = None
+        self._o3d_fov_lines = []
+        self._o3d_last_bounds = None
+        self._o3d_view_initialized = False
 
     @property
     def freeMap(self) -> gridMap:
@@ -541,6 +551,230 @@ class TGM:
         plt.show(block=isPause)
         plt.pause(0.01)
 
+    def plot3D_open3d(self, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
+        """
+        3D plot of the TGM using Open3D.
+        Very similar to plot3D() but using Open3D for visualization.
+        Updates the same window on each call.
+        Optimized to minimize GPU-CPU transfers.
+        """
+        if frame is None:
+            frame = self.frame
+        
+        overlap = self.frame.computeOverlap(frame)
+
+        # Crop the maps to the overlapping region
+        staticMap = self.staticMap.crop(overlap).data
+        dynamicMap = self.dynamicMap.crop(overlap).data
+        weatherMap = self.weatherMap.crop(overlap).data
+        
+        # Keep data on GPU if using cupy, otherwise use numpy
+        if self.GPU:
+            xp = cp
+        else:
+            xp = np
+
+        # Create a meshgrid for the coordinates (on GPU if available)
+        x = xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * self.frame.r
+        y = xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * self.frame.r
+        z = xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * self.frame.r
+        X, Y, Z = xp.meshgrid(x, y, z, indexing='ij')
+
+        # Flatten the arrays for plotting (still on GPU)
+        X = X.flatten()
+        Y = Y.flatten()
+        Z = Z.flatten()
+        staticMap = staticMap.flatten()
+        dynamicMap = dynamicMap.flatten()
+        weatherMap = weatherMap.flatten()
+
+        # Create a color array based on the probabilities (on GPU)
+        colors = xp.zeros((len(X), 3))
+        colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Red channel
+        colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))  # Green channel
+        colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Blue channel
+
+        # Normalize colors to be between 0 and 1 (on GPU)
+        colors = xp.clip(colors, 0, 1)
+
+        # Mask out low and high values (on GPU)
+        mask = (staticMap + dynamicMap + weatherMap > value_min) & (staticMap + dynamicMap + weatherMap < value_max)
+        
+        # Apply mask and transfer only filtered data to CPU (THIS is the only GPU->CPU transfer)
+        if self.GPU:
+            points = cp.asnumpy(xp.vstack([X[mask], Y[mask], Z[mask]]).T)
+            colors = cp.asnumpy(colors[mask])
+        else:
+            points = xp.vstack([X[mask], Y[mask], Z[mask]]).T
+            colors = colors[mask]
+
+        # Compute full map bounds (match plot3D axis limits)
+        x_min = overlap.origin.x * self.frame.r
+        x_max = (overlap.origin.x + overlap.size.w) * self.frame.r
+        y_min = overlap.origin.y * self.frame.r
+        y_max = (overlap.origin.y + overlap.size.h) * self.frame.r
+        z_min = overlap.origin.z * self.frame.r
+        z_max = (overlap.origin.z + overlap.size.d) * self.frame.r
+        bounds = (x_min, x_max, y_min, y_max, z_min, z_max)
+
+        # Initialize visualizer if needed
+        if self._o3d_vis is None:
+            self._o3d_vis = o3d.visualization.Visualizer()
+            self._o3d_vis.create_window(window_name="TGM Open3D")
+            self._o3d_pcd = o3d.geometry.PointCloud()
+            self._o3d_vis.add_geometry(self._o3d_pcd)
+
+        # Update point cloud geometry
+        self._o3d_pcd.points = o3d.utility.Vector3dVector(points)
+        self._o3d_pcd.colors = o3d.utility.Vector3dVector(colors)
+        self._o3d_vis.update_geometry(self._o3d_pcd)
+
+        # Ensure the camera fits the full map bounds only once (initial pose)
+        if not self._o3d_view_initialized:
+            bounds_points = np.array([
+                [x_min, y_min, z_min],
+                [x_min, y_min, z_max],
+                [x_min, y_max, z_min],
+                [x_min, y_max, z_max],
+                [x_max, y_min, z_min],
+                [x_max, y_min, z_max],
+                [x_max, y_max, z_min],
+                [x_max, y_max, z_max],
+            ])
+            bounds_pcd = o3d.geometry.PointCloud()
+            bounds_pcd.points = o3d.utility.Vector3dVector(bounds_points)
+            self._o3d_vis.add_geometry(bounds_pcd, reset_bounding_box=True)
+            self._o3d_vis.reset_view_point(True)
+            view_ctl = self._o3d_vis.get_view_control()
+            if view_ctl is not None:
+                view_ctl.set_zoom(0.8)
+            self._o3d_vis.remove_geometry(bounds_pcd, reset_bounding_box=False)
+            self._o3d_last_bounds = bounds
+            self._o3d_view_initialized = True
+
+        # Remove and re-add ego sphere
+        if self.x_t is not None:
+            if self._o3d_ego is not None:
+                self._o3d_vis.remove_geometry(self._o3d_ego, reset_bounding_box=False)
+            
+            self._o3d_ego = o3d.geometry.TriangleMesh.create_sphere(radius=0.5)
+            self._o3d_ego.translate([self.x_t.position.x, self.x_t.position.y, self.x_t.position.z])
+            self._o3d_ego.paint_uniform_color([1, 0, 0])
+            self._o3d_vis.add_geometry(self._o3d_ego, reset_bounding_box=False)
+
+        # Remove and re-add coordinate frame with proper rotation
+        if self.x_t is not None:
+            if self._o3d_frame is not None:
+                self._o3d_vis.remove_geometry(self._o3d_frame, reset_bounding_box=False)
+            
+            # Create coordinate frame at origin, then transform it
+            self._o3d_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+            
+            # Compute rotation matrix (same as FOV)
+            sensor_roll = self.x_t.orientation.roll
+            sensor_pitch = self.x_t.orientation.pitch
+            sensor_yaw = self.x_t.orientation.yaw
+            
+            R_yaw = np.array([[np.cos(sensor_yaw), -np.sin(sensor_yaw), 0],
+                              [np.sin(sensor_yaw), np.cos(sensor_yaw), 0],
+                              [0, 0, 1]])
+            R_pitch = np.array([[np.cos(sensor_pitch), 0, np.sin(sensor_pitch)],
+                                [0, 1, 0],
+                                [-np.sin(sensor_pitch), 0, np.cos(sensor_pitch)]])
+            R_roll = np.array([[1, 0, 0],
+                               [0, np.cos(sensor_roll), -np.sin(sensor_roll)],
+                               [0, np.sin(sensor_roll), np.cos(sensor_roll)]])
+            R = R_yaw @ R_pitch @ R_roll
+            
+            # Create transformation matrix (rotation + translation)
+            T = np.eye(4)
+            T[:3, :3] = R
+            T[:3, 3] = [self.x_t.position.x, self.x_t.position.y, self.x_t.position.z]
+            
+            # Apply transformation
+            self._o3d_frame.transform(T)
+            self._o3d_vis.add_geometry(self._o3d_frame, reset_bounding_box=False)
+
+        # Remove and re-add FOV pyramid
+        if self.x_t is not None:
+            # Remove old FOV lines
+            if self._o3d_fov_lines is not None:
+                for line_set in self._o3d_fov_lines:
+                    self._o3d_vis.remove_geometry(line_set, reset_bounding_box=False)
+            self._o3d_fov_lines = []
+
+            sensor_x = self.x_t.position.x
+            sensor_y = self.x_t.position.y
+            sensor_z = self.x_t.position.z
+            sensor_roll = self.x_t.orientation.roll
+            sensor_pitch = self.x_t.orientation.pitch
+            sensor_yaw = self.x_t.orientation.yaw
+
+            fov_range = 3.0
+            fov_hfov = np.deg2rad(45.0)  # Half horizontal FOV
+            fov_vfov = np.deg2rad(20.0)  # Half vertical FOV
+
+            # Rotation matrix from sensor to world frame
+            R_yaw = np.array([[np.cos(sensor_yaw), -np.sin(sensor_yaw), 0],
+                              [np.sin(sensor_yaw), np.cos(sensor_yaw), 0],
+                              [0, 0, 1]])
+            R_pitch = np.array([[np.cos(sensor_pitch), 0, np.sin(sensor_pitch)],
+                                [0, 1, 0],
+                                [-np.sin(sensor_pitch), 0, np.cos(sensor_pitch)]])
+            R_roll = np.array([[1, 0, 0],
+                               [0, np.cos(sensor_roll), -np.sin(sensor_roll)],
+                               [0, np.sin(sensor_roll), np.cos(sensor_roll)]])
+            R = R_yaw @ R_pitch @ R_roll
+
+            # Define the 4 corner rays in the sensor frame
+            angles = [(-fov_hfov,  fov_vfov),
+                      ( fov_hfov,  fov_vfov),
+                      ( fov_hfov, -fov_vfov),
+                      (-fov_hfov, -fov_vfov)]
+            corners_sensor = []
+            for yaw_off, pitch_off in angles:
+                cpp = np.cos(pitch_off)
+                dir_sensor = np.array([cpp * np.cos(yaw_off), cpp * np.sin(yaw_off), np.sin(pitch_off)])
+                corners_sensor.append(fov_range * dir_sensor)
+            corners = np.vstack(corners_sensor)
+
+            # Rotate and translate corners to world frame
+            world_corners = (R @ corners.T).T + np.array([sensor_x, sensor_y, sensor_z])
+
+            # Create line segments for FOV pyramid
+            sensor_pos = np.array([sensor_x, sensor_y, sensor_z])
+            
+            # Lines from sensor to corners
+            for i in range(4):
+                points = np.vstack([sensor_pos, world_corners[i]])
+                lines = np.array([[0, 1]])
+                line_set = o3d.geometry.LineSet(
+                    o3d.utility.Vector3dVector(points),
+                    o3d.utility.Vector2iVector(lines)
+                )
+                line_set.paint_uniform_color([0, 0, 1])  # Blue
+                self._o3d_vis.add_geometry(line_set, reset_bounding_box=False)
+                self._o3d_fov_lines.append(line_set)
+
+            # Lines connecting the base of the pyramid
+            for i in range(4):
+                points = np.vstack([world_corners[i], world_corners[(i+1)%4]])
+                lines = np.array([[0, 1]])
+                line_set = o3d.geometry.LineSet(
+                    o3d.utility.Vector3dVector(points),
+                    o3d.utility.Vector2iVector(lines)
+                )
+                line_set.paint_uniform_color([0, 0, 1])  # Blue
+                self._o3d_vis.add_geometry(line_set, reset_bounding_box=False)
+                self._o3d_fov_lines.append(line_set)
+
+        # Update renderer
+        self._o3d_vis.poll_events()
+        self._o3d_vis.update_renderer()
+
+        if isPause:
+            self._o3d_vis.run()
+
     def _get_layer_map(self, layer):
         if layer == 'static':
             return self.staticMap
@@ -654,6 +888,9 @@ if __name__ == '__main__':
 
     # Plot the TGM
     tgm.plot3D(isPause=True, value_min=0.7, value_max=1.0)
+
+    # Plot using Open3D
+    tgm.plot3D_open3d(isPause=True, value_min=0.7, value_max=1.0)
 
 
     # 2D convolution test
