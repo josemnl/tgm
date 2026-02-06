@@ -104,9 +104,13 @@ class TGM:
         # Crop the instantaneous map to the overlapping region
         instMap = instGridMap.crop(overlap).data
 
-        if self.GPU:
+        if self.GPU and not isinstance(instMap, cp.ndarray):
             instMap = cp.asarray(instMap)
-
+            print('WARNING: The instantaneous map is not a cupy array, but the TGM is using GPU. Converting the instantaneous map to a cupy array, which may cause a slowdown.')
+        elif not self.GPU and isinstance(instMap, cp.ndarray):
+            instMap = cp.asnumpy(instMap)
+            print('WARNING: The instantaneous map is a cupy array, but the TGM is not using GPU. Converting the instantaneous map to a numpy array, which may cause a slowdown.')
+        
         # Split the instantaneous map into static, dynamic, weather and free maps
         instStaticMap = instMap * self.staticPrior / self.sdwPrior
         instDynamicMap = instMap * self.dynamicPrior / self.sdwPrior
@@ -823,8 +827,6 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
     return conv
 
 def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
-    print("THIS FUNCTION IS USING 2D CONVOLUTIONS INSTEAD OF 3D. IT SHOULD BE FIXED.")
-
     # Choose numpy/scipy or cupy/cupyx
     if GPU:
         map = cp.asarray(map)
@@ -845,7 +847,7 @@ def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     if fftConv:
         conv = xsp.fftconvolve(paddedMap, convShape, mode='valid')
     else:
-        conv = xsp.convolve(paddedMap, convShape, mode='valid')
+        conv = xsp.convolve(paddedMap, convShape, mode='valid', method='direct')
     return conv
 
 if __name__ == '__main__':

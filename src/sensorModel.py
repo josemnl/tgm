@@ -383,16 +383,16 @@ class sensorModel3DGPU:
         oz = int((x_t.position.z / self.frame.r) - (self.frame.size.d / 2))
         self.frame.origin = origin(ox, oy, oz)
 
-    def generateGridMap(self, z_t: lidarScan3D, x_t: pose) -> gridMap:
-        # Reset
+    def generateGridMap(self, z_t: lidarScan3D, x_t: pose, isMinimizeFrame: bool = True) -> gridMap:
+        # Reset grid to prior
         self.data.fill(self.occPrior)
 
-        # Transform points (ensure CuPy)
+        # Transform points to world (CuPy)
         pts_world = z_t.transform(x_t).points3D
         if not isinstance(pts_world, cp.ndarray):
             pts_world = cp.asarray(pts_world)
 
-        # Convert to voxel indices
+        # Convert to voxel indices (match CPU rounding)
         rx = (pts_world[:, 0] / self.frame.r) - self.frame.origin.x
         ry = (pts_world[:, 1] / self.frame.r) - self.frame.origin.y
         rz = (pts_world[:, 2] / self.frame.r) - self.frame.origin.z
@@ -410,14 +410,25 @@ class sensorModel3DGPU:
         iy = iy[inb]
         iz = iz[inb]
 
+        # If nothing is in bounds, return full map
         if ix.size == 0:
             return gridMap(self.frame, self.data)
 
+        # Sensor origin in grid
         sx, sy, sz = self.frame.world_to_idx(x_t.position.x, x_t.position.y, x_t.position.z)
         if not self.frame.in_bounds(sx, sy, sz):
             raise ValueError("Sensor origin out of bounds.")
 
-        # Launch carve kernel
+        # Bounding box of all affected voxels (endpoints + origin)
+        if isMinimizeFrame:
+            min_ix = cp.minimum(ix.min(), cp.int32(sx))
+            min_iy = cp.minimum(iy.min(), cp.int32(sy))
+            min_iz = cp.minimum(iz.min(), cp.int32(sz))
+            max_ix = cp.maximum(ix.max(), cp.int32(sx))
+            max_iy = cp.maximum(iy.max(), cp.int32(sy))
+            max_iz = cp.maximum(iz.max(), cp.int32(sz))
+
+        # Carve rays
         N = ix.size
         threads = 256
         blocks = (N + threads - 1) // threads
@@ -431,10 +442,29 @@ class sensorModel3DGPU:
                             cp.int32(self.frame.size.d),
                             cp.float32(self.invModel[0])))
 
-        # Mark endpoints occupied (scatter)
+        # Mark endpoints as occupied
         self.data[ix, iy, iz] = cp.float32(self.invModel[1])
 
-        return gridMap(self.frame, self.data)
+        if isMinimizeFrame:
+            # Crop via reshape
+            min_ix = int(cp.asnumpy(min_ix))
+            min_iy = int(cp.asnumpy(min_iy))
+            min_iz = int(cp.asnumpy(min_iz))
+            max_ix = int(cp.asnumpy(max_ix))
+            max_iy = int(cp.asnumpy(max_iy))
+            max_iz = int(cp.asnumpy(max_iz))
+
+            crop_origin = origin(self.frame.origin.x + min_ix,
+                                self.frame.origin.y + min_iy,
+                                self.frame.origin.z + min_iz)
+            crop_size = size(max_ix - min_ix + 1,
+                            max_iy - min_iy + 1,
+                            max_iz - min_iz + 1)
+            crop_frame = frame(crop_origin, crop_size, self.frame.r)
+
+            return gridMap(self.frame, self.data).reshape(crop_frame, self.occPrior)
+        else:
+            return gridMap(self.frame, self.data)
 
 def main():
     # Test 2D sensor model

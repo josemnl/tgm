@@ -9,6 +9,8 @@ from TGM import TGM
 from SLAM import lsqnl_matching3D
 from spatial import position, orientation, pose, frame, origin, size
 
+import cupy as cp
+
 def run3D(logID, conf):
     # Print logID
     print('Running ' + logID)
@@ -46,6 +48,7 @@ def run3D(logID, conf):
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
 
         # IMPORT SENSOR DATA
+        cp.cuda.Device().synchronize()
         time_1 = time.time()
         if conf.lidarFormat == 'CSV':
             z_t_3D = read3DLidarCSV(conf.lidarPath + "z_" + str(i) + ".csv")
@@ -55,6 +58,7 @@ def run3D(logID, conf):
             raise ValueError('Invalid lidar format')
 
         # FILTER POINT CLOUD
+        cp.cuda.Device().synchronize()
         time_2 = time.time()
         z_t_3D.removeClosePoints(conf.minDistance)
         z_t_3D.removeFarPoints(conf.maxDistance)
@@ -67,6 +71,7 @@ def run3D(logID, conf):
             z_t_3D.voxelGridFilter(conf.voxelGridSize)
 
         # COMPUTE CURRENT POSE x_t
+        cp.cuda.Device().synchronize()
         time_3 = time.time()
         if not conf.isSLAM:
             x_t = readPose(conf.lidarPath + str(i).zfill(6) + ".csv")
@@ -93,6 +98,7 @@ def run3D(logID, conf):
         print('Current pose at time step ' + str(i) + ': (' + str(x_t.position.x) + ', ' + str(x_t.position.y) + ', ' + str(x_t.position.z) + '), with orientation (' + str(x_t.orientation.roll) + ', ' + str(x_t.orientation.pitch) + ', ' + str(x_t.orientation.yaw) + ')')
 
         # GENERATE GRID MAP FROM POINT CLOUD
+        cp.cuda.Device().synchronize()
         time_4 = time.time()
         sM.updateBasedOnPose(x_t)
         gm = sM.generateGridMap(z_t_3D, x_t)
@@ -105,12 +111,18 @@ def run3D(logID, conf):
             print('Old TGM frame: origin (' + str(tgm.frame.origin.x) + ', ' + str(tgm.frame.origin.y) + ', ' + str(tgm.frame.origin.z) + ') with size (' + str(tgm.frame.size.w) + ', ' + str(tgm.frame.size.h) + ', ' + str(tgm.frame.size.d) + ') and resolution ' + str(tgm.frame.r))
             print('New TGM frame: origin (' + str(newFrame.origin.x) + ', ' + str(newFrame.origin.y) + ', ' + str(newFrame.origin.z) + ') with size (' + str(newFrame.size.w) + ', ' + str(newFrame.size.h) + ', ' + str(newFrame.size.d) + ') and resolution ' + str(newFrame.r))
             tgm.reshape(newFrame)
+        
+        print('Grid map frame: origin (' + str(gm.frame.origin.x) + ', ' + str(gm.frame.origin.y) + ', ' + str(gm.frame.origin.z) + ') with size (' + str(gm.frame.size.w) + ', ' + str(gm.frame.size.h) + ', ' + str(gm.frame.size.d) + ') and resolution ' + str(gm.frame.r))
+        print('Number of cells in the grid map: ' + str(gm.data.size))
+
 
         # UPDATE TGM WITH THE NEW GRID MAP
+        cp.cuda.Device().synchronize()
         time_5 = time.time()
         tgm.update(gm, x_t)
 
         # PLOT CURRENT FRAME
+        cp.cuda.Device().synchronize()
         time_6 = time.time()
         fig.clear()
         # Compute the frame for the plot
@@ -126,6 +138,7 @@ def run3D(logID, conf):
             plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
         print('Plotting frame at origin (' + str(plotFrame.origin.x) + ', ' + str(plotFrame.origin.y) + ', ' + str(plotFrame.origin.z) + ') with size (' + str(plotFrame.size.w) + ', ' + str(plotFrame.size.h) + ', ' + str(plotFrame.size.d) + ') and resolution ' + str(plotFrame.r))
         tgm.plot3D(fig, plotFrame, isPause=False, value_min = 0.7, value_max = 1.0)
+        cp.cuda.Device().synchronize()
         time_7 = time.time()
 
         # Print timing information
@@ -153,7 +166,7 @@ if __name__ == '__main__':
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'underwater3D'
+    logID = 'underwaterTank'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)
