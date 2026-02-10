@@ -32,7 +32,7 @@ def run3D(logID, conf):
     sM = sensorModel3DGPU(smFrame, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], conf.origin[2])
     tgmSize = size(conf.width, conf.height, conf.depth)
-    tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
+    tgmFrame = frame.frameAroundPosition(x_0.position, tgmSize, conf.resolution)
     tgm = TGM(tgmFrame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     print('TGM initial frame is: origin (' + str(tgm.frame.origin.x) + ', ' + str(tgm.frame.origin.y) + ', ' + str(tgm.frame.origin.z) + ') with size (' + str(tgm.frame.size.w) + ', ' + str(tgm.frame.size.h) + ', ' + str(tgm.frame.size.d) + ') and resolution ' + str(tgm.frame.r))
@@ -62,13 +62,16 @@ def run3D(logID, conf):
         time_2 = time.time()
         z_t_3D.removeClosePoints(conf.minDistance)
         z_t_3D.removeFarPoints(conf.maxDistance)
-        print(conf.skyThreshold)
         if conf.skyThreshold is not None:
             z_t_3D.removeSky(conf.skyThreshold)
         if conf.groundThreshold is not None:
             z_t_3D.removeGround(conf.groundThreshold)
+        print('Number of points after before DROR: ' + str(len(z_t_3D.points3D)))
+        z_t_3D.DROR(30, 0.05)
+        print('Number of points after DROR: ' + str(len(z_t_3D.points3D)))
         if conf.isVoxelGridFilter:
             z_t_3D.voxelGridFilter(conf.voxelGridSize)
+        print('Number of points after voxel grid filter and DROR: ' + str(len(z_t_3D.points3D)))
 
         # COMPUTE CURRENT POSE x_t
         cp.cuda.Device().synchronize()
@@ -105,16 +108,8 @@ def run3D(logID, conf):
 
         # If gm is partially outside the TGM, resize the TGM
         if not tgm.contains(gm.frame):
-            newSize = size(tgm.frame.size.w, tgm.frame.size.h, tgm.frame.size.d)
-            newFrame = frame.frameAroundPosition(x_t.position, newSize, tgm.frame.r)
-            print('Resizing TGM to contain the new grid map')
-            print('Old TGM frame: origin (' + str(tgm.frame.origin.x) + ', ' + str(tgm.frame.origin.y) + ', ' + str(tgm.frame.origin.z) + ') with size (' + str(tgm.frame.size.w) + ', ' + str(tgm.frame.size.h) + ', ' + str(tgm.frame.size.d) + ') and resolution ' + str(tgm.frame.r))
-            print('New TGM frame: origin (' + str(newFrame.origin.x) + ', ' + str(newFrame.origin.y) + ', ' + str(newFrame.origin.z) + ') with size (' + str(newFrame.size.w) + ', ' + str(newFrame.size.h) + ', ' + str(newFrame.size.d) + ') and resolution ' + str(newFrame.r))
-            tgm.reshape(newFrame)
-        
-        print('Grid map frame: origin (' + str(gm.frame.origin.x) + ', ' + str(gm.frame.origin.y) + ', ' + str(gm.frame.origin.z) + ') with size (' + str(gm.frame.size.w) + ', ' + str(gm.frame.size.h) + ', ' + str(gm.frame.size.d) + ') and resolution ' + str(gm.frame.r))
-        print('Number of cells in the grid map: ' + str(gm.data.size))
-
+            newTgmFrame = tgm.frame.computeUnion(gm.frame)
+            tgm.reshape(newTgmFrame)
 
         # UPDATE TGM WITH THE NEW GRID MAP
         cp.cuda.Device().synchronize()

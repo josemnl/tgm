@@ -203,6 +203,7 @@ class frame:
         """
         Compute the overlap between this frame and another frame.
         """
+        assert self.r == other.r, "Cannot compute overlap of frames with different resolutions"
         overlap_origin_x = max(self.origin.x, other.origin.x)
         overlap_origin_y = max(self.origin.y, other.origin.y)
         overlap_origin_z = max(self.origin.z, other.origin.z)
@@ -214,6 +215,23 @@ class frame:
         overlap_size = size(overlap_width, overlap_height, overlap_depth)
 
         return frame(overlap_origin, overlap_size, self.r)
+    
+    def computeUnion(self, other: 'frame') -> 'frame':
+        """
+        Compute the union between this frame and another frame.
+        """
+        assert self.r == other.r, "Cannot compute union of frames with different resolutions"
+        union_origin_x = min(self.origin.x, other.origin.x)
+        union_origin_y = min(self.origin.y, other.origin.y)
+        union_origin_z = min(self.origin.z, other.origin.z)
+        union_width = max(self.origin.x + self.size.w, other.origin.x + other.size.w) - union_origin_x
+        union_height = max(self.origin.y + self.size.h, other.origin.y + other.size.h) - union_origin_y
+        union_depth = max(self.origin.z + self.size.d, other.origin.z + other.size.d) - union_origin_z
+
+        union_origin = origin(union_origin_x, union_origin_y, union_origin_z)
+        union_size = size(union_width, union_height, union_depth)
+
+        return frame(union_origin, union_size, self.r)
     
     def world_to_idx(self, x: float, y: float, z: float = 0.0) -> Tuple[int, int, int]:
         """

@@ -383,6 +383,10 @@ class lidarScan3D:
             self.labels = None
         
     def transform(self, x_t: pose) -> 'lidarScan3D':
+        if self.points3D is None or self.points3D.size == 0:
+            empty_labels = None if self.labels is None else self.labels[:0]
+            return lidarScan3D(np.empty((0, 3)), empty_labels)
+        
         R = orientation.to_R_zyx(x_t.orientation)          # Rz(yaw) @ Ry(pitch) @ Rx(roll)
         t = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
         return lidarScan3D(self.points3D @ R.T + t, self.labels)

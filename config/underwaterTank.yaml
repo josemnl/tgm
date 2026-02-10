@@ -2,8 +2,8 @@
 lidarPath : './logs/underwater/rosbag2_2025_10_13-14_53_47/export/' # Path to the lidar data
 lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
 is3D : True                             # Set to True if the point cloud is 3D
-initialTimeStep : 10                    # Initial time step to start the simulation
-simHorizon : 441                        # If 0, it runs until the end of the log
+initialTimeStep : 1                     # Initial time step to start the simulation
+simHorizon : 435                        # If 0, it runs until the end of the log
 
 # SLAM parameters
 isSLAM : False                           # If True, it computes x_t using SLAM
@@ -15,7 +15,7 @@ startPoseSLAM : [2.5, 2.5, 2.5]         # Initial pose for the SLAM algorithm if
 saveVideo : True                        # If True, it saves the video
 removeFrames : False                    # If True, it removes the frames after saving the video
 saveSvg : True                          # If True, it saves each frame as a SVG file
-videoSection : 'Following'               # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoSection : 'Full'               # Section of the map to plot: 'Full', 'Following', 'Constant'
 videoWidth : 5                          # Width of the following window
 videoHeight : 5                         # Height of the following window
 videoDepth : 5                          # Depth of the following window

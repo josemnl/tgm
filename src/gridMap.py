@@ -153,15 +153,15 @@ class gridMap:
         ix_0 = overlap.origin.x - newFrame.origin.x
         iy_0 = overlap.origin.y - newFrame.origin.y
         iz_0 = overlap.origin.z - newFrame.origin.z
-        ix_1 = ix_0 + overlap.size.w - 1
-        iy_1 = iy_0 + overlap.size.h - 1
-        iz_1 = iz_0 + overlap.size.d - 1
+        ix_1 = ix_0 + overlap.size.w
+        iy_1 = iy_0 + overlap.size.h
+        iz_1 = iz_0 + overlap.size.d
         nx_0 = overlap.origin.x - self.frame.origin.x
         ny_0 = overlap.origin.y - self.frame.origin.y
         nz_0 = overlap.origin.z - self.frame.origin.z
-        nx_1 = nx_0 + overlap.size.w - 1
-        ny_1 = ny_0 + overlap.size.h - 1
-        nz_1 = nz_0 + overlap.size.d - 1
+        nx_1 = nx_0 + overlap.size.w
+        ny_1 = ny_0 + overlap.size.h
+        nz_1 = nz_0 + overlap.size.d
 
         newData[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = self.data[nx_0:nx_1, ny_0:ny_1, nz_0:nz_1]
         return gridMap(newFrame, newData)
