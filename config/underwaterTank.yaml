@@ -24,9 +24,9 @@ style : 'combined'                      # Style of the plot: 'combined', 'static
 
 # Grid parameters
 origin : [0,0,0]                        # Origin of the grid
-width : 5                               # Width of the grid
-height : 5                              # Height of the grid
-depth : 5                               # Depth of the grid
+width : 1                               # Width of the grid
+height : 1                              # Height of the grid
+depth : 1                               # Depth of the grid
 resolution : 0.025                      # Resolution of the grid
 
 # TGM parameters

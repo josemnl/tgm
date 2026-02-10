@@ -277,12 +277,15 @@ class sensorModel3D:
                 self.data[xi, yi, zi] = value
 
 class sensorModel3DGPU:
-    def __init__(self, smFrame: frame, invModel, occPrior: float):
+    def __init__(self, smFrame: frame, invModel, occPrior: float,
+                 diffusion_radius: int = 0, cone_free: bool = False):
         assert isinstance(smFrame, frame)
         assert smFrame.size.d > 0
         self.frame = smFrame
         self.invModel = invModel          # [free_val, occ_val]
         self.occPrior = occPrior
+        self.diffusion_radius = int(diffusion_radius)
+        self.cone_free = bool(cone_free)
         self.data = cp.ones(
             (self.frame.size.w, self.frame.size.h, self.frame.size.d), dtype=cp.float32
         ) * self.occPrior
@@ -301,7 +304,6 @@ class sensorModel3DGPU:
         {
             int i = blockDim.x * blockIdx.x + threadIdx.x;
             if (i >= N) return;
-
             int x0 = sx, y0 = sy, z0 = sz;
             int x1 = ex[i], y1 = ey[i], z1 = ez[i];
 
@@ -315,7 +317,6 @@ class sensorModel3DGPU:
             if (adx >= ady && adx >= adz) {
                 int step = (dx > 0) ? 1 : (dx < 0 ? -1 : 0);
                 if (step == 0) {
-                    // Single voxel ray
                     if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && z0 >= 0 && z0 < D) {
                         int idx = ((x0 * H) + y0) * D + z0;
                         grid[idx] = free_val;
@@ -377,6 +378,189 @@ class sensorModel3DGPU:
         }
         ''', 'carve')
 
+        # Cone carve with exponential decay toward prior; combine via min()
+        self._carve_cone_decay_kernel = cp.RawKernel(r'''
+        extern "C" __global__
+        void carve_cone_decay(int N,
+                              const int sx, const int sy, const int sz,
+                              const int* __restrict__ ex,
+                              const int* __restrict__ ey,
+                              const int* __restrict__ ez,
+                              float* __restrict__ grid,
+                              const int W, const int H, const int D,
+                              const float free_val,
+                              const float prior,
+                              const int max_r,
+                              const float decay)
+        {
+            int i = blockDim.x * blockIdx.x + threadIdx.x;
+            if (i >= N) return;
+
+            int x0 = sx, y0 = sy, z0 = sz;
+            int x1 = ex[i], y1 = ey[i], z1 = ez[i];
+
+            int dx = x1 - x0;
+            int dy = y1 - y0;
+            int dz = z1 - z0;
+            int adx = dx >= 0 ? dx : -dx;
+            int ady = dy >= 0 ? dy : -dy;
+            int adz = dz >= 0 ? dz : -dz;
+
+            int steps = adx;
+            if (ady > steps) steps = ady;
+            if (adz > steps) steps = adz;
+            if (steps == 0) {
+                if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H && z0 >= 0 && z0 < D) {
+                    int idx = ((x0 * H) + y0) * D + z0;
+                    grid[idx] = fminf(grid[idx], free_val);
+                }
+                return;
+            }
+
+            float inv_decay = (decay > 1e-6f) ? (1.0f / decay) : 1.0f;
+
+            if (adx >= ady && adx >= adz) {
+                int step = (dx > 0) ? 1 : -1;
+                int k = 0;
+                for (int x = x0;; x += step, ++k) {
+                    double ry = ((double)dy * (double)(x - x0)) / (double)dx;
+                    double rz = ((double)dz * (double)(x - x0)) / (double)dx;
+                    int y = (int)floor((double)y0 + ry);
+                    int z = (int)floor((double)z0 + rz);
+
+                    int r = (int)floor(((double)max_r * (double)k) / (double)steps);
+
+                    for (int ox = -r; ox <= r; ++ox) {
+                        int xx = x + ox;
+                        if (xx < 0 || xx >= W) continue;
+                        for (int oy = -r; oy <= r; ++oy) {
+                            int yy = y + oy;
+                            if (yy < 0 || yy >= H) continue;
+                            for (int oz = -r; oz <= r; ++oz) {
+                                int zz = z + oz;
+                                if (zz < 0 || zz >= D) continue;
+
+                                float dist = sqrtf((float)(ox*ox + oy*oy + oz*oz));
+                                float w = expf(-dist * inv_decay);
+                                float val = prior + (free_val - prior) * w;
+
+                                int idx = ((xx * H) + yy) * D + zz;
+                                grid[idx] = fminf(grid[idx], val);
+                            }
+                        }
+                    }
+                    if (x == x1) break;
+                }
+            } else if (ady >= adx && ady >= adz) {
+                int step = (dy > 0) ? 1 : -1;
+                int k = 0;
+                for (int y = y0;; y += step, ++k) {
+                    double rx = ((double)dx * (double)(y - y0)) / (double)dy;
+                    double rz = ((double)dz * (double)(y - y0)) / (double)dy;
+                    int x = (int)floor((double)x0 + rx);
+                    int z = (int)floor((double)z0 + rz);
+
+                    int r = (int)floor(((double)max_r * (double)k) / (double)steps);
+
+                    for (int ox = -r; ox <= r; ++ox) {
+                        int xx = x + ox;
+                        if (xx < 0 || xx >= W) continue;
+                        for (int oy = -r; oy <= r; ++oy) {
+                            int yy = y + oy;
+                            if (yy < 0 || yy >= H) continue;
+                            for (int oz = -r; oz <= r; ++oz) {
+                                int zz = z + oz;
+                                if (zz < 0 || zz >= D) continue;
+
+                                float dist = sqrtf((float)(ox*ox + oy*oy + oz*oz));
+                                float w = expf(-dist * inv_decay);
+                                float val = prior + (free_val - prior) * w;
+
+                                int idx = ((xx * H) + yy) * D + zz;
+                                grid[idx] = fminf(grid[idx], val);
+                            }
+                        }
+                    }
+                    if (y == y1) break;
+                }
+            } else {
+                int step = (dz > 0) ? 1 : -1;
+                int k = 0;
+                for (int z = z0;; z += step, ++k) {
+                    double rx = ((double)dx * (double)(z - z0)) / (double)dz;
+                    double ry = ((double)dy * (double)(z - z0)) / (double)dz;
+                    int x = (int)floor((double)x0 + rx);
+                    int y = (int)floor((double)y0 + ry);
+
+                    int r = (int)floor(((double)max_r * (double)k) / (double)steps);
+
+                    for (int ox = -r; ox <= r; ++ox) {
+                        int xx = x + ox;
+                        if (xx < 0 || xx >= W) continue;
+                        for (int oy = -r; oy <= r; ++oy) {
+                            int yy = y + oy;
+                            if (yy < 0 || yy >= H) continue;
+                            for (int oz = -r; oz <= r; ++oz) {
+                                int zz = z + oz;
+                                if (zz < 0 || zz >= D) continue;
+
+                                float dist = sqrtf((float)(ox*ox + oy*oy + oz*oz));
+                                float w = expf(-dist * inv_decay);
+                                float val = prior + (free_val - prior) * w;
+
+                                int idx = ((xx * H) + yy) * D + zz;
+                                grid[idx] = fminf(grid[idx], val);
+                            }
+                        }
+                    }
+                    if (z == z1) break;
+                }
+            }
+        }
+        ''', 'carve_cone_decay')
+
+        # Occupied diffusion with exponential decay toward prior; combine via max()
+        self._dilate_decay_kernel = cp.RawKernel(r'''
+        extern "C" __global__
+        void dilate_decay(int N,
+                          const int* __restrict__ ex,
+                          const int* __restrict__ ey,
+                          const int* __restrict__ ez,
+                          float* __restrict__ grid,
+                          const int W, const int H, const int D,
+                          const float occ_val,
+                          const float prior,
+                          const int r,
+                          const float decay)
+        {
+            int i = blockDim.x * blockIdx.x + threadIdx.x;
+            if (i >= N) return;
+
+            int x1 = ex[i], y1 = ey[i], z1 = ez[i];
+            float inv_decay = (decay > 1e-6f) ? (1.0f / decay) : 1.0f;
+
+            for (int ox = -r; ox <= r; ++ox) {
+                int x = x1 + ox;
+                if (x < 0 || x >= W) continue;
+                for (int oy = -r; oy <= r; ++oy) {
+                    int y = y1 + oy;
+                    if (y < 0 || y >= H) continue;
+                    for (int oz = -r; oz <= r; ++oz) {
+                        int z = z1 + oz;
+                        if (z < 0 || z >= D) continue;
+
+                        float dist = sqrtf((float)(ox*ox + oy*oy + oz*oz));
+                        float w = expf(-dist * inv_decay);
+                        float val = prior + (occ_val - prior) * w;
+
+                        int idx = ((x * H) + y) * D + z;
+                        grid[idx] = fmaxf(grid[idx], val);
+                    }
+                }
+            }
+        }
+        ''', 'dilate_decay')
+
     def updateBasedOnPose(self, x_t: pose):
         ox = int((x_t.position.x / self.frame.r) - (self.frame.size.w / 2))
         oy = int((x_t.position.y / self.frame.r) - (self.frame.size.h / 2))
@@ -397,7 +581,6 @@ class sensorModel3DGPU:
         ry = (pts_world[:, 1] / self.frame.r) - self.frame.origin.y
         rz = (pts_world[:, 2] / self.frame.r) - self.frame.origin.z
 
-        # Match CPU indexing (frame.world_to_idx uses np.round), so use cp.rint here
         ix = cp.rint(rx).astype(cp.int32)
         iy = cp.rint(ry).astype(cp.int32)
         iz = cp.rint(rz).astype(cp.int32)
@@ -410,7 +593,6 @@ class sensorModel3DGPU:
         iy = iy[inb]
         iz = iz[inb]
 
-        # If nothing is in bounds, return full map
         if ix.size == 0:
             return gridMap(self.frame, self.data)
 
@@ -419,7 +601,6 @@ class sensorModel3DGPU:
         if not self.frame.in_bounds(sx, sy, sz):
             raise ValueError("Sensor origin out of bounds.")
 
-        # Bounding box of all affected voxels (endpoints + origin)
         if isMinimizeFrame:
             min_ix = cp.minimum(ix.min(), cp.int32(sx))
             min_iy = cp.minimum(iy.min(), cp.int32(sy))
@@ -428,25 +609,50 @@ class sensorModel3DGPU:
             max_iy = cp.maximum(iy.max(), cp.int32(sy))
             max_iz = cp.maximum(iz.max(), cp.int32(sz))
 
-        # Carve rays
+        # Carve rays (cone or line)
         N = ix.size
         threads = 256
         blocks = (N + threads - 1) // threads
-        self._carve_kernel((blocks,), (threads,),
-                           (N,
-                            cp.int32(sx), cp.int32(sy), cp.int32(sz),
-                            ix, iy, iz,
-                            self.data.ravel(),
-                            cp.int32(self.frame.size.w),
-                            cp.int32(self.frame.size.h),
-                            cp.int32(self.frame.size.d),
-                            cp.float32(self.invModel[0])))
 
-        # Mark endpoints as occupied
-        self.data[ix, iy, iz] = cp.float32(self.invModel[1])
+        if self.cone_free and self.diffusion_radius > 0:
+            self._carve_cone_decay_kernel((blocks,), (threads,),
+                                          (N,
+                                           cp.int32(sx), cp.int32(sy), cp.int32(sz),
+                                           ix, iy, iz,
+                                           self.data.ravel(),
+                                           cp.int32(self.frame.size.w),
+                                           cp.int32(self.frame.size.h),
+                                           cp.int32(self.frame.size.d),
+                                           cp.float32(self.invModel[0]),
+                                           cp.float32(self.occPrior),
+                                           cp.int32(self.diffusion_radius),
+                                           cp.float32(self.diffusion_radius)))
+        else:
+            self._carve_kernel((blocks,), (threads,),
+                               (N,
+                                cp.int32(sx), cp.int32(sy), cp.int32(sz),
+                                ix, iy, iz,
+                                self.data.ravel(),
+                                cp.int32(self.frame.size.w),
+                                cp.int32(self.frame.size.h),
+                                cp.int32(self.frame.size.d),
+                                cp.float32(self.invModel[0])))
+
+        if self.diffusion_radius > 0:
+            self._dilate_decay_kernel((blocks,), (threads,),
+                                      (N, ix, iy, iz,
+                                       self.data.ravel(),
+                                       cp.int32(self.frame.size.w),
+                                       cp.int32(self.frame.size.h),
+                                       cp.int32(self.frame.size.d),
+                                       cp.float32(self.invModel[1]),
+                                       cp.float32(self.occPrior),
+                                       cp.int32(self.diffusion_radius),
+                                       cp.float32(self.diffusion_radius)))
+        else:
+            self.data[ix, iy, iz] = cp.float32(self.invModel[1])
 
         if isMinimizeFrame:
-            # Crop via reshape
             min_ix = int(cp.asnumpy(min_ix))
             min_iy = int(cp.asnumpy(min_iy))
             min_iz = int(cp.asnumpy(min_iz))
