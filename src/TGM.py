@@ -63,7 +63,7 @@ class TGM:
         self.fftConv = fftConv
 
         self.x_t = None
-        self.prev_region = [0, 0, 0, 0, 0, 0]
+        self.prev_dynamic_frame = None
 
         # Open3D persistent visualization state
         self._o3d_vis = None
@@ -147,24 +147,16 @@ class TGM:
         dynamicMatrix = self.xp.clip(dynamicMatrix, self.satLowD, self.satHighD)
 
         # Set the cells that were visible to the prior
-        x0, y0, x1, y1, z0, z1 = self.prev_region
-        self.dynamicMap.data[x0:x1, y0:y1, z0:z1] = (1 - self.staticMap.data[x0:x1, y0:y1, z0:z1]) * self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior)
+        if self.prev_dynamic_frame is not None:
+            self.dynamicMap.update(self.prev_dynamic_frame, (1 - self.staticMap.crop(self.prev_dynamic_frame).data) * self.dynamicPrior / (self.dynamicPrior + self.freePrior + self.weatherPrior))
 
-        # Compute visible mask as the portion of the TGM that overlaps with the instantaneous map
-        x0_new = overlap.origin.x - self.frame.origin.x
-        y0_new = overlap.origin.y - self.frame.origin.y
-        z0_new = overlap.origin.z - self.frame.origin.z
-        x1_new = x0_new + overlap.size.w
-        y1_new = y0_new + overlap.size.h
-        z1_new = z0_new + overlap.size.d
+        # Update the maps in the overlapping region
+        self.staticMap.update(overlap, staticMatrix)
+        self.dynamicMap.update(overlap, dynamicMatrix)
+        self.weatherMap.update(overlap, weatherMatrix)
 
-        # Save the visible cells
-        self.staticMap.data[x0_new:x1_new, y0_new:y1_new, z0_new:z1_new] = staticMatrix
-        self.dynamicMap.data[x0_new:x1_new, y0_new:y1_new, z0_new:z1_new] = dynamicMatrix
-        self.weatherMap.data[x0_new:x1_new, y0_new:y1_new, z0_new:z1_new] = weatherMatrix
-
-        # Save the previous visible mask
-        self.prev_region = [x0_new, y0_new, x1_new, y1_new, z0_new, z1_new]
+        # Save the previous dynamic frame for the next update
+        self.prev_dynamic_frame = overlap
 
         # Clean up GPU memory if using GPU
         if self.GPU:
@@ -209,26 +201,17 @@ class TGM:
     
     def reshape(self, newFrame: frame):
         '''
-        Update the origin and size of the TGM, reshaping the maps and updating the previous region.
+        Update the TGM frame and reshape the maps accordingly. New cells are initialized with the prior values.
         '''
-        self.prev_region[0] = self.prev_region[0] + self.frame.origin.x - newFrame.origin.x
-        self.prev_region[1] = self.prev_region[1] + self.frame.origin.y - newFrame.origin.y
-        self.prev_region[2] = self.prev_region[2] + self.frame.origin.x - newFrame.origin.x
-        self.prev_region[3] = self.prev_region[3] + self.frame.origin.y - newFrame.origin.y
-        self.prev_region[4] = self.prev_region[4] + self.frame.origin.z - newFrame.origin.z
-        self.prev_region[5] = self.prev_region[5] + self.frame.origin.z - newFrame.origin.z
-
         self.staticMap = self.staticMap.reshape(newFrame, self.staticPrior)
         self.dynamicMap = self.dynamicMap.reshape(newFrame, self.dynamicPrior)
         self.weatherMap = self.weatherMap.reshape(newFrame, self.weatherPrior)
 
         self.frame = newFrame
 
-        # Make sure the previous region is within the new map
-        self.prev_region[0] = max(0, self.prev_region[0])
-        self.prev_region[1] = max(0, self.prev_region[1])
-        self.prev_region[2] = min(newFrame.size.w, self.prev_region[2])
-        self.prev_region[3] = min(newFrame.size.h, self.prev_region[3])
+        # Make sure the previous dynamic frame is within the new map
+        if self.prev_dynamic_frame is not None:
+            self.prev_dynamic_frame = self.prev_dynamic_frame.computeOverlap(newFrame)
 
     def oneLayer(self, layer, layerFrame):
         overlap = self.frame.computeOverlap(layerFrame)
@@ -304,24 +287,35 @@ class TGM:
         if ax is None:
             ax = fig.add_subplot(1, 1, 1)
         overlap = self.frame.computeOverlap(frame)
-        staticMap = self.staticMap.crop(overlap).toCPU().data
-        dynamicMap = self.dynamicMap.crop(overlap).toCPU().data
-        weatherMap = self.weatherMap.crop(overlap).toCPU().data
+
+        # Keep data on GPU if available
+        xp = cp if self.GPU else np
+
+        # Crop the maps to the overlapping region
+        staticMap = self.staticMap.crop(overlap).data
+        dynamicMap = self.dynamicMap.crop(overlap).data
+        weatherMap = self.weatherMap.crop(overlap).data
 
         # Plot the map according to the style
         if style == 'combined':
-            I = np.zeros((overlap.size.h, overlap.size.w, 3))
-            I[:,:,0] = 1 - np.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
-            I[:,:,1] = 1 - np.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/np.square(1-weatherMap))
-            I[:,:,2] = 1 - np.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/np.square(1-weatherMap))
+            I = xp.zeros((overlap.size.h, overlap.size.w, 3))
+            I[:,:,0] = 1 - xp.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))
+            I[:,:,1] = 1 - xp.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))
+            I[:,:,2] = 1 - xp.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))
             # Make sure the values are between 0 and 1
-            I = np.clip(I, 0, 1)
+            I = xp.clip(I, 0, 1)
         elif style == 'static':
-            I = 1 - np.transpose(staticMap)
+            I = 1 - xp.transpose(staticMap)
         elif style == 'dynamic':
-            I = 1 - np.transpose(dynamicMap)
+            I = 1 - xp.transpose(dynamicMap)
         elif style == 'weather':
-            I = 1 - np.transpose(weatherMap)
+            I = 1 - xp.transpose(weatherMap)
+
+        # Transfer the image to CPU if using GPU
+        if self.GPU:
+            I = cp.asnumpy(I)
+
+        # Plot the map
         ax.clear()
         ax.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                 extent=(overlap.origin.x*self.frame.r, (overlap.origin.x + overlap.size.w)*self.frame.r,

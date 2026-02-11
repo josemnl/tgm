@@ -171,6 +171,17 @@ class gridMap:
         iy = np.round((y - self.frame.origin.y*self.frame.r)/self.frame.r).astype(int)
         iz = np.round((z - self.frame.origin.z*self.frame.r)/self.frame.r).astype(int)
         return self.data[ix][iy][iz]
+    
+    def update(self, frame: frame, data: np.ndarray) -> None:
+        assert self.frame.contains(frame)
+        assert data.shape == (frame.size.w, frame.size.h, frame.size.d)
+        ix_0 = frame.origin.x - self.frame.origin.x
+        iy_0 = frame.origin.y - self.frame.origin.y
+        iz_0 = frame.origin.z - self.frame.origin.z
+        ix_1 = ix_0 + frame.size.w
+        iy_1 = iy_0 + frame.size.h
+        iz_1 = iz_0 + frame.size.d
+        self.data[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = data
 
     def saveState(self, filename: str) -> None:
         original_data = self.data
