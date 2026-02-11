@@ -166,6 +166,10 @@ class TGM:
         # Save the previous visible mask
         self.prev_region = [x0_new, y0_new, x1_new, y1_new, z0_new, z1_new]
 
+        # Clean up GPU memory if using GPU
+        if self.GPU:
+            cp._default_memory_pool.free_all_blocks()
+
     def predict(self, predictFrame=None):
         # Crop the maps if necessary
         if predictFrame is None:
