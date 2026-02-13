@@ -1,0 +1,53 @@
+# Log parameters
+lidarPath : './logs/underwater/rosbag2_2025_12_14-09_56_06/export/' # Path to the lidar data
+lidarFormat : 'BIN'                     # Format of the lidar data, 'bin' or 'csv'
+is3D : True                             # Set to True if the point cloud is 3D
+initialTimeStep : 1                     # Initial time step to start the simulation
+simHorizon : 2406                       # If 0, it runs until the end of the log
+
+# SLAM parameters
+isSLAM : True                           # If True, it computes x_t using SLAM
+velTracking : True                     # If True, it tracks the velocity to improve the first guess of the SLAM algorithm
+numTimeStepsSLAM : 1                    # Number of time steps to use ground truth x_t before starting SLAM
+startPoseSLAM : [2.5, 2.5, 2.5]         # Initial pose for the SLAM algorithm if x_t is not available
+
+# Plotting parameters
+saveVideo : True                        # If True, it saves the video
+removeFrames : False                    # If True, it removes the frames after saving the video
+saveSvg : True                          # If True, it saves each frame as a SVG file
+videoSection : 'Full'               # Section of the map to plot: 'Full', 'Following', 'Constant'
+videoWidth : 5                          # Width of the following window
+videoHeight : 5                         # Height of the following window
+videoDepth : 5                          # Depth of the following window
+videoOrigin : [0,0,0]                   # Origin of the video
+style : 'combined'                      # Style of the plot: 'combined', 'static', 'dynamic', 'weather'
+
+# Grid parameters
+origin : [0,0,0]                        # Origin of the grid
+width : 1                               # Width of the grid
+height : 1                              # Height of the grid
+depth : 1                               # Depth of the grid
+resolution : 0.10                      # Resolution of the grid
+
+# TGM parameters
+staticPrior : 0.3                       # If 0, it assumes that all the elements are dynamic
+dynamicPrior : 0.3                      # If 0, it behaves like a regular grid map
+weatherPrior : 0                        # If 0, it assumes no weather noise
+maxVelocity : 1                         # Maximum velocity of the agents, used to compute the kernel of the TGM
+saturationLimits : [0, 0.95, 0.05, 1]   # Saturation limits for the TGM
+fftConv : True                          # If True, it uses FFT to compute the convolution
+isGPU : True                            # If True, it uses the GPU to compute the TGM
+
+# Filter parameters
+groundThreshold : None                  # Threshold to consider a point as ground
+skyThreshold : None                     # Threshold to consider a point as sky
+minDistance : 0                         # Minimum distance to consider a point
+maxDistance : 25                        # Maximum distance to consider a point
+isVoxelGridFilter : True                # If True, it uses the Voxel Grid filter
+
+# Inverse Sensor Model parameters
+smWidth : 20                             # Width of the inverse sensor model
+smHeight : 20                            # Height of the inverse sensor model
+smDepth : 20                             # Depth of the inverse sensor model
+sensorRange : 25                        # Maximum range of the sensor
+invModel : [0.1, 0.9]                   # High and low values of the beam inverse sensor model
