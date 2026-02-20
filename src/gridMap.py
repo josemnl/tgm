@@ -3,50 +3,68 @@ import numpy as np
 import pickle
 import cv2
 import cupy as cp
-from typing import Tuple, Union
+from typing import Union
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-class frame:
-    def __init__(self, origin_x: int, origin_y: int, width: int, height: int, resolution: float):
-        """
-        Origin, width, and height are in grid cells
-        Resolution is in meters per grid cell
-        """
-        assert isinstance(origin_x, int)
-        assert isinstance(origin_y, int)
-        assert isinstance(width, int)
-        assert isinstance(height, int)
-        assert isinstance(resolution, float)
-        assert width > 0
-        assert height > 0
-        assert resolution > 0
-        self.ox = origin_x
-        self.oy = origin_y
-        self.w = width
-        self.h = height
-        self.r = resolution
+from spatial import position, orientation, pose, frame, origin, size
 
-    def contains(self, other: 'frame') -> bool:
-        return self.ox <= other.ox and self.oy <= other.oy and self.ox + self.w >= other.ox + other.w and self.oy + self.h >= other.oy + other.h
+class discreteDist:
+    """
+    Base class for discrete probability distributions.
+    """
+    def __init__(self, probabilities: np.ndarray, values: np.ndarray = None):
+        # Set attributes
+        self.probabilities = probabilities
+        if values is None:
+            self.values = np.arange(len(probabilities))
+        else:
+            self.values = values
 
-    def computeOverlap(self, other: 'frame') -> 'frame':
+    def expected_value(self) -> float:
         """
-        Compute the overlap between this frame and another frame.
+        Compute the expected value of the distribution.
+        E[S] = sum(s * p(S = s)) for s = 0..N
         """
-        overlap_origin_x = max(self.ox, other.ox)
-        overlap_origin_y = max(self.oy, other.oy)
-        overlap_width = min(self.ox + self.w, other.ox + other.w) - overlap_origin_x
-        overlap_height = min(self.oy + self.h, other.oy + other.h) - overlap_origin_y
-        
-        return frame(overlap_origin_x, overlap_origin_y, overlap_width, overlap_height, self.r)
-
-    @classmethod
-    def frameAroundPose(cls, x: float, y: float, width: int, height: int, resolution: float) -> 'frame':
+        return np.sum(self.values * self.probabilities)
+    
+    def updateLikelihood(self, likelihoods: np.ndarray) -> 'discreteDist':
         """
-        Create a frame centered around a pose with the specified width and height.
+        Update the distribution with new likelihoods using Bayes' rule.
+        p_new(S = s) = p_old(S = s) * p(likelihood | S = s) / normalization
         """
-        origin_x = int((x / resolution) - width/2)
-        origin_y = int((y / resolution) - height/2)
-        return cls(origin_x, origin_y, width, height, resolution)
+        updated_probs = self.probabilities * likelihoods
+        normalization = np.sum(updated_probs)
+        if normalization > 0:
+            updated_probs /= normalization
+        return discreteDist(updated_probs, self.values)
+    
+    def normalize(self) -> 'discreteDist':
+        normalization = np.sum(self.probabilities)
+        if normalization > 0:
+            normalized_probs = self.probabilities / normalization
+        else:
+            normalized_probs = self.probabilities
+        return discreteDist(normalized_probs, self.values)
+    
+    def plot(self, fig=None, ax=None) -> None:
+        if fig is None:
+            fig = plt.figure()
+        if ax is None:
+            ax = fig.add_subplot(1, 1, 1)
+        ax.clear()
+        # Use full-width bars without edges to avoid aliasing gaps in PNGs
+        ax.bar(
+            self.values,
+            self.probabilities,
+            width=1.0,
+            align='center',
+            alpha=1.0,
+            edgecolor='none',
+            linewidth=0,
+            antialiased=False,
+        )
+        ax.set_title('P(S = s)')
+        plt.show(block=False)
 
 class gridMap:
     def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
@@ -54,6 +72,17 @@ class gridMap:
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
         """
+
+        # Assert that the data is a 2D or 3D array
+        assert isinstance(data, (np.ndarray, cp.ndarray))
+        assert data.ndim in [2, 3]
+        assert data.shape[0] == gridFrame.size.w
+        assert data.shape[1] == gridFrame.size.h
+        if data.ndim == 2:
+            # Expand to 3D array with depth 1
+            data = data[:, :, np.newaxis]
+        assert data.shape[2] == gridFrame.size.d
+
         self.frame = gridFrame
         self.data = data
 
@@ -70,22 +99,27 @@ class gridMap:
             return gridMap(self.frame, cp.asnumpy(self.data))
         return self
     
+    def toGPU(self) -> 'gridMap':
+        if not self.isGPU:
+            return gridMap(self.frame, cp.asarray(self.data))
+        return self
+    
     def toBool(self, threshold: float) -> 'gridMap':
         return gridMap(self.frame, self.data > threshold)
 
-    def plot(self, isPause: bool = False) -> None:
-        I = 1 - np.transpose(self.data)
+    def plot(self, layer: int = 0, isPause: bool = False) -> None:
+        I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
-                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
+                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
+                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
         plt.show(block=isPause)
         plt.pause(0.0001)
 
-    def savePNG(self, filename: str) -> None:
-        I = 1 - np.transpose(self.data)
+    def savePNG(self, layer: int, filename: str) -> None:
+        I = 1 - np.transpose(self.data[:, :, layer])
         plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.ox*self.frame.r, (self.frame.ox + self.frame.w)*self.frame.r,
-                           self.frame.oy*self.frame.r, (self.frame.oy + self.frame.h)*self.frame.r))
+                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
+                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
         plt.savefig(filename)
 
     def contains(self, frame) -> bool:
@@ -98,12 +132,14 @@ class gridMap:
         """
         if not self.contains(newFrame):
             raise ValueError("New grid is outside the old one")
-        x0 = newFrame.ox - self.frame.ox
-        y0 = newFrame.oy - self.frame.oy
-        x1 = x0 + newFrame.w
-        y1 = y0 + newFrame.h
-        return gridMap(newFrame, self.data[x0:x1, y0:y1])
-    
+        x0 = newFrame.origin.x - self.frame.origin.x
+        y0 = newFrame.origin.y - self.frame.origin.y
+        z0 = newFrame.origin.z - self.frame.origin.z
+        x1 = x0 + newFrame.size.w
+        y1 = y0 + newFrame.size.h
+        z1 = z0 + newFrame.size.d
+        return gridMap(newFrame, self.data[x0:x1, y0:y1, z0:z1])
+
     def reshape(self, newFrame: frame, fill_value: float) -> 'gridMap':
         """
         Reshape the grid map.
@@ -111,26 +147,42 @@ class gridMap:
         """
         overlap = self.computeOverlap(newFrame)
         if self.isGPU:
-            newData = cp.full((newFrame.w, newFrame.h), fill_value)
+            newData = cp.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
         else:
-            newData = np.full((newFrame.w, newFrame.h), fill_value)
-        ix_0 = overlap.ox - newFrame.ox
-        iy_0 = overlap.oy - newFrame.oy
-        ix_1 = ix_0 + overlap.w - 1
-        iy_1 = iy_0 + overlap.h - 1
-        nx_0 = overlap.ox - self.frame.ox
-        ny_0 = overlap.oy - self.frame.oy
-        nx_1 = nx_0 + overlap.w - 1
-        ny_1 = ny_0 + overlap.h - 1
+            newData = np.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
+        ix_0 = overlap.origin.x - newFrame.origin.x
+        iy_0 = overlap.origin.y - newFrame.origin.y
+        iz_0 = overlap.origin.z - newFrame.origin.z
+        ix_1 = ix_0 + overlap.size.w
+        iy_1 = iy_0 + overlap.size.h
+        iz_1 = iz_0 + overlap.size.d
+        nx_0 = overlap.origin.x - self.frame.origin.x
+        ny_0 = overlap.origin.y - self.frame.origin.y
+        nz_0 = overlap.origin.z - self.frame.origin.z
+        nx_1 = nx_0 + overlap.size.w
+        ny_1 = ny_0 + overlap.size.h
+        nz_1 = nz_0 + overlap.size.d
 
-        newData[ix_0:ix_1, iy_0:iy_1] = self.data[nx_0:nx_1, ny_0:ny_1]
+        newData[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = self.data[nx_0:nx_1, ny_0:ny_1, nz_0:nz_1]
         return gridMap(newFrame, newData)
 
-    def occupancy(self, x: float, y: float) -> float:
-        ix = np.round((x - self.frame.ox*self.frame.r)/self.frame.r).astype(int)
-        iy = np.round((y - self.frame.oy*self.frame.r)/self.frame.r).astype(int)
-        return self.data[ix][iy]
+    def occupancy(self, x: float, y: float, z: float = 0) -> float:
+        ix = np.round((x - self.frame.origin.x*self.frame.r)/self.frame.r).astype(int)
+        iy = np.round((y - self.frame.origin.y*self.frame.r)/self.frame.r).astype(int)
+        iz = np.round((z - self.frame.origin.z*self.frame.r)/self.frame.r).astype(int)
+        return self.data[ix][iy][iz]
     
+    def update(self, frame: frame, data: np.ndarray) -> None:
+        assert self.frame.contains(frame)
+        assert data.shape == (frame.size.w, frame.size.h, frame.size.d)
+        ix_0 = frame.origin.x - self.frame.origin.x
+        iy_0 = frame.origin.y - self.frame.origin.y
+        iz_0 = frame.origin.z - self.frame.origin.z
+        ix_1 = ix_0 + frame.size.w
+        iy_1 = iy_0 + frame.size.h
+        iz_1 = iz_0 + frame.size.d
+        self.data[ix_0:ix_1, iy_0:iy_1, iz_0:iz_1] = data
+
     def saveState(self, filename: str) -> None:
         original_data = self.data
         self.data = self.data.astype(np.float16)
@@ -157,8 +209,8 @@ class gridMap:
         rotated_corners = np.dot(rotation_matrix, (corners - np.array([x, y])).T).T + np.array([x, y])
 
         # Translate the corners to the grid map
-        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.frame.ox*self.frame.r)/self.frame.r
-        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.frame.oy*self.frame.r)/self.frame.r
+        rotated_corners[:, 0] = (rotated_corners[:, 0] - self.frame.origin.x*self.frame.r)/self.frame.r
+        rotated_corners[:, 1] = (rotated_corners[:, 1] - self.frame.origin.y*self.frame.r)/self.frame.r
 
         # Swap x and y (for consistency with openCV)
         rotated_corners[:, 0], rotated_corners[:, 1] = rotated_corners[:, 1], rotated_corners[:, 0].copy()
@@ -169,11 +221,7 @@ class gridMap:
 
     def diff(self, otherGM: 'gridMap') -> 'gridMap':
         # Implements the set difference between two grid maps
-        assert self.frame.w == otherGM.frame.w
-        assert self.frame.h == otherGM.frame.h
-        assert self.frame.r == otherGM.frame.r
-        assert self.frame.ox == otherGM.frame.ox
-        assert self.frame.oy == otherGM.frame.oy
+        assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
         if self.isGPU:
@@ -182,16 +230,312 @@ class gridMap:
     
     def union(self, otherGM: 'gridMap') -> 'gridMap':
         # Implements the set union between two grid maps
-        assert self.frame.w == otherGM.frame.w
-        assert self.frame.h == otherGM.frame.h
-        assert self.frame.r == otherGM.frame.r
-        assert self.frame.ox == otherGM.frame.ox
-        assert self.frame.oy == otherGM.frame.oy
+        assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
         if self.isGPU:
             return gridMap(self.frame, cp.logical_or(self.data, otherGM.data))
         return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
+
+    def plot3D_scatter(self, isPause: bool = False, s_min: float = 120.0, s_max: float = 120.0,
+                   alpha_min: float = 0.0, alpha_max: float = 1.0, elev: float = 20, azim: float = -60,
+                   value_min: float = 0.0, value_max: float = 1.0) -> None:
+        """
+        3D scatter representation: place a marker at the center of each voxel cell.
+        - Color = grayscale 1 - value (imshow-like)
+        - Alpha scales with occupancy (alpha_min..alpha_max)
+        - Marker size scales with occupancy (s_min..s_max) to hint density
+        - Only plot values in [value_min..value_max] range (default 0..1)
+
+        Drawn per z-slice back-to-front to improve blending.
+        """
+        # Keep data on GPU if available, use xp abstraction for all operations
+        if self.isGPU:
+            data = self.data
+            xp = cp
+        else:
+            data = self.data
+            xp = np
+            
+        values = xp.clip(data.astype(float), 0.0, 1.0)
+        inten = 1.0 - values
+        alpha = alpha_min + (alpha_max - alpha_min) * values
+        sizes = s_min + (s_max - s_min) * values
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        try:
+            ax.set_proj_type('ortho')
+        except Exception:
+            pass
+        ax.view_init(elev=elev, azim=azim)
+
+        # Compute centers in index units (can scale to meters if desired)
+        xs = self.frame.origin.x + xp.arange(self.frame.size.w) + 0.5
+        ys = self.frame.origin.y + xp.arange(self.frame.size.h) + 0.5
+        zs = self.frame.origin.z + xp.arange(self.frame.size.d) + 0.5
+
+        # Shapes
+        nx, ny, nz = len(xs), len(ys), len(zs)
+
+        # 1D coordinates consistent with arr.ravel(order='C') for shape (nx, ny, nz)
+        X = xp.repeat(xs, ny * nz)
+        Y = xp.tile(xp.repeat(ys, nz), nx)
+        Z = xp.tile(zs, nx * ny)
+
+        # Per-point RGBA and sizes
+        rgba = xp.zeros(inten.shape + (4,), dtype=float)
+        rgba[..., 0] = inten
+        rgba[..., 1] = inten
+        rgba[..., 2] = inten
+        rgba[..., 3] = alpha
+
+        # Mask out low and high values (on GPU if available)
+        mask = (values >= value_min) & (values <= value_max)
+        mask = mask.ravel()
+
+        # Transfer to CPU only after masking (only the filtered results)
+        if self.isGPU:
+            X = cp.asnumpy(X[mask])
+            Y = cp.asnumpy(Y[mask])
+            Z = cp.asnumpy(Z[mask])
+            sizes_masked = cp.asnumpy(sizes.ravel()[mask])
+            rgba_masked = cp.asnumpy(rgba.reshape(-1, 4)[mask])
+        else:
+            X = X[mask]
+            Y = Y[mask]
+            Z = Z[mask]
+            sizes_masked = sizes.ravel()[mask]
+            rgba_masked = rgba.reshape(-1, 4)[mask]
+
+        ax.scatter(X, Y, Z,
+                   s=sizes_masked,
+                   c=rgba_masked,
+                   marker='o',
+                   depthshade=False)
+
+        # Limits & aspect
+        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
+        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
+        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
+        try:
+            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
+        except Exception:
+            try:
+                ax.set_aspect('equal')
+            except Exception:
+                pass
+
+        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
+        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
+
+        plt.show(block=isPause)
+        plt.pause(0.0001)
+
+    def plot3D_cubes(self, isPause: bool = False, cube_size: float = 1.0,
+                   alpha_min: float = 0.0, alpha_max: float = 1.0,
+                   face_edges: bool = False, elev: float = 20, azim: float = -60) -> None:
+        """
+        3D glyph scatter with cubes: draw a smaller cube centered in each cell.
+        - cube_size in (0, 1]: side-length relative to cell size (default 0.6)
+        - Color = 1 - value (imshow-like grayscale)
+        - Alpha scales with occupancy (alpha_min..alpha_max)
+        - Optional edges (off by default for speed)
+
+        Renders per z-slice back-to-front for decent transparency blending.
+        """
+        data = cp.asnumpy(self.data) if self.isGPU else self.data
+        values = np.clip(data.astype(float), 0.0, 1.0)
+        inten = 1.0 - values
+        alpha = alpha_min + (alpha_max - alpha_min) * values
+
+        half = float(cube_size) / 2.0
+        # Clamp to (0, 0.5]; 0.5 means cubes span the full cell and touch
+        if half <= 0:
+            half = 1e-3
+        if half > 0.5:
+            half = 0.5
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        try:
+            ax.set_proj_type('ortho')
+        except Exception:
+            pass
+        ax.view_init(elev=elev, azim=azim)
+
+        def cube_faces(cx, cy, cz, h):
+            x0, x1 = cx - h, cx + h
+            y0, y1 = cy - h, cy + h
+            z0, z1 = cz - h, cz + h
+            return [
+                [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)],
+                [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
+                [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)],
+                [(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)],
+                [(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)],
+                [(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)],
+            ]
+
+        # Centers per axis
+        xs = self.frame.origin.x + np.arange(self.frame.size.w) + 0.5
+        ys = self.frame.origin.y + np.arange(self.frame.size.h) + 0.5
+        zs = self.frame.origin.z + np.arange(self.frame.size.d) + 0.5
+
+        for k in range(self.frame.size.d):
+            zc = zs[k]
+            polys = []
+            face_cols = []
+            edge_cols = []
+            for i in range(self.frame.size.w):
+                xc = xs[i]
+                for j in range(self.frame.size.h):
+                    yc = ys[j]
+                    col = inten[i, j, k]
+                    a = alpha[i, j, k]
+                    faces = cube_faces(xc, yc, zc, half)
+                    rgba = (col, col, col, a)
+                    for f in faces:
+                        polys.append(f)
+                        face_cols.append(rgba)
+                        edge_cols.append((0, 0, 0, 0.25) if face_edges else (0, 0, 0, 0))
+            if polys:
+                coll = Poly3DCollection(polys, facecolors=face_cols, edgecolors=edge_cols)
+                coll.set_alpha(None)
+                try:
+                    coll.set_zsort('none')
+                except Exception:
+                    pass
+                ax.add_collection3d(coll)
+
+        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
+        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
+        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
+        try:
+            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
+        except Exception:
+            try:
+                ax.set_aspect('equal')
+            except Exception:
+                pass
+
+        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
+        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
+        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
+        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
+
+        plt.show(block=isPause)
+        plt.pause(0.0001)
+
+    def cardinality(self) -> discreteDist:
+        """
+        Return a vector with the probability of the sum of the occupied cells being equal to each index.
+        p(S = s) for s = 0..N where N is the number of cells.
+        It is computed as a Poisson Binomial distribution, using a dynamic programming approach.
+        """
+        if self.isGPU:
+            p = self.data.flatten().astype(cp.float64)
+            N = int(p.size)
+            print(f"Computing cardinality for N={N} cells (GPU, FFT).")
+
+            if N == 0:
+                return discreteDist(np.array([1.0], dtype=np.float64))
+
+            polys = []
+            one = cp.ones((), dtype=cp.float64)
+            for i in range(N):
+                pi = p[i]
+                polys.append(cp.stack([one - pi, pi]).astype(cp.float64))
+
+            def fft_convolve(a: cp.ndarray, b: cp.ndarray) -> cp.ndarray:
+                total_len = int(a.size + b.size - 1)
+                n = 1 << (total_len - 1).bit_length()
+                fa = cp.fft.rfft(a, n)
+                fb = cp.fft.rfft(b, n)
+                fc = fa * fb
+                c = cp.fft.irfft(fc, n)
+                return c[:total_len]
+
+            while len(polys) > 1:
+                new_polys = []
+                for i in range(0, len(polys), 2):
+                    if i + 1 < len(polys):
+                        new_polys.append(fft_convolve(polys[i], polys[i + 1]))
+                    else:
+                        new_polys.append(polys[i])
+                polys = new_polys
+
+            cardinality_gpu = polys[0]
+            cardinality_gpu = cp.clip(cardinality_gpu, 0.0, 1.0)
+            s = cp.sum(cardinality_gpu)
+            if s > 0:
+                cardinality_gpu = cardinality_gpu / s
+
+            return discreteDist(cp.asnumpy(cardinality_gpu))
+        else:
+            p = self.data.flatten()
+            N = p.size
+            print(f"Computing cardinality for N={N} cells.")
+            cardinality = np.zeros(N + 1, dtype=np.float64)
+            cardinality[0] = 1.0
+
+            for i in range(N):
+                p_i = p[i]
+                for s in range(i + 1, 0, -1):
+                    cardinality[s] = cardinality[s] * (1 - p_i) + cardinality[s - 1] * p_i
+                cardinality[0] = cardinality[0] * (1 - p_i)
+
+        return discreteDist(cardinality)
+    
+    def logOddShift(self, shift: float) -> 'gridMap':
+        """
+        Apply a log-odds shift to the occupancy probabilities.
+        New probability p' = 1 - 1 / (1 + exp(logit(p) + shift))
+        where logit(p) = log(p / (1 - p))
+        """
+        eps = 1e-12
+        if self.isGPU:
+            p = cp.clip(self.data, eps, 1.0 - eps)
+            logit = cp.log(p / (1 - p))
+            logit_shifted = logit + shift
+            p_new = 1 - 1 / (1 + cp.exp(logit_shifted))
+            return gridMap(self.frame, p_new)
+        else:
+            p = np.clip(self.data, eps, 1.0 - eps)
+            logit = np.log(p / (1 - p))
+            logit_shifted = logit + shift
+            p_new = 1 - 1 / (1 + np.exp(logit_shifted))
+            return gridMap(self.frame, p_new)
+        
+    def rebalance(self, target_cardinality: discreteDist) -> 'gridMap':
+        """
+        Rebalance the grid map to match a target cardinality distribution.
+        Uses an iterative approach to adjust the value of the shift applied to the log-odds.
+        """
+        shift_low = -10.0
+        shift_high = 10.0
+        tolerance = 1e-3
+        max_iterations = 20
+
+        expected_target = target_cardinality.expected_value()
+
+        for iteration in range(max_iterations):
+            shift_mid = (shift_low + shift_high) / 2.0
+            gm_shifted = self.logOddShift(shift_mid)
+            cardinality_shifted = gm_shifted.cardinality()
+            expected_shifted = cardinality_shifted.expected_value()
+
+            if abs(expected_shifted - expected_target) < tolerance:
+                return gm_shifted
+
+            if expected_shifted < expected_target:
+                shift_low = shift_mid
+            else:
+                shift_high = shift_mid
+
+        return self.logOddShift(shift_mid)
 
     @classmethod
     def loadState(cls, filename: str, data_type: np.dtype = np.float64) -> 'gridMap':
@@ -199,26 +543,73 @@ class gridMap:
             obj = pickle.load(file)
             obj.data = obj.data.astype(data_type)
             return obj
+        
+    @classmethod
+    def loadFromPNG(cls, filename: str, gridOrigin: origin, resolution: float) -> 'gridMap':
+        img = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            raise ValueError(f"Failed to load image from {filename}")
+        img = cv2.flip(img, 0)
+        img_normalized = img.astype(np.float32) / 255.0
+        # Transpose to have shape (width, height)
+        img_normalized = np.transpose(img_normalized)
+        width, height = img_normalized.shape
+        print(f"Loaded PNG '{filename}' with size: width={width}, height={height}")
+        grid_frame = frame(gridOrigin, size(width, height), resolution)
+        data = 1.0 - img_normalized
+        data_3d = data[:, :, np.newaxis]
+        return cls(grid_frame, data_3d)
 
 def main() -> None:
-    origin_x = 0
-    origin_y = 0
     width = 10*2
     height = 5*2
     resolution = 0.5
-    currentFrame = frame(origin_x, origin_y, width, height, resolution)
+    orig = origin(0, 0, 0)
+    frame_size = size(width, height, 2)
+    currentFrame = frame(orig, frame_size, resolution)
 
-    data = np.zeros((width, height))
-    data[0][0] = 1
-    data[19][0] = 0.5
+    data = np.zeros((width, height, 2))+0.01
+    data[0][0][0] = 1
+    data[19][0][1] = 0.5
     
     grid = gridMap(currentFrame, data)
     grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
-    grid.plot(isPause=True)
+    grid.plot(0, isPause=True)
+    grid.plot3D_scatter(isPause=True) # Balls
+    grid.plot3D_cubes(isPause=True)
+    cardinality = grid.cardinality()
 
-    newFrame = frame(10, 0, 10, 6, 0.5)
-
+    newFrame = frame(origin(10, 0, 0), size(10, 6, 2), 0.5)
+    
     grid.crop(newFrame).plot(isPause=True)
+    grid.crop(newFrame).plot3D_scatter(isPause=True)
+    grid.crop(newFrame).plot3D_cubes(isPause=True)
+
+    # Test pose transformations
+    p1 = pose(position(1.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/2))
+    p2 = pose(position(3.0, 0.0, 0.0), orientation(0.0, 0.0, np.pi/4))
+    p3 = p2.compose(p1)
+
+    print(f"Transformed Position: x={p3.position.x}, y={p3.position.y}, z={p3.position.z}")
+    print(f"Transformed Orientation: roll={p3.orientation.roll}, pitch={p3.orientation.pitch}, yaw={p3.orientation.yaw}")
+
+    x_t = pose(position(2.5, 2.5, 2.5), orientation(0.0, 0.0, 0.0))
+    link_base_sensor = pose(position(0.22, 0.0, -0.15), orientation(0.0, -3.14159/6, 0.0))
+    x_t = link_base_sensor.compose(x_t)
+
+    print(f"Transformed Position: x={x_t.position.x}, y={x_t.position.y}, z={x_t.position.z}")
+    print(f"Transformed Orientation: roll={x_t.orientation.roll}, pitch={x_t.orientation.pitch}, yaw={x_t.orientation.yaw}")
+
+    # Testing cardinality
+    cframe = frame(origin(0, 0, 0), size(2, 2, 1), 1.0)
+    cdata = np.array([[[0.0], [0.5]],
+                      [[0.0], [1.0]]])
+    cgrid = gridMap(cframe, cdata)
+    ccardinality = cgrid.cardinality()
+    print(f"Cardinality: {ccardinality}")
+    target_cardinality = discreteDist(np.array([0.0, 0.0, 1.0, 0.0]))
+    rebalanced_grid = cgrid.rebalance(target_cardinality)
+    print(f"Rebalanced Grid Data:\n{rebalanced_grid.data}")
 
 if __name__ == '__main__':
     main()

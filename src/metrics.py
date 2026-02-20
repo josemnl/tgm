@@ -1,12 +1,13 @@
-from lidarScan import lidarScan, lidarScan3D
+from lidarScan import lidarScan
 from gridMap import gridMap
+from spatial import pose, position, orientation, size, frame, origin
 import numpy as np
 from utilities import read3DLabledLidarBIN, loadConfigAsDict
 from sensorModel import sensorModel
 
 def computeMetrics(z_t, x_t, gM, label=1):
     assert isinstance(z_t, lidarScan)
-    assert isinstance(x_t, np.ndarray)
+    assert isinstance(x_t, pose)
     assert isinstance(gM, gridMap)
     
     # Keep only the snow points
@@ -30,11 +31,11 @@ def computeMetrics(z_t, x_t, gM, label=1):
 def classificationMetrics(gM1, gM2, verbose=False):
     assert isinstance(gM1, gridMap)
     assert isinstance(gM2, gridMap)
-    assert gM1.frame.w == gM2.frame.w
-    assert gM1.frame.h == gM2.frame.h
+    assert gM1.frame.size.w == gM2.frame.size.w
+    assert gM1.frame.size.h == gM2.frame.size.h
     assert gM1.frame.r == gM2.frame.r
-    assert gM1.frame.ox == gM2.frame.ox
-    assert gM1.frame.oy == gM2.frame.oy
+    assert gM1.frame.origin.x == gM2.frame.origin.x
+    assert gM1.frame.origin.y == gM2.frame.origin.y
     assert gM1.frame.r == gM2.frame.r
     assert gM1.isBool
     assert gM2.isBool
@@ -75,7 +76,10 @@ if __name__ == "__main__":
     # Load parameters as dictionary
     conf = loadConfigAsDict(configPath, logID)
 
-    sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
+    smSize = size(conf.smWidth, conf.smHeight)
+    smOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    smFrame = frame(smOrigin, smSize, conf.resolution)
+    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')
@@ -101,7 +105,7 @@ if __name__ == "__main__":
     #z_t.voxelGridFilter(conf.voxelGridSize)
     z_t.orderByAngle()
 
-    x_t = np.array(conf.startPoseSLAM)
+    x_t = pose(position(conf.startPoseSLAM[0], conf.startPoseSLAM[1], 0.0), orientation(0.0, 0.0, conf.startPoseSLAM[2]))
 
     
     

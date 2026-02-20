@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict, listFilesExt
+from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
 from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
-from gridMap import gridMap, frame
+from spatial import frame, origin, size, position, pose, orientation
 
 def run(logID, conf):
     # Print logID
@@ -21,9 +21,14 @@ def run(logID, conf):
         os.makedirs(videoPath)
 
     # Create Sensor Model and TGM
-    sM = sensorModel(conf.origin, conf.smWidth, conf.smHeight, conf.resolution, conf.sensorRange, conf.invModel, conf.occPrior)
-    tgmFrame = frame(conf.origin[0], conf.origin[1], conf.width, conf.height, conf.resolution)
-    tgm = TGM(tgmFrame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+    sMsize = size(conf.smWidth, conf.smHeight, 1)
+    smOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    smFrame = frame(smOrigin, sMsize, conf.resolution)
+    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+    tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
+    tgmSize = size(conf.width, conf.height, 1)
+    tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
+    tgm = TGM(tgmFrame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
 
     # Empty arrays for the results
     x_t_SLAM_array = []
@@ -51,8 +56,8 @@ def run(logID, conf):
     recall_t_b_array = []
     f1_t_b_array = []
 
-    # Initial guess for the velocity
-    v_t = [0, 0, 0]
+    # Initial guess for the velocity (pose type to support pose arithmetic)
+    v_t = pose(position(0.0, 0.0, 0.0), orientation(0.0, 0.0, 0.0))
 
     # Dict to store runtimes. Each key is a type of time, and each value is an array with the time for each frame
     runtimes = {}
@@ -65,6 +70,7 @@ def run(logID, conf):
 
     # Main loop
     fig= plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
         timeStart = time.time()
 
@@ -129,14 +135,16 @@ def run(logID, conf):
             try:
                 x_t = readPose(conf.lidarPath + "x_" + str(i) + ".csv")
             except:
-                x_t = np.array(conf.startPoseSLAM)
+                x_t = np.array(conf.startPoseSLAM, dtype=float)
+                x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
         else:
             x_prev = x_t
             if conf.velTracking:
                 initialGuess = x_t + v_t
             else:
                 initialGuess = x_t
-            slamFrame = frame.frameAroundPose(x_t[0], x_t[1], conf.smWidth, conf.smHeight, tgm.frame.r)
+            slamSize = size(conf.smWidth, conf.smHeight, 1)
+            slamFrame = frame.frameAroundPosition(x_t.position, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
             x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
             v_t = x_t - x_prev
@@ -144,7 +152,7 @@ def run(logID, conf):
 
         # Save SLAM results
         if conf.isSLAM:
-            x_t_SLAM_array.append(x_t)
+            x_t_SLAM_array.append([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
 
         # Compute instantaneous grid map with inverse sensor model
         sM.updateBasedOnPose(x_t)
@@ -156,7 +164,8 @@ def run(logID, conf):
 
         # If gm is partially outside the TGM, resize the TGM
         if not tgm.contains(gm.frame):
-            newFrame = frame.frameAroundPose(x_t[0], x_t[1], tgm.frame.w, tgm.frame.h, tgm.frame.r)
+            newSize = size(tgm.frame.size.w, tgm.frame.size.h, tgm.frame.size.d)
+            newFrame = frame.frameAroundPosition(x_t.position, newSize, tgm.frame.r)
             tgm.reshape(newFrame)
 
         # Update TGM
@@ -164,34 +173,38 @@ def run(logID, conf):
         timeTGM = time.time()
 
         # Plot maps
-        fig.clear()
+        #fig.clear()
         # Compute the frame for the plot
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
         elif conf.videoSection == 'Following':
-            plotFrame = frame.frameAroundPose(x_t[0], x_t[1], int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), tgm.frame.r)
+            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(1))
+            plotFrame = frame.frameAroundPosition(x_t.position, plotSize, tgm.frame.r)
         elif conf.videoSection == 'Constant':
-            plotFrame = frame(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), tgm.frame.r)
-        tgm.plot(fig, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
+            plotOrigin = origin(int(conf.videoOrigin[0] / tgm.frame.r), int(conf.videoOrigin[1] / tgm.frame.r), 0)
+            plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), 1)
+            plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
+        tgm.plot(fig, ax, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
         timePlot = time.time()
 
         # Special plots for snow
         if i == 14 or i == 349 or i == 846:
-            plotFrameSnow = frame.frameAroundPose(x_t[0], x_t[1], int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), tgm.frame.r)
+            plotFrameSize = size(int(conf.videoWidth / tgm.frame.r), int(20 / tgm.frame.r), int(1))
+            plotFrameSnow = frame.frameAroundPosition(x_t.position, plotFrameSize, tgm.frame.r)
             gm_unfiltered = sM.generateGridMap(z_t_before_filter, x_t)
             fig.clear()
             # Create a new unfiltered tgm with the same frame
-            tgm_unfiltered = TGM(tgm.frame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_unfiltered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_unfiltered.update(gm_unfiltered, x_t)
-            tgm_unfiltered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
+            tgm_unfiltered.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_unfiltered', style=conf.style)
             
             gm_filtered = sM.generateGridMap(z_t, x_t)
             fig.clear()
-            tgm_filtered = TGM(tgm.frame, conf.staticPrior, conf.dynamicPrior, conf.weatherPrior, conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
+            tgm_filtered = TGM(tgm.frame, (conf.staticPrior, conf.dynamicPrior, conf.weatherPrior), conf.maxVelocity, conf.saturationLimits, conf.fftConv, conf.isGPU)
             tgm_filtered.update(gm_filtered, x_t)
-            tgm_filtered.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
+            tgm_filtered.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_filtered', style=conf.style)
 
-            tgm.plot(fig, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_tgm', style=conf.style)
+            tgm.plot(fig, ax, plotFrameSnow, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1) + '_tgm', style=conf.style)
 
 
         # Print progress
@@ -361,19 +374,18 @@ def run(logID, conf):
 
     # Save last frame
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID)
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID)
 
     # Save static grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_static', style='static')
-
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_static', style='static')
     # Save dynamic grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_dynamic', style='dynamic')
 
     # Save weather grid map
     fig.clear()
-    tgm.plot(fig, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
+    tgm.plot(fig, ax, saveMap=True, imgName= videoPath + logID + '_weather', style='weather')
 
 if __name__ == '__main__':
     # Config file

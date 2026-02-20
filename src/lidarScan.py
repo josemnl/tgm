@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from GroundSeg import ground_seg
+from spatial import pose, orientation
 
 class lidarScan:
     def __init__(self, angles, ranges, labels=None):
@@ -18,10 +19,10 @@ class lidarScan:
     def computeCartesian(self):
         return np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles)])
 
-    def computeRelativeCartesian(self, relPose):
-        angles = self.angles + relPose[2]
-        x = self.ranges * np.cos(angles) + relPose[0]
-        y = self.ranges * np.sin(angles) + relPose[1]
+    def computeRelativeCartesian(self, relPose: pose):
+        angles = self.angles + relPose.orientation.yaw
+        x = self.ranges * np.cos(angles) + relPose.position.x
+        y = self.ranges * np.sin(angles) + relPose.position.y
         return np.column_stack([x, y])
 
     def plot(self, ax=None, byLabel=False):
@@ -132,9 +133,16 @@ class lidarScan:
         ranges = self.ranges[mask]
         labels = self.labels[mask]
         return lidarScan(angles, ranges, labels)
+    
+    def convertTo3D(self, height=0.0):
+        points3D = np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles), np.ones(self.ranges.shape) * height])
+        return lidarScan3D(points3D, self.labels)
 
 class lidarScan3D:
     def __init__(self, points3D, labels=None):
+        assert points3D.shape[1] == 3
+        if labels is not None:
+            assert points3D.shape[0] == labels.shape[0]
         self.points3D = points3D
         self.numReadings = len(points3D)
         self.labels = labels
@@ -229,7 +237,10 @@ class lidarScan3D:
                 ax.scatter(self.points3D[indices, 0], self.points3D[indices, 1], self.points3D[indices, 2], color)
         else:
             ax.scatter(self.points3D[:, 0], self.points3D[:, 1], self.points3D[:,2], 'r')
-        #ax.axis('equal')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.axis('equal')
         plt.show()
 
     def ROR(self, k, r):
@@ -343,6 +354,42 @@ class lidarScan3D:
         # This function performs the ground segmentation using the RMF algorithm
         ground, objects = ground_seg(self.points3D)
         return lidarScan3D(ground), lidarScan3D(objects)
+    
+    def voxelGridFilter(self, voxel_size):
+        # Determine the grid indices for each point
+        grid_indices = np.floor(self.points3D / voxel_size).astype(int)
+
+        # Create a dictionary to store points in each voxel
+        voxel_dict = {}
+        for i, idx in enumerate(grid_indices):
+            key = tuple(idx)
+            if key not in voxel_dict:
+                voxel_dict[key] = []
+            voxel_dict[key].append(self.points3D[i])
+
+        # Create a list to store the downsampled points
+        downsampled_points = []
+
+        # Iterate through each voxel and average the points inside
+        for key, points in voxel_dict.items():
+            average_point = np.mean(points, axis=0)
+            downsampled_points.append(average_point)
+        
+        downsampled_points = np.array(downsampled_points)
+        self.points3D = downsampled_points
+
+        # Remove labels if they exist
+        if self.labels is not None:
+            self.labels = None
+        
+    def transform(self, x_t: pose) -> 'lidarScan3D':
+        if self.points3D is None or self.points3D.size == 0:
+            empty_labels = None if self.labels is None else self.labels[:0]
+            return lidarScan3D(np.empty((0, 3)), empty_labels)
+        
+        R = orientation.to_R_zyx(x_t.orientation)          # Rz(yaw) @ Ry(pitch) @ Rx(roll)
+        t = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
+        return lidarScan3D(self.points3D @ R.T + t, self.labels)
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point

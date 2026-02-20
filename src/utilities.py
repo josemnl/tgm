@@ -5,11 +5,65 @@ from lidarScan import lidarScan, lidarScan3D
 import yaml
 import pandas as pd
 from types import SimpleNamespace
+from spatial import position, orientation, pose
 
 def readPose(file):
-    with open(file) as data:
-        x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-    return x_t
+    """Read a single-line pose CSV file.
+
+    Supported formats (comma-separated, first non-empty line only):
+    - 3 values: x, y, yaw (z assumed 0)
+    - 6 values: x, y, z, roll, pitch, yaw
+    - 7 values: x, y, z, qx, qy, qz, qw (quaternion -> roll, pitch, yaw)
+    """
+    # Use utf-8-sig to gracefully handle potential BOM
+    with open(file, 'r', encoding='utf-8-sig', newline='') as f:
+        first_non_empty = None
+        for line in f:
+            line = line.strip()
+            if line:
+                first_non_empty = line
+                break
+
+        if first_non_empty is None:
+            raise ValueError('Empty pose file: ' + file)
+
+        parts = [p.strip() for p in first_non_empty.split(',') if p.strip() != '']
+        n = len(parts)
+
+        # Parse as floats if count is valid
+        if n not in (3, 6, 7):
+            raise ValueError(
+                'Invalid pose format in file: ' + file + '. Expected 3, 6 or 7 values per line, got ' + str(n)
+            )
+
+        vals = list(map(float, parts))
+
+        if n == 3:
+            x, y, yaw = vals
+            return pose(position(x, y, 0.0), orientation(0.0, 0.0, yaw))
+
+        if n == 6:
+            x, y, z, roll, pitch, yaw = vals
+            return pose(position(x, y, z), orientation(roll, pitch, yaw))
+
+        # n == 7: quaternion -> roll, pitch, yaw
+        x, y, z, qx, qy, qz, qw = vals
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (qw * qx + qy * qz)
+        cosr_cosp = 1 - 2 * (qx * qx + qy * qy)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+        # Pitch (y-axis rotation)
+        sinp = 2 * (qw * qy - qz * qx)
+        if abs(sinp) >= 1:
+            pitch = np.sign(sinp) * (np.pi / 2)  # clamp at 90 degrees if out of range
+        else:
+            pitch = np.arcsin(sinp)
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (qw * qz + qx * qy)
+        cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+        ori_obj = orientation(roll, pitch, yaw)
+        return pose(position(x, y, z), ori_obj)
 
 def read2DLidarCSV(file):
     with open(file) as data:
@@ -21,11 +75,11 @@ def read3DLidarCSV(file):
     z_t_3D = lidarScan3D(data.values.astype(float))
     return z_t_3D
 
-def read3DLidarBIN(file):
+def read3DLidarBIN(file, n_fields=4):
     rawdata = np.fromfile(file, dtype=np.float32)
     # Convert raw data to float
     rawdata = rawdata.astype(float)
-    data = np.reshape(rawdata, (-1, 4))
+    data = np.reshape(rawdata, (-1, n_fields))
     z_t_3D = lidarScan3D(data[:,0:3])
     return z_t_3D
 
@@ -116,13 +170,21 @@ def loadConfig(configPath, configFile):
 def loadConfigAsDict(configPath, configFile):
     # Import parameters from config file
     config = yaml.safe_load(open(configPath + configFile + '.yaml'))
+    # One-liner: shallow-normalize 'None' (string) to Python None across top-level keys
+    config = {k: (None if isinstance(v, str) and v.strip().lower() == 'none' else v) for k, v in config.items()}
+    # Wrap into a SimpleNamespace for attribute access
     config = SimpleNamespace(**config)
     # Convert meters to cells
     config.width = int(config.width/config.resolution)
     config.height = int(config.height/config.resolution)
+    if hasattr(config, 'depth'):
+        config.depth = int(config.depth/config.resolution)
     config.smWidth = int(config.smWidth/config.resolution)
     config.smHeight = int(config.smHeight/config.resolution)
+    if hasattr(config, 'smDepth'):
+        config.smDepth = int(config.smDepth/config.resolution)
     config.sensorRange = int(config.sensorRange/config.resolution)
+    config.maxVelocity = int(config.maxVelocity/config.resolution)
     # Compute occupancy prior
     config.occPrior = config.staticPrior + config.dynamicPrior + config.weatherPrior
     # Voxel grid size is the same as the resolution
