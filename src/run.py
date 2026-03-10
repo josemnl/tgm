@@ -4,7 +4,7 @@ import time
 import os
 
 from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel
+from sensorModel import sensorModel, sensorModelGPU
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
@@ -24,7 +24,10 @@ def run(logID, conf):
     sMsize = size(conf.smWidth, conf.smHeight, 1)
     smOrigin = origin(conf.origin[0], conf.origin[1], 0)
     smFrame = frame(smOrigin, sMsize, conf.resolution)
-    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+    if conf.isGPU:
+        sM = sensorModelGPU(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+    else:
+        sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
