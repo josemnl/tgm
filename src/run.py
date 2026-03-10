@@ -8,7 +8,7 @@ from sensorModel import sensorModel
 from TGM import TGM
 from SLAM import lsqnl_matching
 from metrics import classificationMetrics
-from spatial import frame, origin, size, position, pose, orientation
+from spatial import frame, origin, poseWithCovariance, size, position, pose, orientation
 
 def run(logID, conf):
     # Print logID
@@ -67,6 +67,8 @@ def run(logID, conf):
     runtimes['TGM'] = []
     runtimes['Plots'] = []
     runtimes['Total'] = []
+
+    poseCov = None
 
     # Main loop
     fig= plt.figure()
@@ -146,7 +148,8 @@ def run(logID, conf):
             slamSize = size(conf.smWidth, conf.smHeight, 1)
             slamFrame = frame.frameAroundPosition(x_t.position, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
-            x_t = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange)
+            x_t, poseCov = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange, return_covariance=True)
+            print('Pose covariance:\n', poseCov.as_array())
             v_t = x_t - x_prev
         timeSLAM = time.time()
 
@@ -185,6 +188,13 @@ def run(logID, conf):
             plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), 1)
             plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
         tgm.plot(fig, ax, plotFrame, saveMap=conf.saveMap, savePNG=conf.saveVideo, saveSvg=conf.saveSvg, imgName= videoPath + 'frame_' + str(i-conf.initialTimeStep+1), style=conf.style)
+        if poseCov is not None:
+            # Times 100 to make it visible in the plot
+            poseCov._P *= 10000
+            print('Pose covariance (scaled for visualization):\n', poseCov.as_array())
+            poseWithCov = poseWithCovariance(x_t, poseCov)
+            poseWithCov.plot2D(ax)
+            plt.pause(0.01)  # Small pause to ensure the plot updates to show the covariance ellipse
         timePlot = time.time()
 
         # Special plots for snow
