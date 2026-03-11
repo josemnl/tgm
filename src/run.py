@@ -10,6 +10,9 @@ from SLAM import lsqnl_matching
 from metrics import classificationMetrics
 from spatial import frame, origin, poseWithCovariance, size, position, pose, orientation
 
+import matplotlib
+matplotlib.use('Qt5Agg')
+
 def run(logID, conf):
     # Print logID
     print('Running ' + logID)

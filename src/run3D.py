@@ -11,6 +11,9 @@ from spatial import position, orientation, pose, frame, origin, size, poseWithCo
 
 import cupy as cp
 
+import matplotlib
+matplotlib.use('Qt5Agg')
+
 def run3D(logID, conf):
     # Print logID
     print('Running ' + logID)

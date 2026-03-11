@@ -42,7 +42,7 @@ def run():
     ax2 = fig.add_subplot(1, 2, 2)
 
     # Initial plots
-    cadinalityDist.plot(fig, ax2)
+    cadinalityDist.plot(ax2)
     plotFrame = tgm.frame
     tgm.plot(ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
 
@@ -87,7 +87,7 @@ def run():
             tgm.dynamicRebalance(cadinalityDist)
 
         # Plot cardinality distribution
-        cadinalityDist.plot(fig, ax2)
+        cadinalityDist.plot(ax2)
 
         # Plot map
         plotFrame = tgm.frame

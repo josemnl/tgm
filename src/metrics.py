@@ -120,5 +120,5 @@ if __name__ == "__main__":
     
     print(z_t.ranges, z_t.angles)
 
-    gm.plot()
+    gm.plot2D()
     print(computeMetrics(z_t, x_t, gm))
