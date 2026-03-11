@@ -277,15 +277,14 @@ class TGM:
         self.dynamicMap = new_dynamic_map
 
     
-    def plot(self, fig=None, ax = None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
+    def plot(self, ax = None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
         assert style in ['combined', 'static', 'dynamic', 'weather']
         assert egoStyle in ['none', 'dot', 'rectangle']
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
         if frame is None:
             frame = self.frame
-        if fig is None:
-            fig = plt.figure()
-        if ax is None:
-            ax = fig.add_subplot(1, 1, 1)
         overlap = self.frame.computeOverlap(frame)
 
         # Keep data on GPU if available
@@ -361,16 +360,17 @@ class TGM:
         # Pause to show the image
         plt.pause(0.01)
 
-    def plot3D(self, fig: plt.Figure = None, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
+    def plot3D(self, ax: plt.Axes = None, frame: frame = None, value_min: float = 0.0, value_max: float = 1.0) -> None:
         """
         3D plot of the TGM using scatter plot.
         Very similar to the one in gridMap.py, but plotting the 3 layers each using
         a different RGB layer for the color, similarly to the 2D case.
         """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
         if frame is None:
             frame = self.frame
-        if fig is None:
-            fig = plt.figure()
         overlap = self.frame.computeOverlap(frame)
 
         # Crop the maps to the overlapping region
@@ -383,9 +383,6 @@ class TGM:
             xp = cp
         else:
             xp = np
-
-        # Create a 3D axis
-        ax = fig.add_subplot(111, projection='3d')
 
         # Create a meshgrid for the coordinates (on GPU if available)
         x = xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * self.frame.r
@@ -550,8 +547,7 @@ class TGM:
             ax.plot([sensor_x, axes_world[1, 0]], [sensor_y, axes_world[1, 1]], [sensor_z, axes_world[1, 2]], color='green', linewidth=2) # Y-axis
             ax.plot([sensor_x, axes_world[2, 0]], [sensor_y, axes_world[2, 1]], [sensor_z, axes_world[2, 2]], color='blue', linewidth=2)  # Z-axis
             
-        plt.show(block=isPause)
-        plt.pause(0.01)
+        plt.show(block=False)
 
     def plot3D_open3d(self, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
         """
@@ -887,7 +883,7 @@ if __name__ == '__main__':
     tgm.update(instGridMap, x_t)
 
     # Plot the TGM
-    tgm.plot3D(isPause=True, value_min=0.7, value_max=1.0)
+    tgm.plot3D(value_min=0.7, value_max=1.0)
 
     # Plot using Open3D
     tgm.plot3D_open3d(isPause=True, value_min=0.7, value_max=1.0)
@@ -902,7 +898,7 @@ if __name__ == '__main__':
     testTGM.dynamicMap.data[5, 5, 0] = 0.9  # Set the center cell to be highly dynamic
 
     # plot the initial map
-    testTGM.plot3D(isPause=True, value_min=0.01, value_max=1.0)
+    testTGM.plot3D(value_min=0.01, value_max=1.0)
 
     print("data", testTGM.dynamicMap.data[:,:,0])
 
@@ -910,7 +906,7 @@ if __name__ == '__main__':
     testTGM.update(gridMap(testFrame, np.ones((11, 11, 1))*sum(priors)), None)
 
     # Plot the predicted map
-    testTGM.plot3D(isPause=True, value_min=0.1, value_max=1.0)
+    testTGM.plot3D(value_min=0.1, value_max=1.0)
 
     print("data after prediction", testTGM.dynamicMap.data[:,:,0])
 
@@ -923,7 +919,7 @@ if __name__ == '__main__':
     testTGM.dynamicMap.data[5, 5, 5] = 0.9  # Set the center cell to be highly dynamic
 
     # plot the initial map
-    testTGM.plot3D(isPause=True, value_min=0.1, value_max=1.0)
+    testTGM.plot3D(value_min=0.1, value_max=1.0)
 
     print("data", testTGM.dynamicMap.data[:,:,5])
 
@@ -931,7 +927,7 @@ if __name__ == '__main__':
     testTGM.update(gridMap(testFrame, np.ones((11, 11, 11))*sum(priors)), None)
 
     # Plot the predicted map
-    testTGM.plot3D(isPause=True, value_min=0.01, value_max=1.0)
+    testTGM.plot3D(value_min=0.01, value_max=1.0)
 
     print("data after prediction", np.array2string(np.asarray(testTGM.dynamicMap.data[:, :, 5]), formatter={'float_kind': lambda x: f"{x:.4f}"}))
 

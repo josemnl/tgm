@@ -390,6 +390,12 @@ class lidarScan3D:
         R = orientation.to_R_zyx(x_t.orientation)          # Rz(yaw) @ Ry(pitch) @ Rx(roll)
         t = np.array([x_t.position.x, x_t.position.y, x_t.position.z])
         return lidarScan3D(self.points3D @ R.T + t, self.labels)
+    
+    def __matmul__(self, other):
+        # This function allows to use the @ operator to transform the scan by a pose
+        if not isinstance(other, pose):
+            raise ValueError("The @ operator can only be used to transform the scan by a pose")
+        return self.transform(other)
 
 if __name__ == "__main__":
     # Create a 3D lidar scan with only one point

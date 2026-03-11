@@ -44,7 +44,7 @@ def run():
     # Initial plots
     cadinalityDist.plot(fig, ax2)
     plotFrame = tgm.frame
-    tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
+    tgm.plot(ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
 
     # Pause to view initial plots
     plt.pause(2)
@@ -91,7 +91,7 @@ def run():
 
         # Plot map
         plotFrame = tgm.frame
-        tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
+        tgm.plot(ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
 
         # Print progress
         print('Frame:   ' + str(i) + ' / ' + '106')

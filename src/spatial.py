@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Optional, Tuple
+import matplotlib.pyplot as plt
 
 class position:
     def __init__(self, x: float, y: float, z: float = 0.0):
@@ -150,7 +151,7 @@ class poseWithCovariance:
         self.pose = x_t
         self.covariance = cov
 
-    def plot2D(self, ax, **kwargs):
+    def plot2D(self, ax: plt.Axes, **kwargs):
         # Plot ellipse representing 95% confidence interval in x-y plane
         from matplotlib.patches import Ellipse
         cov_xy = self.covariance._P[0:2, 0:2]
@@ -159,10 +160,9 @@ class poseWithCovariance:
         angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0]) * 180 / np.pi
         ellipse = Ellipse(xy=(self.pose.position.x, self.pose.position.y), width=width, height=height, angle=angle, **kwargs)
         ax.add_patch(ellipse)
-        # Force plot to redraw to show the ellipse
-        ax.figure.canvas.draw()
+        plt.show(block=False)
 
-    def plot3D(self, ax, **kwargs):
+    def plot3D(self, ax: plt.Axes, **kwargs):
         # Plot ellipsoid representing 95% confidence interval in x-y-z space
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection
         cov = self.covariance._P[0:3, 0:3]
@@ -173,15 +173,16 @@ class poseWithCovariance:
         x = radii[0] * np.outer(np.cos(u), np.sin(v))
         y = radii[1] * np.outer(np.sin(u), np.sin(v))
         z = radii[2] * np.outer(np.ones_like(u), np.cos(v))
-        for i in range(len(x)):
-            for j in range(len(x)):
+        # Iterate using the real 2D shape to avoid out-of-bounds indexing.
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
                 [x[i, j], y[i, j], z[i, j]] = eigvecs @ [x[i, j], y[i, j], z[i, j]]
                 x[i, j] += self.pose.position.x
                 y[i, j] += self.pose.position.y
                 z[i, j] += self.pose.position.z
         verts = [list(zip(x.flatten(), y.flatten(), z.flatten()))]
         ax.add_collection3d(Poly3DCollection(verts, **kwargs))
-        ax.figure.canvas.draw()
+        plt.show(block=False)
 
 class origin:
     def __init__(self, x: int, y: int, z: int = 0):
