@@ -4,8 +4,8 @@ import scipy.signal as sp
 import cupyx.scipy.signal as csp
 from skimage.morphology import disk
 
-from gridMap import discreteDist, gridMap
-from spatial import frame, origin, size, pose, position, orientation
+from .gridMap import discreteDist, gridMap
+from .spatial import frame, origin, size, pose, position, orientation
 
 class TGM:
     def __init__(self, tgmFrame: frame, priors: list, maxVelocity: int, saturationLimits: list, fftConv=False, isGPU=True):
@@ -270,15 +270,15 @@ class TGM:
 
     
     def plot(self, ax = None, frame = None, saveMap=False, savePNG=False, saveSvg=False, imgName='', style='combined', egoStyle='rectangle'):
-        from plotting import tgm_plot2D
+        from .plotting import tgm_plot2D
         return tgm_plot2D(self, ax, frame, saveMap, savePNG, saveSvg, imgName, style, egoStyle)
 
     def plot3D(self, ax = None, frame: frame = None, value_min: float = 0.0, value_max: float = 1.0) -> None:
-        from plotting import tgm_plot3D
+        from .plotting import tgm_plot3D
         return tgm_plot3D(self, ax, frame, value_min, value_max)
 
     def plot3D_open3d(self, frame: frame = None, isPause=False, value_min: float = 0.0, value_max: float = 1.0) -> None:
-        from plotting import tgm_plot3D_open3d
+        from .plotting import tgm_plot3D_open3d
         return tgm_plot3D_open3d(self, frame, isPause, value_min, value_max)
 
     def _get_layer_map(self, layer):
@@ -353,9 +353,9 @@ def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     return conv
 
 if __name__ == '__main__':
-    from lidarScan import lidarScan3D
-    from utilities import read3DLidarCSV
-    from sensorModel import sensorModel3D
+    from .lidarScan import lidarScan3D
+    from .utilities import read3DLidarCSV
+    from .sensorModel import sensorModel3D
     # Example of usage
     # Create a TGM
     tgmOrigin = origin(10, 10, 0)

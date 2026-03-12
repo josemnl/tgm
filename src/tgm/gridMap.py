@@ -4,7 +4,7 @@ import cv2
 import cupy as cp
 from typing import Union, TYPE_CHECKING
 
-from spatial import position, orientation, pose, frame, origin, size
+from .spatial import position, orientation, pose, frame, origin, size
 
 if TYPE_CHECKING:
     from matplotlib import pyplot as plt
@@ -48,7 +48,7 @@ class discreteDist:
         return discreteDist(normalized_probs, self.values)
     
     def plot(self, ax=None) -> None:
-        from plotting import discreteDist_plot
+        from .plotting import discreteDist_plot
         return discreteDist_plot(self, ax)
 
 class gridMap:
@@ -216,18 +216,18 @@ class gridMap:
         return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
 
     def plot2D(self, ax: 'plt.Axes' = None, frame = None, isPause: bool = False) -> None:
-        from plotting import gridMap_plot2D
+        from .plotting import gridMap_plot2D
         return gridMap_plot2D(self, ax, frame, isPause)
 
     def plot3D(self, ax: 'plt.Axes' = None, frame = None, isPause: bool = False,
                    value_min: float = 0.0, value_max: float = 1.0) -> None:
-        from plotting import gridMap_plot3D
+        from .plotting import gridMap_plot3D
         return gridMap_plot3D(self, ax, frame, isPause, value_min, value_max)
 
     def plot3D_cubes(self, isPause: bool = False, cube_size: float = 1.0,
                    alpha_min: float = 0.0, alpha_max: float = 1.0,
                    face_edges: bool = False, elev: float = 20, azim: float = -60) -> None:
-        from plotting import gridMap_plot3D_cubes
+        from .plotting import gridMap_plot3D_cubes
         return gridMap_plot3D_cubes(self, isPause, cube_size, alpha_min, alpha_max, face_edges, elev, azim)
 
     def cardinality(self) -> discreteDist:

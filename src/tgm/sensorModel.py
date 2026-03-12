@@ -1,10 +1,10 @@
 import numpy as np
 import cupy as cp
-from gridMap import gridMap
-from spatial import frame, origin, size, pose, position, orientation
-from lidarScan import lidarScan, lidarScan3D
+from .gridMap import gridMap
+from .spatial import frame, origin, size, pose, position, orientation
+from .lidarScan import lidarScan, lidarScan3D
 import time
-from utilities import read3DLidarCSV
+from .utilities import read3DLidarCSV
 
 class sensorModel:
     def __init__ (self, smFrame: frame, sensorRange, invModel ,occPrior):

@@ -1,4 +1,7 @@
 src/__pycache__
+src/tgm/__pycache__
+src/transitional_grid_map.egg-info/
+data
 logs
 results
 snowyKITTI

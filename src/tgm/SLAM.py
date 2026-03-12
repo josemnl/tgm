@@ -3,9 +3,9 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 
-from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap
-from spatial import pose, position, orientation, covariance
+from .lidarScan import lidarScan, lidarScan3D
+from .gridMap import gridMap
+from .spatial import pose, position, orientation, covariance
 
 
 def _compute_lsq_covariance(lsq_result, n_params: int) -> np.ndarray:

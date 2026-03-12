@@ -10,16 +10,26 @@ Probabilistic multi‑layer occupancy mapping for static, dynamic, and noise lay
 
 ### Clone
 ```powershell
-git clone https://github.com/josemnl/TGMw.git
+git clone https://github.com/josemnl/tgm.git
 cd TGMp
 ```
 
-### Create venv and install deps
+### Create venv and install package
 ```powershell
 python -m venv .venv
 . .\.venv\Scripts\Activate.ps1
 pip install -U pip
-pip install -r requirements.txt
+python -m pip install -e .
+```
+
+Optional extras:
+
+```powershell
+# CUDA 12.x
+python -m pip install -e ".[gpu-cuda12]"
+
+# CUDA 11.x
+python -m pip install -e ".[gpu-cuda11]"
 ```
 
 ### GPU (recommended) vs CPU
@@ -64,18 +74,35 @@ python -c "import matplotlib; matplotlib.use('Qt5Agg'); import matplotlib.pyplot
 	- LiDAR paths (`lidarPath`, `labelPath`, `posePath`)
 	- Video/output settings (`saveVideo`, `saveSvg`, `videoSection`)
 
+## Repository Layout
+
+- `src/tgm/`: core library package (`import tgm`)
+- `examples/`: runnable examples showing how to use the package
+- `scripts/`: utility scripts (plotting, conversion, ad-hoc tooling)
+- `config/`: experiment and dataset config files
+- `data/`: input datasets (typically not versioned)
+- `results/`: generated outputs
+
 ## Run
 
-Run the main processing loop (generates TGM maps and applies snow filters):
+Run the main processing loop example (generates TGM maps and applies snow filters):
 ```powershell
-python .\src\snowRunLoop.py
+python .\examples\snowRunLoop.py
 ```
 
 Generate analysis plots and metrics from results:
 ```powershell
-python .\src\snowPlotResults.py
+python .\scripts\snowPlotResults.py
 ```
 This produces detailed plots, sensitivity analysis, and summary tables from the data in `./results/`.
+
+You can also run other examples directly:
+
+```powershell
+python .\examples\run.py
+python .\examples\run3D.py
+python .\examples\run-test-cardinality.py
+```
 
 **Note**: If config has `isGPU: true` but CuPy is not installed, the code will automatically fall back to CPU mode with a warning.
 
@@ -106,6 +133,6 @@ This produces detailed plots, sensitivity analysis, and summary tables from the 
 
 ## Notes
 
-- **CuPy is not in `requirements.txt`** — users must install the correct wheel for their CUDA version (e.g., `cupy-cuda12x` for CUDA 12.x).
+- **CuPy is optional** and exposed via extras in `pyproject.toml` (`gpu-cuda12`, `gpu-cuda11`), or can be installed manually with a matching wheel.
 - The code automatically falls back to CPU mode if CuPy is unavailable, even when `isGPU: true` is set.
 - For CI or headless servers, use CPU mode (`isGPU: false`) or ensure CUDA DLLs are on PATH before imports.

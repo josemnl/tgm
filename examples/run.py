@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel, sensorModelGPU
-from TGM import TGM
-from SLAM import lsqnl_matching
-from metrics import classificationMetrics
-from spatial import frame, origin, poseWithCovariance, size, position, pose, orientation
+from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
+from tgm.sensorModel import sensorModel, sensorModelGPU
+from tgm.TGM import TGM
+from tgm.SLAM import lsqnl_matching
+from tgm.metrics import classificationMetrics
+from tgm.spatial import frame, origin, poseWithCovariance, size, position, pose, orientation
 
 import matplotlib
 matplotlib.use('Qt5Agg')

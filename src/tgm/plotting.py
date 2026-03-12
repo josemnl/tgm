@@ -6,9 +6,9 @@ from matplotlib.image import imsave
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 if TYPE_CHECKING:
-    from TGM import TGM
-    from gridMap import gridMap
-    from gridMap import discreteDist
+    from .TGM import TGM
+    from .gridMap import gridMap
+    from .gridMap import discreteDist
 
 '''
 This file contains the plotting functions for the TGM repository.

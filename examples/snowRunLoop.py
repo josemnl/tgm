@@ -1,5 +1,5 @@
 from run import run
-from utilities import loadConfigAsDict
+from tgm.utilities import loadConfigAsDict
 import os
 import copy
 import concurrent.futures

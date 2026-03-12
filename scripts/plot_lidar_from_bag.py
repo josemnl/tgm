@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utilities import read3DLidarCSV
+from tgm.utilities import read3DLidarCSV
 
 def plot_lidar_from_bag(logPath, i):
     z_t_3D = read3DLidarCSV(logPath + "z_" + str(i) + ".csv")

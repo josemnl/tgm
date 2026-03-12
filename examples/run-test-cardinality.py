@@ -3,14 +3,14 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from gridMap import discreteDist
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel
-from TGM import TGM
-from SLAM import lsqnl_matching
-from metrics import classificationMetrics
-from spatial import frame, origin, size, position, pose, orientation
-from gridMap import gridMap, discreteDist
+from tgm.gridMap import discreteDist
+from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
+from tgm.sensorModel import sensorModel
+from tgm.TGM import TGM
+from tgm.SLAM import lsqnl_matching
+from tgm.metrics import classificationMetrics
+from tgm.spatial import frame, origin, size, position, pose, orientation
+from tgm.gridMap import gridMap, discreteDist
 
 def run():
     # Bool cardinality

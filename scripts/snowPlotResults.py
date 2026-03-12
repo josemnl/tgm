@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-from utilities import loadConfigAsDict
+from tgm.utilities import loadConfigAsDict
 
 RESULTS_ROOT = 'D:/FINAL-results/'
 META_RESULTS_FOLDER = 'D:/FINAL-meta/'
