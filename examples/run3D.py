@@ -3,13 +3,16 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel3D, sensorModel3DGPU
-from TGM import TGM
-from SLAM import lsqnl_matching3D
-from spatial import position, orientation, pose, frame, origin, size
+from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
+from tgm.sensorModel import sensorModel3D, sensorModel3DGPU
+from tgm.TGM import TGM
+from tgm.SLAM import lsqnl_matching3D
+from tgm.spatial import position, orientation, pose, frame, origin, size, poseWithCovariance
 
 import cupy as cp
+
+import matplotlib
+matplotlib.use('Qt5Agg')
 
 def run3D(logID, conf):
     # Print logID
@@ -43,8 +46,11 @@ def run3D(logID, conf):
     link_world_base = pose(position(0.0, 0.0, 0.0), orientation(np.pi, 0.0, 0.0))
     link_base_sensor = pose(position(0.22, 0.0, -0.15), orientation(0.0, -np.pi/6, 0.0))
 
+    cov = None
+
     # Main loop
-    fig= plt.figure()
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
 
         # IMPORT SENSOR DATA
@@ -95,7 +101,7 @@ def run3D(logID, conf):
             slamSize = size(conf.smWidth, conf.smHeight, conf.smDepth)
             slamFrame = frame.frameAroundPosition(x_t.position, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
-            x_t = lsqnl_matching3D(z_t_3D, slam_map, initialGuess, conf.sensorRange)
+            x_t, cov = lsqnl_matching3D(z_t_3D, slam_map, initialGuess, conf.sensorRange, return_covariance=True)
             v_t = x_t - x_prev
         
         print('Current pose at time step ' + str(i) + ': (' + str(x_t.position.x) + ', ' + str(x_t.position.y) + ', ' + str(x_t.position.z) + '), with orientation (' + str(x_t.orientation.roll) + ', ' + str(x_t.orientation.pitch) + ', ' + str(x_t.orientation.yaw) + ')')
@@ -119,7 +125,7 @@ def run3D(logID, conf):
         # PLOT CURRENT FRAME
         cp.cuda.Device().synchronize()
         time_6 = time.time()
-        fig.clear()
+        ax.clear()
         # Compute the frame for the plot
         if conf.videoSection == 'Full':
             plotFrame = tgm.frame
@@ -132,7 +138,11 @@ def run3D(logID, conf):
             plotSize = size(int(conf.videoWidth / tgm.frame.r), int(conf.videoHeight / tgm.frame.r), int(conf.videoDepth / tgm.frame.r))
             plotFrame = frame(plotOrigin, plotSize, tgm.frame.r)
         print('Plotting frame at origin (' + str(plotFrame.origin.x) + ', ' + str(plotFrame.origin.y) + ', ' + str(plotFrame.origin.z) + ') with size (' + str(plotFrame.size.w) + ', ' + str(plotFrame.size.h) + ', ' + str(plotFrame.size.d) + ') and resolution ' + str(plotFrame.r))
-        tgm.plot3D(fig, plotFrame, isPause=False, value_min = 0.7, value_max = 1.0)
+        tgm.plot3D(ax, plotFrame, value_min = 0.7, value_max = 1.0)
+        if cov is not None:
+            poseWithCov = poseWithCovariance(x_t, cov)
+            poseWithCov.plot3D(ax)
+            plt.pause(0.01)  # Small pause to ensure the plot updates to show the covariance ellipse
         cp.cuda.Device().synchronize()
         time_7 = time.time()
 
@@ -161,7 +171,7 @@ if __name__ == '__main__':
     # Config file
     configPath = './config/'
     defConfFile = 'config'
-    logID = 'underwaterTank'
+    logID = 'underwaterDock'
 
     # Load parameters
     conf = loadConfigAsDict(configPath, defConfFile)

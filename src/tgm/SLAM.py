@@ -3,21 +3,57 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 
-from lidarScan import lidarScan, lidarScan3D
-from gridMap import gridMap
-from spatial import pose, position, orientation
+from .lidarScan import lidarScan, lidarScan3D
+from .gridMap import gridMap
+from .spatial import pose, position, orientation, covariance
 
-def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range):
+
+def _compute_lsq_covariance(lsq_result, n_params: int) -> np.ndarray:
+    """
+    Estimate parameter covariance from least-squares Jacobian at the optimum.
+
+    Cov ~= sigma^2 * (J^T J)^-1, with sigma^2 estimated from residuals.
+    Uses pseudo-inverse for numerical robustness in near-singular cases.
+    """
+    J = lsq_result.jac
+    residuals = lsq_result.fun
+    dof = max(residuals.size - n_params, 1)
+
+    sigma2 = float(np.dot(residuals, residuals) / dof)
+    H = J.T @ J
+    H_inv = np.linalg.pinv(H)
+    return sigma2 * H_inv
+
+
+def _embed_2d_covariance_in_pose_covariance(cov2d: np.ndarray, unobserved_variance: float = 1e6) -> covariance:
+    """
+    Map [x, y, yaw] covariance into [x, y, z, roll, pitch, yaw] covariance.
+    """
+    P = np.zeros((6, 6), dtype=float)
+    idx = [0, 1, 5]
+    P[np.ix_(idx, idx)] = cov2d
+    P[2, 2] = unobserved_variance
+    P[3, 3] = unobserved_variance
+    P[4, 4] = unobserved_variance
+    return covariance(P)
+
+def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range, return_covariance: bool = False):
     # Remove the no-return scans from scan
     scan.removeFarPoints(max_range)
 
     x_0 = np.array([x0.position.x, x0.position.y, x0.orientation.yaw])
 
     # Perform the least squares optimization
-    x = least_squares(lsq_fun, x_0, max_nfev=500, args=(scan, lsq_map), method='lm')
-    x = x.x
+    result = least_squares(lsq_fun, x_0, max_nfev=500, args=(scan, lsq_map), method='lm')
+    x = result.x
     x = pose(position(x[0], x[1], 0.0), orientation(0.0, 0.0, x[2]))
-    return x
+
+    if not return_covariance:
+        return x
+
+    cov2d = _compute_lsq_covariance(result, n_params=3)
+    cov = _embed_2d_covariance_in_pose_covariance(cov2d)
+    return x, cov
 
 def lsq_fun(relPose, lsq_scan: lidarScan, lsq_map: gridMap):
     # Extract grid parameters
@@ -40,7 +76,7 @@ def lsq_fun(relPose, lsq_scan: lidarScan, lsq_map: gridMap):
     cost = 1 - interp(transCart)
     return cost
 
-def lsqnl_matching3D(scan3D: lidarScan3D, lsq_map: gridMap, x0: pose, max_range):
+def lsqnl_matching3D(scan3D: lidarScan3D, lsq_map: gridMap, x0: pose, max_range, return_covariance: bool = False):
     # Remove the no-return scans from scan
     scan3D.removeFarPoints(max_range)
 
@@ -48,10 +84,16 @@ def lsqnl_matching3D(scan3D: lidarScan3D, lsq_map: gridMap, x0: pose, max_range)
                     x0.orientation.roll, x0.orientation.pitch, x0.orientation.yaw])
 
     # Perform the least squares optimization
-    x = least_squares(lsq_fun3D, x_0, max_nfev=500, args=(scan3D, lsq_map), method='lm')
-    x = x.x
+    result = least_squares(lsq_fun3D, x_0, max_nfev=500, args=(scan3D, lsq_map), method='lm')
+    x = result.x
     x = pose(position(x[0], x[1], x[2]), orientation(x[3], x[4], x[5]))
-    return x
+
+    if not return_covariance:
+        return x
+
+    cov6d = _compute_lsq_covariance(result, n_params=6)
+    cov = covariance(cov6d)
+    return x, cov
 
 def lsq_fun3D(relPose, lsq_scan: lidarScan3D, lsq_map: gridMap):
     # Extract grid parameters

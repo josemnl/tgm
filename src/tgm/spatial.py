@@ -1,5 +1,6 @@
 import numpy as np
-from typing import Tuple
+from typing import Optional, Tuple
+import matplotlib.pyplot as plt
 
 class position:
     def __init__(self, x: float, y: float, z: float = 0.0):
@@ -127,6 +128,61 @@ class pose:
         Python @ operator: A @ B == A ⊕ B (apply A, then B)
         """
         return self.compose(right)
+
+class covariance:
+    def __init__(self, matrix: np.ndarray):
+        assert isinstance(matrix, np.ndarray)
+        assert matrix.ndim == 2
+        assert matrix.shape == (6, 6)
+
+        mat = np.array(matrix, dtype=float, copy=True)
+        assert np.all(np.isfinite(mat)), "Covariance contains non-finite values"
+
+        # Numerical operations can introduce tiny asymmetries; enforce symmetry.
+        self._P = 0.5 * (mat + mat.T)
+
+    def as_array(self) -> np.ndarray:
+        return self._P
+
+class poseWithCovariance:
+    def __init__(self, x_t: pose, cov: covariance):
+        assert isinstance(x_t, pose)
+        assert isinstance(cov, covariance)
+        self.pose = x_t
+        self.covariance = cov
+
+    def plot2D(self, ax: plt.Axes, **kwargs):
+        # Plot ellipse representing 95% confidence interval in x-y plane
+        from matplotlib.patches import Ellipse
+        cov_xy = self.covariance._P[0:2, 0:2]
+        eigvals, eigvecs = np.linalg.eigh(cov_xy)
+        width, height = 2 * np.sqrt(eigvals)
+        angle = np.arctan2(eigvecs[1, 0], eigvecs[0, 0]) * 180 / np.pi
+        ellipse = Ellipse(xy=(self.pose.position.x, self.pose.position.y), width=width, height=height, angle=angle, **kwargs)
+        ax.add_patch(ellipse)
+        plt.show(block=False)
+
+    def plot3D(self, ax: plt.Axes, **kwargs):
+        # Plot ellipsoid representing 95% confidence interval in x-y-z space
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+        cov = self.covariance._P[0:3, 0:3]
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        radii = 2 * np.sqrt(eigvals)
+        u = np.linspace(0, 2 * np.pi, 20)
+        v = np.linspace(0, np.pi, 10)
+        x = radii[0] * np.outer(np.cos(u), np.sin(v))
+        y = radii[1] * np.outer(np.sin(u), np.sin(v))
+        z = radii[2] * np.outer(np.ones_like(u), np.cos(v))
+        # Iterate using the real 2D shape to avoid out-of-bounds indexing.
+        for i in range(x.shape[0]):
+            for j in range(x.shape[1]):
+                [x[i, j], y[i, j], z[i, j]] = eigvecs @ [x[i, j], y[i, j], z[i, j]]
+                x[i, j] += self.pose.position.x
+                y[i, j] += self.pose.position.y
+                z[i, j] += self.pose.position.z
+        verts = [list(zip(x.flatten(), y.flatten(), z.flatten()))]
+        ax.add_collection3d(Poly3DCollection(verts, **kwargs))
+        plt.show(block=False)
 
 class origin:
     def __init__(self, x: int, y: int, z: int = 0):

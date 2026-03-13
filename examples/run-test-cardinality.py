@@ -3,14 +3,14 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from gridMap import discreteDist
-from utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from sensorModel import sensorModel
-from TGM import TGM
-from SLAM import lsqnl_matching
-from metrics import classificationMetrics
-from spatial import frame, origin, size, position, pose, orientation
-from gridMap import gridMap, discreteDist
+from tgm.gridMap import discreteDist
+from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
+from tgm.sensorModel import sensorModel
+from tgm.TGM import TGM
+from tgm.SLAM import lsqnl_matching
+from tgm.metrics import classificationMetrics
+from tgm.spatial import frame, origin, size, position, pose, orientation
+from tgm.gridMap import gridMap, discreteDist
 
 def run():
     # Bool cardinality
@@ -42,9 +42,9 @@ def run():
     ax2 = fig.add_subplot(1, 2, 2)
 
     # Initial plots
-    cadinalityDist.plot(fig, ax2)
+    cadinalityDist.plot(ax2)
     plotFrame = tgm.frame
-    tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
+    tgm.plot(ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=True, imgName= videoPath + 'frame_0', style='combined')
 
     # Pause to view initial plots
     plt.pause(2)
@@ -87,11 +87,11 @@ def run():
             tgm.dynamicRebalance(cadinalityDist)
 
         # Plot cardinality distribution
-        cadinalityDist.plot(fig, ax2)
+        cadinalityDist.plot(ax2)
 
         # Plot map
         plotFrame = tgm.frame
-        tgm.plot(fig, ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
+        tgm.plot(ax1, plotFrame, saveMap=False, savePNG=True, saveSvg=False, imgName= videoPath + 'frame_' + str(i), style='combined')
 
         # Print progress
         print('Frame:   ' + str(i) + ' / ' + '106')

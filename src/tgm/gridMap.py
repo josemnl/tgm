@@ -1,12 +1,13 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 import cv2
 import cupy as cp
-from typing import Union
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from typing import Union, TYPE_CHECKING
 
-from spatial import position, orientation, pose, frame, origin, size
+from .spatial import position, orientation, pose, frame, origin, size
+
+if TYPE_CHECKING:
+    from matplotlib import pyplot as plt
 
 class discreteDist:
     """
@@ -46,25 +47,9 @@ class discreteDist:
             normalized_probs = self.probabilities
         return discreteDist(normalized_probs, self.values)
     
-    def plot(self, fig=None, ax=None) -> None:
-        if fig is None:
-            fig = plt.figure()
-        if ax is None:
-            ax = fig.add_subplot(1, 1, 1)
-        ax.clear()
-        # Use full-width bars without edges to avoid aliasing gaps in PNGs
-        ax.bar(
-            self.values,
-            self.probabilities,
-            width=1.0,
-            align='center',
-            alpha=1.0,
-            edgecolor='none',
-            linewidth=0,
-            antialiased=False,
-        )
-        ax.set_title('P(S = s)')
-        plt.show(block=False)
+    def plot(self, ax=None) -> None:
+        from .plotting import discreteDist_plot
+        return discreteDist_plot(self, ax)
 
 class gridMap:
     def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
@@ -89,10 +74,18 @@ class gridMap:
     @property
     def isGPU(self) -> bool:
         return isinstance(self.data, cp.ndarray)
-    
+
     @property
     def isBool(self) -> bool:
         return self.data.dtype == bool
+
+    @property
+    def is2D(self) -> bool:
+        return self.frame.is2D
+
+    @property
+    def is3D(self) -> bool:
+        return self.frame.is3D
 
     def toCPU(self) -> 'gridMap':
         if self.isGPU:
@@ -106,21 +99,6 @@ class gridMap:
     
     def toBool(self, threshold: float) -> 'gridMap':
         return gridMap(self.frame, self.data > threshold)
-
-    def plot(self, layer: int = 0, isPause: bool = False) -> None:
-        I = 1 - np.transpose(self.data[:, :, layer])
-        plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
-                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
-        plt.show(block=isPause)
-        plt.pause(0.0001)
-
-    def savePNG(self, layer: int, filename: str) -> None:
-        I = 1 - np.transpose(self.data[:, :, layer])
-        plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
-                   extent=(self.frame.origin.x*self.frame.r, (self.frame.origin.x + self.frame.size.w)*self.frame.r,
-                           self.frame.origin.y*self.frame.r, (self.frame.origin.y + self.frame.size.h)*self.frame.r))
-        plt.savefig(filename)
 
     def contains(self, frame) -> bool:
         return self.frame.contains(frame)
@@ -237,197 +215,20 @@ class gridMap:
             return gridMap(self.frame, cp.logical_or(self.data, otherGM.data))
         return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
 
-    def plot3D_scatter(self, isPause: bool = False, s_min: float = 120.0, s_max: float = 120.0,
-                   alpha_min: float = 0.0, alpha_max: float = 1.0, elev: float = 20, azim: float = -60,
+    def plot2D(self, ax: 'plt.Axes' = None, frame = None, isPause: bool = False) -> None:
+        from .plotting import gridMap_plot2D
+        return gridMap_plot2D(self, ax, frame, isPause)
+
+    def plot3D(self, ax: 'plt.Axes' = None, frame = None, isPause: bool = False,
                    value_min: float = 0.0, value_max: float = 1.0) -> None:
-        """
-        3D scatter representation: place a marker at the center of each voxel cell.
-        - Color = grayscale 1 - value (imshow-like)
-        - Alpha scales with occupancy (alpha_min..alpha_max)
-        - Marker size scales with occupancy (s_min..s_max) to hint density
-        - Only plot values in [value_min..value_max] range (default 0..1)
-
-        Drawn per z-slice back-to-front to improve blending.
-        """
-        # Keep data on GPU if available, use xp abstraction for all operations
-        if self.isGPU:
-            data = self.data
-            xp = cp
-        else:
-            data = self.data
-            xp = np
-            
-        values = xp.clip(data.astype(float), 0.0, 1.0)
-        inten = 1.0 - values
-        alpha = alpha_min + (alpha_max - alpha_min) * values
-        sizes = s_min + (s_max - s_min) * values
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        try:
-            ax.set_proj_type('ortho')
-        except Exception:
-            pass
-        ax.view_init(elev=elev, azim=azim)
-
-        # Compute centers in index units (can scale to meters if desired)
-        xs = self.frame.origin.x + xp.arange(self.frame.size.w) + 0.5
-        ys = self.frame.origin.y + xp.arange(self.frame.size.h) + 0.5
-        zs = self.frame.origin.z + xp.arange(self.frame.size.d) + 0.5
-
-        # Shapes
-        nx, ny, nz = len(xs), len(ys), len(zs)
-
-        # 1D coordinates consistent with arr.ravel(order='C') for shape (nx, ny, nz)
-        X = xp.repeat(xs, ny * nz)
-        Y = xp.tile(xp.repeat(ys, nz), nx)
-        Z = xp.tile(zs, nx * ny)
-
-        # Per-point RGBA and sizes
-        rgba = xp.zeros(inten.shape + (4,), dtype=float)
-        rgba[..., 0] = inten
-        rgba[..., 1] = inten
-        rgba[..., 2] = inten
-        rgba[..., 3] = alpha
-
-        # Mask out low and high values (on GPU if available)
-        mask = (values >= value_min) & (values <= value_max)
-        mask = mask.ravel()
-
-        # Transfer to CPU only after masking (only the filtered results)
-        if self.isGPU:
-            X = cp.asnumpy(X[mask])
-            Y = cp.asnumpy(Y[mask])
-            Z = cp.asnumpy(Z[mask])
-            sizes_masked = cp.asnumpy(sizes.ravel()[mask])
-            rgba_masked = cp.asnumpy(rgba.reshape(-1, 4)[mask])
-        else:
-            X = X[mask]
-            Y = Y[mask]
-            Z = Z[mask]
-            sizes_masked = sizes.ravel()[mask]
-            rgba_masked = rgba.reshape(-1, 4)[mask]
-
-        ax.scatter(X, Y, Z,
-                   s=sizes_masked,
-                   c=rgba_masked,
-                   marker='o',
-                   depthshade=False)
-
-        # Limits & aspect
-        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
-        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
-        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
-        try:
-            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
-        except Exception:
-            try:
-                ax.set_aspect('equal')
-            except Exception:
-                pass
-
-        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
-        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
-        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
-        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
-
-        plt.show(block=isPause)
-        plt.pause(0.0001)
+        from .plotting import gridMap_plot3D
+        return gridMap_plot3D(self, ax, frame, isPause, value_min, value_max)
 
     def plot3D_cubes(self, isPause: bool = False, cube_size: float = 1.0,
                    alpha_min: float = 0.0, alpha_max: float = 1.0,
                    face_edges: bool = False, elev: float = 20, azim: float = -60) -> None:
-        """
-        3D glyph scatter with cubes: draw a smaller cube centered in each cell.
-        - cube_size in (0, 1]: side-length relative to cell size (default 0.6)
-        - Color = 1 - value (imshow-like grayscale)
-        - Alpha scales with occupancy (alpha_min..alpha_max)
-        - Optional edges (off by default for speed)
-
-        Renders per z-slice back-to-front for decent transparency blending.
-        """
-        data = cp.asnumpy(self.data) if self.isGPU else self.data
-        values = np.clip(data.astype(float), 0.0, 1.0)
-        inten = 1.0 - values
-        alpha = alpha_min + (alpha_max - alpha_min) * values
-
-        half = float(cube_size) / 2.0
-        # Clamp to (0, 0.5]; 0.5 means cubes span the full cell and touch
-        if half <= 0:
-            half = 1e-3
-        if half > 0.5:
-            half = 0.5
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        try:
-            ax.set_proj_type('ortho')
-        except Exception:
-            pass
-        ax.view_init(elev=elev, azim=azim)
-
-        def cube_faces(cx, cy, cz, h):
-            x0, x1 = cx - h, cx + h
-            y0, y1 = cy - h, cy + h
-            z0, z1 = cz - h, cz + h
-            return [
-                [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)],
-                [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
-                [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)],
-                [(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)],
-                [(x0, y0, z0), (x0, y1, z0), (x0, y1, z1), (x0, y0, z1)],
-                [(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)],
-            ]
-
-        # Centers per axis
-        xs = self.frame.origin.x + np.arange(self.frame.size.w) + 0.5
-        ys = self.frame.origin.y + np.arange(self.frame.size.h) + 0.5
-        zs = self.frame.origin.z + np.arange(self.frame.size.d) + 0.5
-
-        for k in range(self.frame.size.d):
-            zc = zs[k]
-            polys = []
-            face_cols = []
-            edge_cols = []
-            for i in range(self.frame.size.w):
-                xc = xs[i]
-                for j in range(self.frame.size.h):
-                    yc = ys[j]
-                    col = inten[i, j, k]
-                    a = alpha[i, j, k]
-                    faces = cube_faces(xc, yc, zc, half)
-                    rgba = (col, col, col, a)
-                    for f in faces:
-                        polys.append(f)
-                        face_cols.append(rgba)
-                        edge_cols.append((0, 0, 0, 0.25) if face_edges else (0, 0, 0, 0))
-            if polys:
-                coll = Poly3DCollection(polys, facecolors=face_cols, edgecolors=edge_cols)
-                coll.set_alpha(None)
-                try:
-                    coll.set_zsort('none')
-                except Exception:
-                    pass
-                ax.add_collection3d(coll)
-
-        ax.set_xlim(self.frame.origin.x, self.frame.origin.x + self.frame.size.w)
-        ax.set_ylim(self.frame.origin.y, self.frame.origin.y + self.frame.size.h)
-        ax.set_zlim(self.frame.origin.z, self.frame.origin.z + self.frame.size.d)
-        try:
-            ax.set_box_aspect((self.frame.size.w, self.frame.size.h, self.frame.size.d))
-        except Exception:
-            try:
-                ax.set_aspect('equal')
-            except Exception:
-                pass
-
-        tick_interval = max(1, int(round(1 / self.frame.r))) if self.frame.r > 0 else 1
-        ax.set_xticks(np.arange(self.frame.origin.x, self.frame.origin.x + self.frame.size.w + 1, tick_interval))
-        ax.set_yticks(np.arange(self.frame.origin.y, self.frame.origin.y + self.frame.size.h + 1, tick_interval))
-        ax.set_zticks(np.arange(self.frame.origin.z, self.frame.origin.z + self.frame.size.d + 1, tick_interval))
-
-        plt.show(block=isPause)
-        plt.pause(0.0001)
+        from .plotting import gridMap_plot3D_cubes
+        return gridMap_plot3D_cubes(self, isPause, cube_size, alpha_min, alpha_max, face_edges, elev, azim)
 
     def cardinality(self) -> discreteDist:
         """
@@ -567,6 +368,7 @@ def main() -> None:
     orig = origin(0, 0, 0)
     frame_size = size(width, height, 2)
     currentFrame = frame(orig, frame_size, resolution)
+    currentFrame2D = frame(orig, size(width, height), resolution)
 
     data = np.zeros((width, height, 2))+0.01
     data[0][0][0] = 1
@@ -574,15 +376,17 @@ def main() -> None:
     
     grid = gridMap(currentFrame, data)
     grid.drawFilledRectangle(0.0, 2.0, 0.0, 2.0, 1.0, 1.0)
-    grid.plot(0, isPause=True)
-    grid.plot3D_scatter(isPause=True) # Balls
+    grid2D = grid.crop(currentFrame2D)
+    grid2D.plot2D(isPause=True)
+    grid.plot3D(isPause=True) # Balls
     grid.plot3D_cubes(isPause=True)
     cardinality = grid.cardinality()
 
     newFrame = frame(origin(10, 0, 0), size(10, 6, 2), 0.5)
+    newFrame2D = frame(origin(10, 0, 0), size(10, 6), 0.5)
     
-    grid.crop(newFrame).plot(isPause=True)
-    grid.crop(newFrame).plot3D_scatter(isPause=True)
+    grid2D.crop(newFrame2D).plot2D(isPause=True)
+    grid.crop(newFrame).plot3D(isPause=True)
     grid.crop(newFrame).plot3D_cubes(isPause=True)
 
     # Test pose transformations

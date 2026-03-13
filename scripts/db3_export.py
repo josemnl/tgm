@@ -18,7 +18,7 @@ from typing import Tuple
 import numpy as np
 import cv2
 
-from utilities import read3DLidarBIN
+from tgm.utilities import read3DLidarBIN
 
 # Path to the bag folder (the directory that contains metadata.yaml)
 BAG_DIR = Path('./logs/underwater/rosbag2_2025_10_13-14_53_47/')

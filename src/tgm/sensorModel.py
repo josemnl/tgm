@@ -1,10 +1,10 @@
 import numpy as np
 import cupy as cp
-from gridMap import gridMap
-from spatial import frame, origin, size, pose, position, orientation
-from lidarScan import lidarScan, lidarScan3D
+from .gridMap import gridMap
+from .spatial import frame, origin, size, pose, position, orientation
+from .lidarScan import lidarScan, lidarScan3D
 import time
-from utilities import read3DLidarCSV
+from .utilities import read3DLidarCSV
 
 class sensorModel:
     def __init__ (self, smFrame: frame, sensorRange, invModel ,occPrior):
@@ -165,6 +165,258 @@ class sensorModel:
             # Check if all cells in the ray are different from the valueCondition
             if np.all(self.data[x_coords, y_coords] != valueCondition):
                 self.data[x_coords, y_coords] = value
+
+class sensorModelGPU:
+    def __init__(self, smFrame: frame, sensorRange, invModel, occPrior):
+        assert isinstance(smFrame, frame)
+        self.frame = smFrame
+        self.sensorRange = sensorRange
+        self.invModel = invModel
+        self.occPrior = occPrior
+        self.data = cp.ones((self.frame.size.w, self.frame.size.h), dtype=cp.float32) * cp.float32(self.occPrior)
+
+        # Each thread carves one 2D ray. mode=0 writes unconditionally, mode=1 writes only
+        # when no cell on the ray matches value_condition.
+        self._carve_rays_kernel = cp.RawKernel(r'''
+        extern "C" __global__
+        void carve_rays(const int N,
+                        const int* __restrict__ sx,
+                        const int* __restrict__ sy,
+                        const int* __restrict__ ex,
+                        const int* __restrict__ ey,
+                        float* __restrict__ grid,
+                        const int W,
+                        const int H,
+                        const float value,
+                        const int mode,
+                        const float value_condition)
+        {
+            int i = blockDim.x * blockIdx.x + threadIdx.x;
+            if (i >= N) return;
+
+            int x1 = sx[i], y1 = sy[i];
+            int x2 = ex[i], y2 = ey[i];
+            int dx = x2 - x1;
+            int dy = y2 - y1;
+            int adx = dx >= 0 ? dx : -dx;
+            int ady = dy >= 0 ? dy : -dy;
+
+            bool blocked = false;
+
+            if (ady > adx) {
+                if (dy == 0) {
+                    if (x1 >= 0 && x1 < W && y1 >= 0 && y1 < H) {
+                        int idx = x1 * H + y1;
+                        if (mode == 1 && grid[idx] == value_condition) {
+                            blocked = true;
+                        }
+                    }
+                    if (!blocked && x1 >= 0 && x1 < W && y1 >= 0 && y1 < H) {
+                        int idx = x1 * H + y1;
+                        grid[idx] = value;
+                    }
+                    return;
+                }
+
+                int step = (y2 > y1) ? 1 : -1;
+
+                if (mode == 1) {
+                    for (int y = y1;; y += step) {
+                        double rx = ((double)dx * (double)(y - y1)) / (double)dy;
+                        int x = (int)floor((double)x1 + rx);
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            int idx = x * H + y;
+                            if (grid[idx] == value_condition) {
+                                blocked = true;
+                                break;
+                            }
+                        }
+                        if (y == y2) break;
+                    }
+                }
+
+                if (!blocked) {
+                    for (int y = y1;; y += step) {
+                        double rx = ((double)dx * (double)(y - y1)) / (double)dy;
+                        int x = (int)floor((double)x1 + rx);
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            int idx = x * H + y;
+                            grid[idx] = value;
+                        }
+                        if (y == y2) break;
+                    }
+                }
+            } else {
+                if (dx == 0) {
+                    if (x1 >= 0 && x1 < W && y1 >= 0 && y1 < H) {
+                        int idx = x1 * H + y1;
+                        if (mode == 1 && grid[idx] == value_condition) {
+                            blocked = true;
+                        }
+                    }
+                    if (!blocked && x1 >= 0 && x1 < W && y1 >= 0 && y1 < H) {
+                        int idx = x1 * H + y1;
+                        grid[idx] = value;
+                    }
+                    return;
+                }
+
+                int step = (x2 > x1) ? 1 : -1;
+
+                if (mode == 1) {
+                    for (int x = x1;; x += step) {
+                        double ry = ((double)dy * (double)(x - x1)) / (double)dx;
+                        int y = (int)floor((double)y1 + ry);
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            int idx = x * H + y;
+                            if (grid[idx] == value_condition) {
+                                blocked = true;
+                                break;
+                            }
+                        }
+                        if (x == x2) break;
+                    }
+                }
+
+                if (!blocked) {
+                    for (int x = x1;; x += step) {
+                        double ry = ((double)dy * (double)(x - x1)) / (double)dx;
+                        int y = (int)floor((double)y1 + ry);
+                        if (x >= 0 && x < W && y >= 0 && y < H) {
+                            int idx = x * H + y;
+                            grid[idx] = value;
+                        }
+                        if (x == x2) break;
+                    }
+                }
+            }
+        }
+        ''', 'carve_rays')
+
+    def updateBasedOnPose(self, x_t: pose):
+        x_t_np = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
+        self.frame.origin = origin(
+            int((x_t_np[0] / self.frame.r) - (self.frame.size.w / 2)),
+            int((x_t_np[1] / self.frame.r) - (self.frame.size.h / 2)),
+            0,
+        )
+
+    def _carve_rays(self,
+                    sx: cp.ndarray,
+                    sy: cp.ndarray,
+                    ex: cp.ndarray,
+                    ey: cp.ndarray,
+                    value: float,
+                    valueCondition: float | None = None):
+        n = int(ex.size)
+        if n == 0:
+            return
+        threads = 256
+        blocks = (n + threads - 1) // threads
+        mode = cp.int32(1 if valueCondition is not None else 0)
+        cond = cp.float32(valueCondition if valueCondition is not None else 0.0)
+        self._carve_rays_kernel(
+            (blocks,),
+            (threads,),
+            (
+                cp.int32(n),
+                sx.astype(cp.int32, copy=False),
+                sy.astype(cp.int32, copy=False),
+                ex.astype(cp.int32, copy=False),
+                ey.astype(cp.int32, copy=False),
+                self.data.ravel(),
+                cp.int32(self.frame.size.w),
+                cp.int32(self.frame.size.h),
+                cp.float32(value),
+                mode,
+                cond,
+            ),
+        )
+
+    def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround=True):
+        x_t_np = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
+        assert isinstance(z_t, lidarScan)
+        assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
+
+        ang = cp.asarray(z_t.angles, dtype=cp.float32) + cp.float32(x_t_np[2])
+        dist = cp.asarray(z_t.ranges, dtype=cp.float32)
+
+        mask = dist < cp.float32(self.sensorRange * self.frame.r)
+        ang = ang[mask]
+        dist = dist[mask]
+
+        ox = cp.float32(x_t_np[0]) + cp.cos(ang) * dist
+        oy = cp.float32(x_t_np[1]) + cp.sin(ang) * dist
+
+        if z_t_ground is not None:
+            ang_ground = cp.asarray(z_t_ground.angles, dtype=cp.float32) + cp.float32(x_t_np[2])
+            dist_ground = cp.asarray(z_t_ground.ranges, dtype=cp.float32)
+            mask_ground = dist_ground < cp.float32(self.sensorRange * self.frame.r)
+            ang_ground = ang_ground[mask_ground]
+            dist_ground = dist_ground[mask_ground]
+            ox_ground = cp.float32(x_t_np[0]) + cp.cos(ang_ground) * dist_ground
+            oy_ground = cp.float32(x_t_np[1]) + cp.sin(ang_ground) * dist_ground
+
+        ix_t = ((x_t_np[0:2] / self.frame.r) - (self.frame.origin.x, self.frame.origin.y)).astype(int)
+
+        self.data.fill(cp.float32(self.occPrior))
+
+        ix = cp.rint((ox / self.frame.r) - self.frame.origin.x).astype(cp.int32)
+        iy = cp.rint((oy / self.frame.r) - self.frame.origin.y).astype(cp.int32)
+
+        valid = (ix >= 0) & (ix < self.data.shape[0]) & (iy >= 0) & (iy < self.data.shape[1])
+        ix = ix[valid]
+        iy = iy[valid]
+
+        if ix.size > 0:
+            sx = cp.full(ix.shape, cp.int32(ix_t[0]), dtype=cp.int32)
+            sy = cp.full(iy.shape, cp.int32(ix_t[1]), dtype=cp.int32)
+            self._carve_rays(sx, sy, ix, iy, self.invModel[0])
+
+        if z_t_ground is not None and not rayTraceGround:
+            ix_ground = cp.rint((ox_ground / self.frame.r) - self.frame.origin.x).astype(cp.int32)
+            iy_ground = cp.rint((oy_ground / self.frame.r) - self.frame.origin.y).astype(cp.int32)
+            valid_ground = (
+                (ix_ground >= 0) & (ix_ground < self.data.shape[0]) &
+                (iy_ground >= 0) & (iy_ground < self.data.shape[1])
+            )
+            ix_ground = ix_ground[valid_ground]
+            iy_ground = iy_ground[valid_ground]
+            self.data[ix_ground, iy_ground] = cp.float32(self.invModel[0])
+
+        if ix.size > 0:
+            prev_ix = cp.roll(ix, 1)
+            prev_iy = cp.roll(iy, 1)
+            self._carve_rays(ix, iy, prev_ix, prev_iy, self.occPrior)
+
+        self.data[ix, iy] = cp.float32(self.invModel[1])
+
+        if z_t_ground is not None and rayTraceGround:
+            ix_ground = cp.rint((ox_ground / self.frame.r) - self.frame.origin.x).astype(cp.int32)
+            iy_ground = cp.rint((oy_ground / self.frame.r) - self.frame.origin.y).astype(cp.int32)
+            valid_ground = (
+                (ix_ground >= 0) & (ix_ground < self.data.shape[0]) &
+                (iy_ground >= 0) & (iy_ground < self.data.shape[1])
+            )
+            ix_ground = ix_ground[valid_ground]
+            iy_ground = iy_ground[valid_ground]
+
+            if ix_ground.size > 0:
+                sx_ground = cp.full(ix_ground.shape, cp.int32(ix_t[0]), dtype=cp.int32)
+                sy_ground = cp.full(iy_ground.shape, cp.int32(ix_t[1]), dtype=cp.int32)
+                self._carve_rays(
+                    sx_ground,
+                    sy_ground,
+                    ix_ground,
+                    iy_ground,
+                    self.invModel[0],
+                    valueCondition=self.invModel[1],
+                )
+
+        gridOrigin = origin(self.frame.origin.x, self.frame.origin.y, 0)
+        gridSize = size(self.frame.size.w, self.frame.size.h, 1)
+        gridFrame = frame(gridOrigin, gridSize, self.frame.r)
+        return gridMap(gridFrame, self.data)
 
 class sensorModel3D:
     def __init__(self, smFrame: frame, invModel, occPrior: float):
@@ -673,7 +925,17 @@ class sensorModel3DGPU:
             return gridMap(self.frame, self.data)
 
 def main():
-    # Test 2D sensor model
+    runs = 100
+
+    def _print_bench_stats(name: str, samples: list[float]):
+        arr = np.array(samples, dtype=float)
+        print(f'{name} first run: {arr[0]:.6f}s')
+        print(f'{name} mean all {runs}: {arr.mean():.6f}s')
+        print(f'{name} mean runs 2..{runs}: {arr[1:].mean():.6f}s')
+
+    # -----------------------------
+    # 2D benchmark and comparison
+    # -----------------------------
     smOrigin = origin(0, 0, 0)
     width = 300
     height = 100
@@ -682,66 +944,92 @@ def main():
     invModel = [0.1, 0.9]
     occPrior = 0.5
     smSize = size(width, height)
-    sM = sensorModel(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+
+    sM_2d = sensorModel(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+    sM_gpu_2d = sensorModelGPU(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
 
     with open("./logs/sim_corridor/z_100.csv") as data:
         z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
-    
+
     with open("./logs/sim_corridor/x_100.csv") as data:
-        x_t = np.array([line.split(",") for line in data]).astype(float)[0]
-    x_t = pose(position(x_t[0], x_t[1], 0.0), orientation(0.0, 0.0, x_t[2]))
+        x_t_raw = np.array([line.split(",") for line in data]).astype(float)[0]
+    x_t_2d = pose(position(x_t_raw[0], x_t_raw[1], 0.0), orientation(0.0, 0.0, x_t_raw[2]))
 
-    start = time.time()
-    gm = sM.generateGridMap(z_t, x_t)
-    print(time.time() - start)
-    #gm.plot()
+    cpu_times_2d = []
+    gpu_times_2d = []
+    gm_cpu_2d = None
+    gm_gpu_2d = None
 
-    # Test 3D sensor model
+    for _ in range(runs):
+        start = time.time()
+        gm_cpu_2d = sM_2d.generateGridMap(z_t, x_t_2d)
+        cpu_times_2d.append(time.time() - start)
+
+        cp.cuda.Stream.null.synchronize()
+        start = time.time()
+        gm_gpu_2d = sM_gpu_2d.generateGridMap(z_t, x_t_2d)
+        cp.cuda.Stream.null.synchronize()
+        gpu_times_2d.append(time.time() - start)
+
+    print('\n2D benchmark ({runs} runs):'.format(runs=runs))
+    _print_bench_stats('2D CPU', cpu_times_2d)
+    _print_bench_stats('2D GPU', gpu_times_2d)
+
+    cpu_grid_2d = gm_cpu_2d.data[:, :, 0]
+    gpu_grid_2d = cp.asnumpy(gm_gpu_2d.data[:, :, 0])
+    diff_2d = np.abs(cpu_grid_2d - gpu_grid_2d)
+    max_diff_2d = float(np.max(diff_2d))
+    differing_2d = np.where(diff_2d > 0)
+    differing_2d_tol = np.where(diff_2d > 1e-6)
+    print('2D max abs difference:', max_diff_2d)
+    print('2D exact differing cells:', differing_2d[0].size)
+    print('2D differing cells (>1e-6):', differing_2d_tol[0].size)
+    print('2D allclose (atol=1e-6):', bool(np.allclose(cpu_grid_2d, gpu_grid_2d, atol=1e-6)))
+
+    # -----------------------------
+    # 3D benchmark and comparison
+    # -----------------------------
     smOrigin = origin(0, 0, 0)
     smSize = size(100, 100, 25)
     resolution = 0.5
-    sensorRange = 50
     invModel = [0.1, 0.9]
     occPrior = 0.5
-    sM = sensorModel3D(frame(smOrigin, smSize, resolution), invModel, occPrior)
+
+    sM_3d = sensorModel3D(frame(smOrigin, smSize, resolution), invModel, occPrior)
+    sM_gpu_3d = sensorModel3DGPU(frame(smOrigin, smSize, resolution), invModel, occPrior)
 
     z_t_3D = read3DLidarCSV("./logs/2024-02-13-10-35-56/z_1.csv")
-
     z_t_3D.voxelGridFilter(resolution)
+    print('Number of points after voxel grid filter:', z_t_3D.points3D.shape[0])
 
-    # print number of points
-    print("Number of points after voxel grid filter:", z_t_3D.points3D.shape[0])
+    x_t_3d = pose(position(25, 25, 2.0), orientation(0.0, 0.0, 0.0))
 
-    z_t_3D.plot()
+    cpu_times_3d = []
+    gpu_times_3d = []
+    gm_cpu_3d = None
+    gm_gpu_3d = None
 
-    x_t = pose(position(25, 25, 2.0), orientation(0.0, 0.0, 0.0))
-    start = time.time()
-    gm = sM.generateGridMap(z_t_3D, x_t)
-    print('Time taken (CPU):', time.time() - start)
-    gm.plot3D_scatter(isPause=True, value_min=0.6, value_max=1.0)
+    for _ in range(runs):
+        start = time.time()
+        gm_cpu_3d = sM_3d.generateGridMap(z_t_3D, x_t_3d)
+        cpu_times_3d.append(time.time() - start)
 
-    # Test 3D sensor model on GPU
-    sM_gpu = sensorModel3DGPU(frame(smOrigin, smSize, resolution), invModel, occPrior)
+        cp.cuda.Stream.null.synchronize()
+        start = time.time()
+        gm_gpu_3d = sM_gpu_3d.generateGridMap(z_t_3D, x_t_3d, isMinimizeFrame=False)
+        cp.cuda.Stream.null.synchronize()
+        gpu_times_3d.append(time.time() - start)
 
-    start = time.time()
-    gm_gpu = sM_gpu.generateGridMap(z_t_3D, x_t)
-    print('Time taken (GPU):', time.time() - start)
-    gm_gpu.plot3D_scatter(isPause=True, value_min=0.6, value_max=1.0)
+    print('\n3D benchmark ({runs} runs):'.format(runs=runs))
+    _print_bench_stats('3D CPU', cpu_times_3d)
+    _print_bench_stats('3D GPU', gpu_times_3d)
 
-    # Compute the difference between CPU and GPU results
-    diff = np.abs(gm.data - cp.asnumpy(gm_gpu.data))
-    print('Max difference between CPU and GPU results:', np.max(diff))
-    # Diagnostic counts
-    cpu_grid = gm.data
-    gpu_grid = cp.asnumpy(gm_gpu.data)
-    differing = np.where(np.abs(cpu_grid - gpu_grid) > 1e-6)
-    print('Total differing voxels:', differing[0].size)
-    if differing[0].size > 0:
-        # Show distribution of CPU values where they differ
-        unique_cpu, counts_cpu = np.unique(cpu_grid[differing], return_counts=True)
-        unique_gpu, counts_gpu = np.unique(gpu_grid[differing], return_counts=True)
-        print('CPU differing value counts:', dict(zip(unique_cpu, counts_cpu)))
-        print('GPU differing value counts:', dict(zip(unique_gpu, counts_gpu)))
+    cpu_grid_3d = gm_cpu_3d.data
+    gpu_grid_3d = cp.asnumpy(gm_gpu_3d.data)
+    diff_3d = np.abs(cpu_grid_3d - gpu_grid_3d)
+    print('3D max abs difference:', float(np.max(diff_3d)))
+    differing_3d = np.where(diff_3d > 1e-6)
+    print('3D differing voxels (>1e-6):', differing_3d[0].size)
 
 if __name__ == '__main__':
     main()

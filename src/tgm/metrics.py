@@ -1,9 +1,9 @@
-from lidarScan import lidarScan
-from gridMap import gridMap
-from spatial import pose, position, orientation, size, frame, origin
+from .lidarScan import lidarScan
+from .gridMap import gridMap
+from .spatial import pose, position, orientation, size, frame, origin
 import numpy as np
-from utilities import read3DLabledLidarBIN, loadConfigAsDict
-from sensorModel import sensorModel
+from .utilities import read3DLabledLidarBIN, loadConfigAsDict
+from .sensorModel import sensorModel
 
 def computeMetrics(z_t, x_t, gM, label=1):
     assert isinstance(z_t, lidarScan)
@@ -120,5 +120,5 @@ if __name__ == "__main__":
     
     print(z_t.ranges, z_t.angles)
 
-    gm.plot()
+    gm.plot2D()
     print(computeMetrics(z_t, x_t, gm))

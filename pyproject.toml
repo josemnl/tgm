@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transitional-grid-map"
+version = "0.1.0"
+description = "Transitional Grid Map (TGM): probabilistic dynamic occupancy mapping"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy<2.3.0",
+    "scipy>=1.10",
+    "matplotlib>=3.8",
+    "PyQt5>=5.15.11",
+    "scikit-image>=0.22",
+    "opencv-python",
+    "PyYAML",
+    "pandas",
+    "open3d>=0.19.0",
+]
+
+[project.optional-dependencies]
+# Install the extra that matches your CUDA major version.
+gpu-cuda12 = ["cupy-cuda12x"]
+gpu-cuda11 = ["cupy-cuda11x"]
+
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
