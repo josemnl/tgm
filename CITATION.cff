@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "Transitional Grid Map (TGM)"
+type: software
+authors:
+  - family-names: Gaspar Sanchez
+    given-names: Jose Manuel
+  - family-names: Bruns
+    given-names: Leonard
+  - family-names: Tumova
+    given-names: Jana
+  - family-names: Jensfelt
+    given-names: Patric
+  - family-names: Torngren
+    given-names: Martin
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Gaspar Sanchez
+      given-names: Jose Manuel
+    - family-names: Bruns
+      given-names: Leonard
+    - family-names: Tumova
+      given-names: Jana
+    - family-names: Jensfelt
+      given-names: Patric
+    - family-names: Torngren
+      given-names: Martin
+  title: "Transitional Grid Maps: Joint Modeling of Static and Dynamic Occupancy"
+  journal: "IEEE Open Journal of Intelligent Transportation Systems"
+  year: 2025
+  volume: 6
+  start: 1
+  end: 10
+  doi: 10.1109/OJITS.2024.3521449

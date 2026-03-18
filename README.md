@@ -136,3 +136,25 @@ python .\examples\run-test-cardinality.py
 - **CuPy is optional** and exposed via extras in `pyproject.toml` (`gpu-cuda12`, `gpu-cuda11`), or can be installed manually with a matching wheel.
 - The code automatically falls back to CPU mode if CuPy is unavailable, even when `isGPU: true` is set.
 - For CI or headless servers, use CPU mode (`isGPU: false`) or ensure CUDA DLLs are on PATH before imports.
+
+## How to Cite
+
+If you use this code in academic work, please cite:
+
+J. M. Gaspar Sanchez, L. Bruns, J. Tumova, P. Jensfelt and M. Torngren, "Transitional Grid Maps: Joint Modeling of Static and Dynamic Occupancy," in IEEE Open Journal of Intelligent Transportation Systems, vol. 6, pp. 1-10, 2025, doi: 10.1109/OJITS.2024.3521449.
+
+BibTeX:
+
+```bibtex
+@ARTICLE{10813430,
+	author={Gaspar Sanchez, Jose Manuel and Bruns, Leonard and Tumova, Jana and Jensfelt, Patric and Torngren, Martin},
+	journal={IEEE Open Journal of Intelligent Transportation Systems},
+	title={Transitional Grid Maps: Joint Modeling of Static and Dynamic Occupancy},
+	year={2025},
+	volume={6},
+	number={},
+	pages={1-10},
+	keywords={Vehicle dynamics;Bayes methods;Hidden Markov models;Time measurement;Simultaneous localization and mapping;Radar tracking;Heuristic algorithms;Current measurement;Computational modeling;Noise measurement;Grid map;Bayesian inference;SLAM},
+	doi={10.1109/OJITS.2024.3521449}
+}
+```
