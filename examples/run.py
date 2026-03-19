@@ -4,11 +4,11 @@ import time
 import os
 
 from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from tgm.sensorModel import sensorModel, sensorModelGPU
-from tgm.TGM import TGM
-from tgm.SLAM import lsqnl_matching
-from tgm.metrics import classificationMetrics
-from tgm.spatial import frame, origin, poseWithCovariance, size, position, pose, orientation
+from tgm import (
+    sensorModel2DCPU, sensorModel2DGPU,
+    TGM, lsqnl_matching2D, classificationMetrics,
+    frame, origin, poseWithCovariance, size, position, pose, orientation,
+)
 
 import matplotlib
 matplotlib.use('Qt5Agg')
@@ -28,9 +28,9 @@ def run(logID, conf):
     smOrigin = origin(conf.origin[0], conf.origin[1], 0)
     smFrame = frame(smOrigin, sMsize, conf.resolution)
     if conf.isGPU:
-        sM = sensorModelGPU(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+        sM = sensorModel2DGPU(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
     else:
-        sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+        sM = sensorModel2DCPU(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
     tgmOrigin = origin(conf.origin[0], conf.origin[1], 0)
     tgmSize = size(conf.width, conf.height, 1)
     tgmFrame = frame(tgmOrigin, tgmSize, conf.resolution)
@@ -154,7 +154,7 @@ def run(logID, conf):
             slamSize = size(conf.smWidth, conf.smHeight, 1)
             slamFrame = frame.frameAroundPosition(x_t.position, slamSize, tgm.frame.r)
             slam_map = tgm.oneLayer('static', slamFrame).toCPU()
-            x_t, poseCov = lsqnl_matching(z_t, slam_map, initialGuess, conf.sensorRange, return_covariance=True)
+            x_t, poseCov = lsqnl_matching2D(z_t, slam_map, initialGuess, conf.sensorRange, return_covariance=True)
             print('Pose covariance:\n', poseCov.as_array())
             v_t = x_t - x_prev
         timeSLAM = time.time()

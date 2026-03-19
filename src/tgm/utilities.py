@@ -1,7 +1,7 @@
 import numpy as np
 import subprocess
 import os
-from .lidarScan import lidarScan, lidarScan3D
+from .lidarScans import lidarScan2D, lidarScan3D
 import yaml
 import pandas as pd
 from types import SimpleNamespace
@@ -67,7 +67,7 @@ def readPose(file):
 
 def read2DLidarCSV(file):
     with open(file) as data:
-        z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
+        z_t = lidarScan2D(*np.array([line.split(",") for line in data]).astype(float).T)
     return z_t
 
 def read3DLidarCSV(file):

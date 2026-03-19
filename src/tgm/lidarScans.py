@@ -4,7 +4,7 @@ import scipy as sp
 from .GroundSeg import ground_seg
 from .spatial import pose, orientation
 
-class lidarScan:
+class lidarScan2D:
     def __init__(self, angles, ranges, labels=None):
         assert len(angles) == len(ranges)
         if labels is not None:
@@ -124,7 +124,7 @@ class lidarScan:
         angles = self.angles[mask]
         ranges = self.ranges[mask]
         labels = self.labels[mask]
-        return lidarScan(angles, ranges, labels)
+        return lidarScan2D(angles, ranges, labels)
 
     def filterInByLabel(self, label):
         assert self.labels is not None
@@ -132,7 +132,7 @@ class lidarScan:
         angles = self.angles[mask]
         ranges = self.ranges[mask]
         labels = self.labels[mask]
-        return lidarScan(angles, ranges, labels)
+        return lidarScan2D(angles, ranges, labels)
     
     def convertTo3D(self, height=0.0):
         points3D = np.column_stack([self.ranges * np.cos(self.angles), self.ranges * np.sin(self.angles), np.ones(self.ranges.shape) * height])
@@ -203,12 +203,12 @@ class lidarScan3D:
         return lidarScan3D(points3D, labels)
     
     def convertTo2D(self):
-        return lidarScan(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2), self.labels)
+        return lidarScan2D(np.arctan2(self.points3D[:, 1], self.points3D[:, 0]), np.sqrt(self.points3D[:, 0]**2 + self.points3D[:, 1]**2), self.labels)
     
     def convertTo2D_new(self, angRes, maxRange):
         # This function converts the 3D scan to a 2D scan taking only the closest point in each angular sector
         # Create lidarScan object with the specified angular resolution and maximum range
-        z_t = lidarScan(np.linspace(-np.pi, np.pi, angRes), np.ones(angRes)*maxRange)
+        z_t = lidarScan2D(np.linspace(-np.pi, np.pi, angRes), np.ones(angRes)*maxRange)
         # Iterate through each point in the 3D scan
         for point in self.points3D:
             # Compute the angle and range of the point

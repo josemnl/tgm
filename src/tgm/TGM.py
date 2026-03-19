@@ -360,9 +360,9 @@ def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     return conv
 
 if __name__ == '__main__':
-    from .lidarScan import lidarScan3D
+    from .lidarScans import lidarScan3D
     from .utilities import read3DLidarCSV
-    from .sensorModel import sensorModel3D
+    from .sensorModels import sensorModel3DCPU
     # Example of usage
     # Create a TGM
     tgmOrigin = origin(10, 10, 0)
@@ -376,7 +376,7 @@ if __name__ == '__main__':
 
     # Create a sensor model (using the same frame as the TGM for simplicity)
     # The occPrior of the sensor model MUST be the sum of the priors of the TGM
-    sM = sensorModel3D(tgmFrame, [0.1, 0.9], sum(priors))
+    sM = sensorModel3DCPU(tgmFrame, [0.1, 0.9], sum(priors))
 
     # Import a sensor measurement and pose
     z_t = read3DLidarCSV("./logs/2024-02-13-10-35-56/z_1.csv")

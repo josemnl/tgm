@@ -1,12 +1,12 @@
-from .lidarScan import lidarScan
+from .lidarScans import lidarScan2D
 from .gridMap import gridMap
 from .spatial import pose, position, orientation, size, frame, origin
 import numpy as np
 from .utilities import read3DLabledLidarBIN, loadConfigAsDict
-from .sensorModel import sensorModel
+from .sensorModels import sensorModel2DCPU
 
 def computeMetrics(z_t, x_t, gM, label=1):
-    assert isinstance(z_t, lidarScan)
+    assert isinstance(z_t, lidarScan2D)
     assert isinstance(x_t, pose)
     assert isinstance(gM, gridMap)
     
@@ -79,7 +79,7 @@ if __name__ == "__main__":
     smSize = size(conf.smWidth, conf.smHeight)
     smOrigin = origin(conf.origin[0], conf.origin[1], 0)
     smFrame = frame(smOrigin, smSize, conf.resolution)
-    sM = sensorModel(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
+    sM = sensorModel2DCPU(smFrame, conf.sensorRange, conf.invModel, conf.occPrior)
 
     pathLabels = './SnowyKITTI/dataset/sequences/00/snow_labels/'
     z_t_3D = read3DLabledLidarBIN('./SnowyKITTI/dataset/sequences/00/snow_velodyne/000000.bin', './SnowyKITTI/dataset/sequences/00/snow_labels/000000.label')
