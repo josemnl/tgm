@@ -1,9 +1,8 @@
 import numpy as np
-import cupy as cp
 import scipy.signal as sp
-import cupyx.scipy.signal as csp
 from skimage.morphology import disk
 
+from .cupy_compat import CUPY_AVAILABLE, is_cupy_array, require_cupy
 from .gridMap import discreteDist, gridMap
 from .spatial import frame, origin, size, pose, position, orientation
 
@@ -17,8 +16,11 @@ class TGM:
         assert isinstance(saturationLimits, list) and len(saturationLimits) == 4
 
         # Choose numpy or cupy
-        self.GPU = isGPU
+        self.GPU = bool(isGPU and CUPY_AVAILABLE)
+        if isGPU and not CUPY_AVAILABLE:
+            print("WARNING: CuPy is not installed. Falling back to CPU execution.")
         if self.GPU:
+            import cupy as cp
             self.xp = cp
         else:
             self.xp = np
@@ -98,10 +100,11 @@ class TGM:
         # Crop the instantaneous map to the overlapping region
         instMap = instGridMap.crop(overlap).data
 
-        if self.GPU and not isinstance(instMap, cp.ndarray):
-            instMap = cp.asarray(instMap)
+        if self.GPU and not is_cupy_array(instMap):
+            instMap = self.xp.asarray(instMap)
             print('WARNING: The instantaneous map is not a cupy array, but the TGM is using GPU. Converting the instantaneous map to a cupy array, which may cause a slowdown.')
-        elif not self.GPU and isinstance(instMap, cp.ndarray):
+        elif not self.GPU and is_cupy_array(instMap):
+            import cupy as cp
             instMap = cp.asnumpy(instMap)
             print('WARNING: The instantaneous map is a cupy array, but the TGM is not using GPU. Converting the instantaneous map to a numpy array, which may cause a slowdown.')
         
@@ -154,6 +157,7 @@ class TGM:
 
         # Clean up GPU memory if using GPU
         if self.GPU:
+            import cupy as cp
             cp._default_memory_pool.free_all_blocks()
 
     def predict(self, predictFrame=None):
@@ -180,7 +184,7 @@ class TGM:
                 dynamicMove = conv2prior(dynamicMap, self.convShape2D, self.dynamicPrior, self.fftConv, self.GPU) * (1 - staticMap)
             predDynamicMap = dynamicStay + bounceBack + dynamicMove
         else:
-            predDynamicMap = cp.zeros_like(dynamicMap) if self.GPU else np.zeros_like(dynamicMap)
+            predDynamicMap = self.xp.zeros_like(dynamicMap)
 
         # Compute weather prediction
         predWeatherMap = (1 - predStaticMap - predDynamicMap) * self.weatherPrior / (self.weatherPrior + self.freePrior)
@@ -246,10 +250,7 @@ class TGM:
         for _ in range(max_iterations):
             shift = (shift_low + shift_high) / 2.0
             denom = dynamic_map + free_map
-            if self.GPU:
-                denom = cp.where(denom <= 0, 1e-12, denom)
-            else:
-                denom = np.where(denom <= 0, 1e-12, denom)
+            denom = self.xp.where(denom <= 0, 1e-12, denom)
             dynamic_free_ratio_map = gridMap(self.frame, dynamic_map / denom)
             new_dynamic_free_ratio_map = dynamic_free_ratio_map.logOddShift(shift).data
             new_dynamic_map = new_dynamic_free_ratio_map * (dynamic_map + free_map)
@@ -296,7 +297,10 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
     assert map.ndim == 2 or (map.ndim == 3 and map.shape[2] == 1)
 
     # Choose numpy/scipy or cupy/cupyx
-    if GPU:
+    if GPU and CUPY_AVAILABLE:
+        require_cupy("2D GPU convolution")
+        import cupy as cp
+        import cupyx.scipy.signal as csp
         map = cp.asarray(map)
         xp = cp
         xsp = csp
@@ -330,7 +334,10 @@ def conv2prior(map, convShape, prior, fftConv=False, GPU=False):
 
 def conv3prior(map, convShape, prior, fftConv=False, GPU=False):
     # Choose numpy/scipy or cupy/cupyx
-    if GPU:
+    if GPU and CUPY_AVAILABLE:
+        require_cupy("3D GPU convolution")
+        import cupy as cp
+        import cupyx.scipy.signal as csp
         map = cp.asarray(map)
         xp = cp
         xsp = csp

@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import numpy as np
 import pickle
 import cv2
-import cupy as cp
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from .cupy_compat import CUPY_AVAILABLE, is_cupy_array, require_cupy
 from .spatial import position, orientation, pose, frame, origin, size
 
 if TYPE_CHECKING:
@@ -52,14 +54,14 @@ class discreteDist:
         return discreteDist_plot(self, ax)
 
 class gridMap:
-    def __init__(self, gridFrame: frame, data: Union[np.ndarray, cp.ndarray]):
+    def __init__(self, gridFrame: frame, data: Any):
         """
         Origin, width, and height are in grid cells
         Resolution is in meters per grid cell
         """
 
         # Assert that the data is a 2D or 3D array
-        assert isinstance(data, (np.ndarray, cp.ndarray))
+        assert isinstance(data, np.ndarray) or is_cupy_array(data)
         assert data.ndim in [2, 3]
         assert data.shape[0] == gridFrame.size.w
         assert data.shape[1] == gridFrame.size.h
@@ -70,10 +72,16 @@ class gridMap:
 
         self.frame = gridFrame
         self.data = data
+        self.GPU = is_cupy_array(self.data)
+        if self.GPU:
+            import cupy as cp
+            self.xp = cp
+        else:
+            self.xp = np
 
     @property
     def isGPU(self) -> bool:
-        return isinstance(self.data, cp.ndarray)
+        return self.GPU
 
     @property
     def isBool(self) -> bool:
@@ -89,11 +97,14 @@ class gridMap:
 
     def toCPU(self) -> 'gridMap':
         if self.isGPU:
+            import cupy as cp
             return gridMap(self.frame, cp.asnumpy(self.data))
         return self
     
     def toGPU(self) -> 'gridMap':
         if not self.isGPU:
+            require_cupy("gridMap.toGPU")
+            import cupy as cp
             return gridMap(self.frame, cp.asarray(self.data))
         return self
     
@@ -124,10 +135,7 @@ class gridMap:
         If the new grid is partially outside the old one, the new cells are initialized with the fill value.
         """
         overlap = self.computeOverlap(newFrame)
-        if self.isGPU:
-            newData = cp.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
-        else:
-            newData = np.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
+        newData = self.xp.full((newFrame.size.w, newFrame.size.h, newFrame.size.d), fill_value)
         ix_0 = overlap.origin.x - newFrame.origin.x
         iy_0 = overlap.origin.y - newFrame.origin.y
         iz_0 = overlap.origin.z - newFrame.origin.z
@@ -202,18 +210,16 @@ class gridMap:
         assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
-        if self.isGPU:
-            return gridMap(self.frame, cp.logical_and(self.data, cp.logical_not(otherGM.data)))
-        return gridMap(self.frame, np.logical_and(self.data, np.logical_not(otherGM.data)))
+        assert self.isGPU == otherGM.isGPU
+        return gridMap(self.frame, self.xp.logical_and(self.data, self.xp.logical_not(otherGM.data)))
     
     def union(self, otherGM: 'gridMap') -> 'gridMap':
         # Implements the set union between two grid maps
         assert self.frame == otherGM.frame
         assert self.isBool
         assert otherGM.isBool
-        if self.isGPU:
-            return gridMap(self.frame, cp.logical_or(self.data, otherGM.data))
-        return gridMap(self.frame, np.logical_or(self.data, otherGM.data))
+        assert self.isGPU == otherGM.isGPU
+        return gridMap(self.frame, self.xp.logical_or(self.data, otherGM.data))
 
     def plot2D(self, ax: 'plt.Axes' = None, frame = None, isPause: bool = False) -> None:
         from .plotting import gridMap_plot2D
@@ -236,7 +242,9 @@ class gridMap:
         p(S = s) for s = 0..N where N is the number of cells.
         It is computed as a Poisson Binomial distribution, using a dynamic programming approach.
         """
-        if self.isGPU:
+        if self.isGPU and CUPY_AVAILABLE:
+            require_cupy("gridMap.cardinality GPU path")
+            import cupy as cp
             p = self.data.flatten().astype(cp.float64)
             N = int(p.size)
             print(f"Computing cardinality for N={N} cells (GPU, FFT).")
@@ -250,7 +258,7 @@ class gridMap:
                 pi = p[i]
                 polys.append(cp.stack([one - pi, pi]).astype(cp.float64))
 
-            def fft_convolve(a: cp.ndarray, b: cp.ndarray) -> cp.ndarray:
+            def fft_convolve(a, b):
                 total_len = int(a.size + b.size - 1)
                 n = 1 << (total_len - 1).bit_length()
                 fa = cp.fft.rfft(a, n)
@@ -297,18 +305,11 @@ class gridMap:
         where logit(p) = log(p / (1 - p))
         """
         eps = 1e-12
-        if self.isGPU:
-            p = cp.clip(self.data, eps, 1.0 - eps)
-            logit = cp.log(p / (1 - p))
-            logit_shifted = logit + shift
-            p_new = 1 - 1 / (1 + cp.exp(logit_shifted))
-            return gridMap(self.frame, p_new)
-        else:
-            p = np.clip(self.data, eps, 1.0 - eps)
-            logit = np.log(p / (1 - p))
-            logit_shifted = logit + shift
-            p_new = 1 - 1 / (1 + np.exp(logit_shifted))
-            return gridMap(self.frame, p_new)
+        p = self.xp.clip(self.data, eps, 1.0 - eps)
+        logit = self.xp.log(p / (1 - p))
+        logit_shifted = logit + shift
+        p_new = 1 - 1 / (1 + self.xp.exp(logit_shifted))
+        return gridMap(self.frame, p_new)
         
     def rebalance(self, target_cardinality: discreteDist) -> 'gridMap':
         """

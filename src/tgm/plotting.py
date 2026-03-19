@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 import numpy as np
-import cupy as cp
 import matplotlib.pyplot as plt
 from matplotlib.image import imsave
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -43,17 +42,14 @@ def gridMap_plot2D(gM: 'gridMap', ax = None, frame = None, isPause: bool = False
         frame = gM.frame
     overlap = gM.frame.computeOverlap(frame)
 
-    # Keep data on GPU if available
-    xp = cp if gM.isGPU else np
-
     # Crop the map to the overlapping region and transfer to CPU if needed
     croppedMap = gM.crop(overlap).data
 
-    I = xp.zeros((overlap.size.h, overlap.size.w))
-    I[:,:] = 1 - np.transpose(croppedMap)
+    I = gM.xp.zeros((overlap.size.h, overlap.size.w))
+    I[:,:] = 1 - gM.xp.transpose(croppedMap)
 
     if gM.isGPU:
-        I = cp.asnumpy(I)
+        I = gM.xp.asnumpy(I)
     
     plt.imshow(I, cmap="gray", vmin=0, vmax=1, origin ="lower",
                 extent=(gM.frame.origin.x*gM.frame.r, (gM.frame.origin.x + gM.frame.size.w)*gM.frame.r,
@@ -83,15 +79,10 @@ def gridMap_plot3D(gM: 'gridMap', ax = None, frame = None, isPause: bool = False
     croppedMap = gM.crop(overlap).data
 
     # Keep data on GPU if available, use xp abstraction for all operations
-    if gM.isGPU:
-        xp = cp
-    else:
-        xp = np
-        
-    values = xp.clip(croppedMap.astype(float), 0.0, 1.0)
+    values = gM.xp.clip(croppedMap.astype(float), 0.0, 1.0)
     inten = 1.0 - values
     alpha = values
-    sizes = xp.full(values.shape, 120.0)
+    sizes = gM.xp.full(values.shape, 120.0)
 
     try:
         ax.set_proj_type('ortho')
@@ -99,20 +90,20 @@ def gridMap_plot3D(gM: 'gridMap', ax = None, frame = None, isPause: bool = False
         pass
 
     # Compute centers in index units (can scale to meters if desired)
-    xs = overlap.origin.x + xp.arange(overlap.size.w) + 0.5
-    ys = overlap.origin.y + xp.arange(overlap.size.h) + 0.5
-    zs = overlap.origin.z + xp.arange(overlap.size.d) + 0.5
+    xs = overlap.origin.x + gM.xp.arange(overlap.size.w) + 0.5
+    ys = overlap.origin.y + gM.xp.arange(overlap.size.h) + 0.5
+    zs = overlap.origin.z + gM.xp.arange(overlap.size.d) + 0.5
 
     # Shapes
     nx, ny, nz = len(xs), len(ys), len(zs)
 
     # 1D coordinates consistent with arr.ravel(order='C') for shape (nx, ny, nz)
-    X = xp.repeat(xs, ny * nz)
-    Y = xp.tile(xp.repeat(ys, nz), nx)
-    Z = xp.tile(zs, nx * ny)
+    X = gM.xp.repeat(xs, ny * nz)
+    Y = gM.xp.tile(gM.xp.repeat(ys, nz), nx)
+    Z = gM.xp.tile(zs, nx * ny)
 
     # Per-point RGBA and sizes
-    rgba = xp.zeros(inten.shape + (4,), dtype=float)
+    rgba = gM.xp.zeros(inten.shape + (4,), dtype=float)
     rgba[..., 0] = inten
     rgba[..., 1] = inten
     rgba[..., 2] = inten
@@ -124,11 +115,11 @@ def gridMap_plot3D(gM: 'gridMap', ax = None, frame = None, isPause: bool = False
 
     # Transfer to CPU only after masking (only the filtered results)
     if gM.isGPU:
-        X = cp.asnumpy(X[mask])
-        Y = cp.asnumpy(Y[mask])
-        Z = cp.asnumpy(Z[mask])
-        sizes_masked = cp.asnumpy(sizes.ravel()[mask])
-        rgba_masked = cp.asnumpy(rgba.reshape(-1, 4)[mask])
+        X = gM.xp.asnumpy(X[mask])
+        Y = gM.xp.asnumpy(Y[mask])
+        Z = gM.xp.asnumpy(Z[mask])
+        sizes_masked = gM.xp.asnumpy(sizes.ravel()[mask])
+        rgba_masked = gM.xp.asnumpy(rgba.reshape(-1, 4)[mask])
     else:
         X = X[mask]
         Y = Y[mask]
@@ -162,7 +153,7 @@ def gridMap_plot3D(gM: 'gridMap', ax = None, frame = None, isPause: bool = False
     plt.show(block=isPause)
     plt.pause(0.0001)
 
-def gridMap_plot3D_cubes(gM, isPause: bool = False, cube_size: float = 1.0,
+def gridMap_plot3D_cubes(gM: 'gridMap', isPause: bool = False, cube_size: float = 1.0,
                    alpha_min: float = 0.0, alpha_max: float = 1.0,
                    face_edges: bool = False, elev: float = 20, azim: float = -60) -> None:
     """
@@ -174,7 +165,7 @@ def gridMap_plot3D_cubes(gM, isPause: bool = False, cube_size: float = 1.0,
 
     Renders per z-slice back-to-front for decent transparency blending.
     """
-    data = cp.asnumpy(gM.data) if gM.isGPU else gM.data
+    data = gM.xp.asnumpy(gM.data) if gM.isGPU else gM.data
     values = np.clip(data.astype(float), 0.0, 1.0)
     inten = 1.0 - values
     alpha = alpha_min + (alpha_max - alpha_min) * values
@@ -268,9 +259,6 @@ def tgm_plot2D(tgm: 'TGM', ax = None, frame = None, saveMap=False, savePNG=False
         frame = tgm.frame
     overlap = tgm.frame.computeOverlap(frame)
 
-    # Keep data on GPU if available
-    xp = cp if tgm.GPU else np
-
     # Crop the maps to the overlapping region
     staticMap = tgm.staticMap.crop(overlap).data
     dynamicMap = tgm.dynamicMap.crop(overlap).data
@@ -278,22 +266,22 @@ def tgm_plot2D(tgm: 'TGM', ax = None, frame = None, saveMap=False, savePNG=False
 
     # Plot the map according to the style
     if style == 'combined':
-        I = xp.zeros((overlap.size.h, overlap.size.w, 3))
-        I[:,:,0] = 1 - xp.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))
-        I[:,:,1] = 1 - xp.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))
-        I[:,:,2] = 1 - xp.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))
+        I = tgm.xp.zeros((overlap.size.h, overlap.size.w, 3))
+        I[:,:,0] = 1 - tgm.xp.transpose(1.0*staticMap + 0.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))
+        I[:,:,1] = 1 - tgm.xp.transpose(0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/tgm.xp.square(1-weatherMap))
+        I[:,:,2] = 1 - tgm.xp.transpose(0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))
         # Make sure the values are between 0 and 1
-        I = xp.clip(I, 0, 1)
+        I = tgm.xp.clip(I, 0, 1)
     elif style == 'static':
-        I = 1 - xp.transpose(staticMap)
+        I = 1 - tgm.xp.transpose(staticMap)
     elif style == 'dynamic':
-        I = 1 - xp.transpose(dynamicMap)
+        I = 1 - tgm.xp.transpose(dynamicMap)
     elif style == 'weather':
-        I = 1 - xp.transpose(weatherMap)
+        I = 1 - tgm.xp.transpose(weatherMap)
 
     # Transfer the image to CPU if using GPU
     if tgm.GPU:
-        I = cp.asnumpy(I)
+        I = tgm.xp.asnumpy(I)
 
     # Plot the map
     ax.clear()
@@ -361,17 +349,11 @@ def tgm_plot3D(tgm: 'TGM', ax = None, frame = None, value_min=0.0, value_max=1.0
     dynamicMap = tgm.dynamicMap.crop(overlap).data
     weatherMap = tgm.weatherMap.crop(overlap).data
 
-    # Keep data on GPU if using cupy, otherwise use numpy (optimized like plot3D_open3d)
-    if tgm.GPU:
-        xp = cp
-    else:
-        xp = np
-
     # Create a meshgrid for the coordinates (on GPU if available)
-    x = xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * tgm.frame.r
-    y = xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * tgm.frame.r
-    z = xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * tgm.frame.r
-    X, Y, Z = xp.meshgrid(x, y, z, indexing='ij')
+    x = tgm.xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * tgm.frame.r
+    y = tgm.xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * tgm.frame.r
+    z = tgm.xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * tgm.frame.r
+    X, Y, Z = tgm.xp.meshgrid(x, y, z, indexing='ij')
 
     # Flatten the arrays for plotting (still on GPU if applicable)
     X = X.flatten()
@@ -382,24 +364,24 @@ def tgm_plot3D(tgm: 'TGM', ax = None, frame = None, value_min=0.0, value_max=1.0
     weatherMap = weatherMap.flatten()
 
     # Create a color array based on the probabilities (on GPU if applicable)
-    colors = xp.zeros((len(X), 3))
+    colors = tgm.xp.zeros((len(X), 3))
     # Same color coding as in the 2D case
-    colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Red channel
-    colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))  # Green channel
-    colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Blue channel
+    colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))  # Red channel
+    colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/tgm.xp.square(1-weatherMap))  # Green channel
+    colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))  # Blue channel
 
     # Normalize colors to be between 0 and 1 (on GPU if applicable)
-    colors = xp.clip(colors, 0, 1)
+    colors = tgm.xp.clip(colors, 0, 1)
 
     # Mask out low and high values (on GPU if applicable)
     mask = (staticMap + dynamicMap + weatherMap > value_min) & (staticMap + dynamicMap + weatherMap < value_max)
     
     # Apply mask and transfer to CPU only once at the end (if using GPU)
     if tgm.GPU:
-        X = cp.asnumpy(X[mask])
-        Y = cp.asnumpy(Y[mask])
-        Z = cp.asnumpy(Z[mask])
-        colors = cp.asnumpy(colors[mask])
+        X = tgm.xp.asnumpy(X[mask])
+        Y = tgm.xp.asnumpy(Y[mask])
+        Z = tgm.xp.asnumpy(Z[mask])
+        colors = tgm.xp.asnumpy(colors[mask])
     else:
         X = X[mask]
         Y = Y[mask]
@@ -551,17 +533,11 @@ def tgm_plot3D_open3d(tgm: 'TGM', frame = None, isPause=False, value_min=0.0, va
     dynamicMap = tgm.dynamicMap.crop(overlap).data
     weatherMap = tgm.weatherMap.crop(overlap).data
 
-    # Keep data on GPU if using cupy, otherwise use numpy
-    if tgm.GPU:
-        xp = cp
-    else:
-        xp = np
-
     # Create a meshgrid for the coordinates (on GPU if available)
-    x = xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * tgm.frame.r
-    y = xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * tgm.frame.r
-    z = xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * tgm.frame.r
-    X, Y, Z = xp.meshgrid(x, y, z, indexing='ij')
+    x = tgm.xp.arange(overlap.origin.x, overlap.origin.x + overlap.size.w) * tgm.frame.r
+    y = tgm.xp.arange(overlap.origin.y, overlap.origin.y + overlap.size.h) * tgm.frame.r
+    z = tgm.xp.arange(overlap.origin.z, overlap.origin.z + overlap.size.d) * tgm.frame.r
+    X, Y, Z = tgm.xp.meshgrid(x, y, z, indexing='ij')
 
     # Flatten the arrays for plotting (still on GPU)
     X = X.flatten()
@@ -572,23 +548,23 @@ def tgm_plot3D_open3d(tgm: 'TGM', frame = None, isPause=False, value_min=0.0, va
     weatherMap = weatherMap.flatten()
 
     # Create a color array based on the probabilities (on GPU)
-    colors = xp.zeros((len(X), 3))
-    colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Red channel
-    colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/xp.square(1-weatherMap))  # Green channel
-    colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/xp.square(1-weatherMap))  # Blue channel
+    colors = tgm.xp.zeros((len(X), 3))
+    colors[:, 0] = 1 - (staticMap + 0.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))  # Red channel
+    colors[:, 1] = 1 - (0.5*staticMap + 0.5*dynamicMap + 0.0*weatherMap/tgm.xp.square(1-weatherMap))  # Green channel
+    colors[:, 2] = 1 - (0.0*staticMap + 1.0*dynamicMap + 2.0*weatherMap/tgm.xp.square(1-weatherMap))  # Blue channel
 
     # Normalize colors to be between 0 and 1 (on GPU)
-    colors = xp.clip(colors, 0, 1)
+    colors = tgm.xp.clip(colors, 0, 1)
 
     # Mask out low and high values (on GPU)
     mask = (staticMap + dynamicMap + weatherMap > value_min) & (staticMap + dynamicMap + weatherMap < value_max)
     
     # Apply mask and transfer only filtered data to CPU (THIS is the only GPU->CPU transfer)
     if tgm.GPU:
-        points = cp.asnumpy(xp.vstack([X[mask], Y[mask], Z[mask]]).T)
-        colors = cp.asnumpy(colors[mask])
+        points = tgm.xp.asnumpy(tgm.xp.vstack([X[mask], Y[mask], Z[mask]]).T)
+        colors = tgm.xp.asnumpy(colors[mask])
     else:
-        points = xp.vstack([X[mask], Y[mask], Z[mask]]).T
+        points = tgm.xp.vstack([X[mask], Y[mask], Z[mask]]).T
         colors = colors[mask]
 
     # Compute full map bounds (match plot3D axis limits)

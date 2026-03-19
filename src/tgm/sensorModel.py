@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import numpy as np
-import cupy as cp
+from typing import Any
+from .cupy_compat import require_cupy
 from .gridMap import gridMap
 from .spatial import frame, origin, size, pose, position, orientation
 from .lidarScan import lidarScan, lidarScan3D
@@ -168,6 +171,9 @@ class sensorModel:
 
 class sensorModelGPU:
     def __init__(self, smFrame: frame, sensorRange, invModel, occPrior):
+        require_cupy("sensorModelGPU")
+        import cupy as cp
+        self.cp = cp
         assert isinstance(smFrame, frame)
         self.frame = smFrame
         self.sensorRange = sensorRange
@@ -302,12 +308,13 @@ class sensorModelGPU:
         )
 
     def _carve_rays(self,
-                    sx: cp.ndarray,
-                    sy: cp.ndarray,
-                    ex: cp.ndarray,
-                    ey: cp.ndarray,
+                    sx: Any,
+                    sy: Any,
+                    ex: Any,
+                    ey: Any,
                     value: float,
                     valueCondition: float | None = None):
+        cp = self.cp
         n = int(ex.size)
         if n == 0:
             return
@@ -334,6 +341,7 @@ class sensorModelGPU:
         )
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround=True):
+        cp = self.cp
         x_t_np = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
         assert isinstance(z_t, lidarScan)
         assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
@@ -531,6 +539,9 @@ class sensorModel3D:
 class sensorModel3DGPU:
     def __init__(self, smFrame: frame, invModel, occPrior: float,
                  diffusion_radius: int = 0, cone_free: bool = False):
+        require_cupy("sensorModel3DGPU")
+        import cupy as cp
+        self.cp = cp
         assert isinstance(smFrame, frame)
         assert smFrame.size.d > 0
         self.frame = smFrame
@@ -820,6 +831,7 @@ class sensorModel3DGPU:
         self.frame.origin = origin(ox, oy, oz)
 
     def generateGridMap(self, z_t: lidarScan3D, x_t: pose, isMinimizeFrame: bool = True) -> gridMap:
+        cp = self.cp
         # Reset grid to prior
         self.data.fill(self.occPrior)
 
@@ -925,6 +937,7 @@ class sensorModel3DGPU:
             return gridMap(self.frame, self.data)
 
 def main():
+    import cupy as cp
     runs = 100
 
     def _print_bench_stats(name: str, samples: list[float]):
