@@ -158,3 +158,7 @@ BibTeX:
 	doi={10.1109/OJITS.2024.3521449}
 }
 ```
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
