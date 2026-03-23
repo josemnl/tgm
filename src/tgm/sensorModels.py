@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import numpy as np
-import cupy as cp
+from typing import Any
+from .cupy_compat import require_cupy
 from .gridMap import gridMap
 from .spatial import frame, origin, size, pose, position, orientation
-from .lidarScan import lidarScan, lidarScan3D
+from .lidarScans import lidarScan2D, lidarScan3D
 import time
 from .utilities import read3DLidarCSV
 
-class sensorModel:
+class sensorModel2DCPU:
     def __init__ (self, smFrame: frame, sensorRange, invModel ,occPrior):
         assert isinstance(smFrame, frame)
         self.frame = smFrame
@@ -22,8 +25,8 @@ class sensorModel:
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround = True):
         x_t = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
         timeStart = time.time()
-        assert isinstance(z_t, lidarScan)
-        assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
+        assert isinstance(z_t, lidarScan2D)
+        assert isinstance(z_t_ground, lidarScan2D) or z_t_ground is None
         ang, dist = z_t.angles, z_t.ranges
 
         # Update measurement orientation with agent's pose
@@ -166,8 +169,11 @@ class sensorModel:
             if np.all(self.data[x_coords, y_coords] != valueCondition):
                 self.data[x_coords, y_coords] = value
 
-class sensorModelGPU:
+class sensorModel2DGPU:
     def __init__(self, smFrame: frame, sensorRange, invModel, occPrior):
+        require_cupy("sensorModelGPU")
+        import cupy as cp
+        self.cp = cp
         assert isinstance(smFrame, frame)
         self.frame = smFrame
         self.sensorRange = sensorRange
@@ -302,12 +308,13 @@ class sensorModelGPU:
         )
 
     def _carve_rays(self,
-                    sx: cp.ndarray,
-                    sy: cp.ndarray,
-                    ex: cp.ndarray,
-                    ey: cp.ndarray,
+                    sx: Any,
+                    sy: Any,
+                    ex: Any,
+                    ey: Any,
                     value: float,
                     valueCondition: float | None = None):
+        cp = self.cp
         n = int(ex.size)
         if n == 0:
             return
@@ -334,9 +341,10 @@ class sensorModelGPU:
         )
 
     def generateGridMap(self, z_t, x_t: pose, z_t_ground=None, rayTraceGround=True):
+        cp = self.cp
         x_t_np = np.array([x_t.position.x, x_t.position.y, x_t.orientation.yaw])
-        assert isinstance(z_t, lidarScan)
-        assert isinstance(z_t_ground, lidarScan) or z_t_ground is None
+        assert isinstance(z_t, lidarScan2D)
+        assert isinstance(z_t_ground, lidarScan2D) or z_t_ground is None
 
         ang = cp.asarray(z_t.angles, dtype=cp.float32) + cp.float32(x_t_np[2])
         dist = cp.asarray(z_t.ranges, dtype=cp.float32)
@@ -418,7 +426,7 @@ class sensorModelGPU:
         gridFrame = frame(gridOrigin, gridSize, self.frame.r)
         return gridMap(gridFrame, self.data)
 
-class sensorModel3D:
+class sensorModel3DCPU:
     def __init__(self, smFrame: frame, invModel, occPrior: float):
         assert isinstance(smFrame, frame)
         assert smFrame.size.d > 0
@@ -531,6 +539,9 @@ class sensorModel3D:
 class sensorModel3DGPU:
     def __init__(self, smFrame: frame, invModel, occPrior: float,
                  diffusion_radius: int = 0, cone_free: bool = False):
+        require_cupy("sensorModel3DGPU")
+        import cupy as cp
+        self.cp = cp
         assert isinstance(smFrame, frame)
         assert smFrame.size.d > 0
         self.frame = smFrame
@@ -820,6 +831,7 @@ class sensorModel3DGPU:
         self.frame.origin = origin(ox, oy, oz)
 
     def generateGridMap(self, z_t: lidarScan3D, x_t: pose, isMinimizeFrame: bool = True) -> gridMap:
+        cp = self.cp
         # Reset grid to prior
         self.data.fill(self.occPrior)
 
@@ -925,6 +937,7 @@ class sensorModel3DGPU:
             return gridMap(self.frame, self.data)
 
 def main():
+    import cupy as cp
     runs = 100
 
     def _print_bench_stats(name: str, samples: list[float]):
@@ -945,11 +958,11 @@ def main():
     occPrior = 0.5
     smSize = size(width, height)
 
-    sM_2d = sensorModel(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
-    sM_gpu_2d = sensorModelGPU(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+    sM_2d = sensorModel2DCPU(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
+    sM_gpu_2d = sensorModel2DGPU(frame(smOrigin, smSize, resolution), sensorRange, invModel, occPrior)
 
     with open("./logs/sim_corridor/z_100.csv") as data:
-        z_t = lidarScan(*np.array([line.split(",") for line in data]).astype(float).T)
+        z_t = lidarScan2D(*np.array([line.split(",") for line in data]).astype(float).T)
 
     with open("./logs/sim_corridor/x_100.csv") as data:
         x_t_raw = np.array([line.split(",") for line in data]).astype(float)[0]
@@ -995,7 +1008,7 @@ def main():
     invModel = [0.1, 0.9]
     occPrior = 0.5
 
-    sM_3d = sensorModel3D(frame(smOrigin, smSize, resolution), invModel, occPrior)
+    sM_3d = sensorModel3DCPU(frame(smOrigin, smSize, resolution), invModel, occPrior)
     sM_gpu_3d = sensorModel3DGPU(frame(smOrigin, smSize, resolution), invModel, occPrior)
 
     z_t_3D = read3DLidarCSV("./logs/2024-02-13-10-35-56/z_1.csv")

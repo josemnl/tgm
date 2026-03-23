@@ -3,7 +3,7 @@ from scipy.interpolate import RegularGridInterpolator
 from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 
-from .lidarScan import lidarScan, lidarScan3D
+from .lidarScans import lidarScan2D, lidarScan3D
 from .gridMap import gridMap
 from .spatial import pose, position, orientation, covariance
 
@@ -37,7 +37,7 @@ def _embed_2d_covariance_in_pose_covariance(cov2d: np.ndarray, unobserved_varian
     P[4, 4] = unobserved_variance
     return covariance(P)
 
-def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range, return_covariance: bool = False):
+def lsqnl_matching2D(scan: lidarScan2D, lsq_map: gridMap, x0: pose, max_range, return_covariance: bool = False):
     # Remove the no-return scans from scan
     scan.removeFarPoints(max_range)
 
@@ -55,7 +55,7 @@ def lsqnl_matching(scan, lsq_map: gridMap, x0: pose, max_range, return_covarianc
     cov = _embed_2d_covariance_in_pose_covariance(cov2d)
     return x, cov
 
-def lsq_fun(relPose, lsq_scan: lidarScan, lsq_map: gridMap):
+def lsq_fun(relPose, lsq_scan: lidarScan2D, lsq_map: gridMap):
     # Extract grid parameters
     limit_x = lsq_map.frame.size.w*lsq_map.frame.r
     limit_y = lsq_map.frame.size.h*lsq_map.frame.r

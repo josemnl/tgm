@@ -3,14 +3,13 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-from tgm.gridMap import discreteDist
 from tgm.utilities import read2DLidarCSV, read3DLidarCSV, read3DLidarBIN, read3DLabledLidarBIN, readPose, createVideo, loadConfigAsDict
-from tgm.sensorModel import sensorModel
-from tgm.TGM import TGM
-from tgm.SLAM import lsqnl_matching
-from tgm.metrics import classificationMetrics
-from tgm.spatial import frame, origin, size, position, pose, orientation
-from tgm.gridMap import gridMap, discreteDist
+from tgm import (
+    discreteDist, gridMap,
+    sensorModel2DCPU,
+    TGM, lsqnl_matching2D, classificationMetrics,
+    frame, origin, size, position, pose, orientation,
+)
 
 def run():
     # Bool cardinality
