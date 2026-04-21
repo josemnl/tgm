@@ -171,10 +171,16 @@ class gridMap:
 
     def saveState(self, filename: str) -> None:
         original_data = self.data
+        original_xp = self.xp
         self.data = self.data.astype(np.float16)
-        with open(filename, 'wb') as f:
-            pickle.dump(self, f)
-        self.data = original_data
+        if hasattr(self, 'xp'):
+            del self.xp
+        try:
+            with open(filename, 'wb') as f:
+                pickle.dump(self, f)
+        finally:
+            self.data = original_data
+            self.xp = original_xp
 
     def computeOverlap(self, frame: frame) -> 'frame':
         """
@@ -344,6 +350,12 @@ class gridMap:
         with open(filename, 'rb') as file:
             obj = pickle.load(file)
             obj.data = obj.data.astype(data_type)
+            if obj.GPU:
+                require_cupy("gridMap.loadState")
+                import cupy as cp
+                obj.xp = cp
+            else:
+                obj.xp = np
             return obj
         
     @classmethod
