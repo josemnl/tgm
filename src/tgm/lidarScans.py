@@ -361,6 +361,92 @@ class lidarScan3D:
         vis_left.destroy_window()
         vis_right.destroy_window()
 
+    def BEV_GroundSeg(self, grid_res=0.5, height_thresh=0.2,
+                        smooth_kernel=5, abs_height_limit=1.5):
+
+        points_numpy = self.points3D
+        if points_numpy.size == 0:
+            return lidarScan3D(np.empty((0, 3))), lidarScan3D(np.empty((0, 3)))
+
+
+        min_x = float(np.min(points_numpy[:, 0]))
+        max_x = float(np.max(points_numpy[:, 0]))
+        min_y = float(np.min(points_numpy[:, 1]))
+        max_y = float(np.max(points_numpy[:, 1]))
+        span_pad = float(grid_res)
+        min_x -= span_pad
+        max_x += span_pad
+        min_y -= span_pad
+        max_y += span_pad
+        pts = points_numpy
+        outside_pts = np.empty((0, 3), dtype=points_numpy.dtype)
+
+        if pts.shape[0] == 0:
+            return lidarScan3D(np.empty((0, 3))), lidarScan3D(points_numpy.copy())
+
+        grid_w = int(np.ceil((max_x - min_x) / grid_res)) + 1
+        grid_h = int(np.ceil((max_y - min_y) / grid_res)) + 1
+
+        idx_x = np.clip(((pts[:, 0] - min_x) / grid_res).astype(np.int64), 0, grid_w - 1)
+        idx_y = np.clip(((pts[:, 1] - min_y) / grid_res).astype(np.int64), 0, grid_h - 1)
+        flat_idx = idx_x * grid_h + idx_y
+
+        # Get min Z per cell (empty cells stay inf)
+        min_z = np.full((grid_w * grid_h,), np.inf, dtype=np.float32)
+        np.minimum.at(min_z, flat_idx, pts[:, 2].astype(np.float32))
+
+        min_z_2d = min_z.reshape(grid_w, grid_h)
+        pad = smooth_kernel // 2
+
+        # Fill empty cells (Morphological Dilation)
+        filled = sp.ndimage.minimum_filter(
+            min_z_2d,
+            size=(smooth_kernel * 2 + 1, smooth_kernel * 2 + 1),
+            mode='constant',
+            cval=np.inf
+        )
+        min_z_2d = np.where(np.isinf(min_z_2d), filled, min_z_2d)
+
+        # Erosion (Min-Pool): Pulls curbs and walls down to road level locally
+        eroded_z_2d = sp.ndimage.minimum_filter(
+            min_z_2d,
+            size=(3, 3),
+            mode='constant',
+            cval=np.inf
+        )
+
+        # Smooth the surface (Avg-Pool)
+        valid_mask = np.isfinite(eroded_z_2d).astype(np.float32)
+        finite_values = np.where(np.isfinite(eroded_z_2d), eroded_z_2d, 0.0).astype(np.float32)
+        window_area = float(smooth_kernel * smooth_kernel)
+        sum_z = sp.ndimage.uniform_filter(
+            finite_values,
+            size=(smooth_kernel, smooth_kernel),
+            mode='constant',
+            cval=0.0
+        ) * window_area
+        count_z = sp.ndimage.uniform_filter(
+            valid_mask,
+            size=(smooth_kernel, smooth_kernel),
+            mode='constant',
+            cval=0.0
+        ) * window_area
+        smoothed_z_2d = np.divide(
+            sum_z,
+            count_z,
+            out=np.full_like(sum_z, np.nan, dtype=np.float32),
+            where=count_z > 0
+        )
+
+        smoothed_z = smoothed_z_2d.reshape(-1)
+        point_sloped_z = smoothed_z[flat_idx]
+
+        ground_mask = (pts[:, 2] - point_sloped_z <= height_thresh) & \
+                    (pts[:, 2] < abs_height_limit)
+
+        nonground_pts = np.concatenate([pts[~ground_mask], outside_pts], axis=0)
+        return lidarScan3D(pts[ground_mask].copy()), lidarScan3D(nonground_pts.copy())
+
     def ROR(self, k, r):
         # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a specified radius
         # Create a KDTree object with the 3D points
