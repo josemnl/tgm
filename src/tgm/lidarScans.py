@@ -3,6 +3,7 @@ import numpy as np
 import scipy as sp
 from .GroundSeg import ground_seg
 from .spatial import pose, orientation
+import open3d as o3d
 
 class lidarScan2D:
     def __init__(self, angles, ranges, labels=None):
@@ -117,6 +118,17 @@ class lidarScan2D:
         # Remove labels if they exist
         if self.labels is not None:
             self.labels = None
+
+    def voxelGridFilter_o3d(self, voxel_size):
+        if len(self.points3D) == 0:
+            return
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.asarray(self.points3D))
+
+        down_pcd = pcd.voxel_down_sample(voxel_size) # It uses centroid method(avg) instead of center of voxel or random point in voxel
+        
+        self.points3D = np.asarray(down_pcd.points, dtype=np.float32)
 
     def filterOutByLabel(self, label):
         assert self.labels is not None
