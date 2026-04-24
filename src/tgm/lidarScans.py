@@ -254,6 +254,112 @@ class lidarScan3D:
         ax.set_zlabel('Z')
         ax.axis('equal')
         plt.show()
+    
+    def plot_o3d(self, title='Open3D_LiDAR_Scan', show_plane=False, compare_scan=None):
+
+        def _build_geometries(scan_obj, include_plane=False):
+            # 1. Create Point Cloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(scan_obj.points3D[:, :3])
+
+            # 2. Handle Colors
+            if hasattr(scan_obj, "colors") and scan_obj.colors is not None:
+                c = scan_obj.colors
+                if c.max() > 1.0:
+                    c = c / 255.0
+                pcd.colors = o3d.utility.Vector3dVector(c)
+            else:
+                pcd.paint_uniform_color([0.2, 0.5, 1.0])
+
+            geometries_local = [pcd]
+
+            # 3. Optional Plane
+            if include_plane and hasattr(scan_obj, "_plane_normal") and hasattr(scan_obj, "_plane_d"):
+                n = scan_obj._plane_normal
+                d = scan_obj._plane_d
+                x_min, x_max = np.percentile(scan_obj.points3D[:, 0], [2, 98])
+                y_min, y_max = np.percentile(scan_obj.points3D[:, 1], [2, 98])
+
+                xx, yy = np.meshgrid(
+                    np.linspace(x_min, x_max, 2),
+                    np.linspace(y_min, y_max, 2)
+                )
+                zz = (-n[0] * xx - n[1] * yy - d) / (n[2] + 1e-12)
+
+                plane_vertices = np.stack((xx.flatten(), yy.flatten(), zz.flatten()), axis=1)
+                triangles = [[0, 2, 1], [1, 2, 3]]
+
+                plane_mesh = o3d.geometry.TriangleMesh()
+                plane_mesh.vertices = o3d.utility.Vector3dVector(plane_vertices)
+                plane_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+                plane_mesh.paint_uniform_color([0.2, 1.0, 0.2])
+                geometries_local.append(plane_mesh)
+
+            # 4. Add Axes
+            axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+            geometries_local.append(axes)
+            return geometries_local
+
+        # Single-view mode (original behavior)
+        if compare_scan is None:
+            geometries = _build_geometries(self, include_plane=show_plane)
+
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(window_name=title, width=1024, height=768)
+
+            for geom in geometries:
+                vis.add_geometry(geom)
+
+            opt = vis.get_render_option()
+            opt.background_color = np.asarray([1, 1, 1])
+            opt.point_size = 2.0
+
+            vis.run()
+            vis.destroy_window()
+            return
+
+        # Compare mode: two Open3D views side-by-side (same visualizer style)
+        left_geometries = _build_geometries(self, include_plane=show_plane)
+        right_geometries = _build_geometries(compare_scan, include_plane=False)
+
+        win_w = 900
+        win_h = 768
+        left_pos = 40
+        top_pos = 60
+        right_pos = left_pos + win_w + 20
+
+        vis_left = o3d.visualization.Visualizer()
+        vis_left.create_window(window_name=f"{title} | Ground", width=win_w, height=win_h, left=left_pos, top=top_pos)
+        for geom in left_geometries:
+            vis_left.add_geometry(geom)
+
+        vis_right = o3d.visualization.Visualizer()
+        vis_right.create_window(window_name=f"{title} | Original", width=win_w, height=win_h, left=right_pos, top=top_pos)
+        for geom in right_geometries:
+            vis_right.add_geometry(geom)
+
+        opt_left = vis_left.get_render_option()
+        opt_left.background_color = np.asarray([1, 1, 1])
+        opt_left.point_size = 2.0
+
+        opt_right = vis_right.get_render_option()
+        opt_right.background_color = np.asarray([1, 1, 1])
+        opt_right.point_size = 2.0
+
+        while True:
+            alive_left = vis_left.poll_events()
+            if alive_left:
+                vis_left.update_renderer()
+
+            alive_right = vis_right.poll_events()
+            if alive_right:
+                vis_right.update_renderer()
+
+            if (not alive_left) or (not alive_right):
+                break
+
+        vis_left.destroy_window()
+        vis_right.destroy_window()
 
     def ROR(self, k, r):
         # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a specified radius
