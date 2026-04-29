@@ -151,6 +151,54 @@ class poseWithCovariance:
         self.pose = x_t
         self.covariance = cov
 
+    @staticmethod
+    def _wrap_to_pi(angle: float) -> float:
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def _as_state_vector(self) -> np.ndarray:
+        return np.array([
+            self.pose.position.x,
+            self.pose.position.y,
+            self.pose.position.z,
+            self.pose.orientation.roll,
+            self.pose.orientation.pitch,
+            self.pose.orientation.yaw,
+        ], dtype=float)
+
+    def fuse_with(self, other: 'poseWithCovariance') -> 'poseWithCovariance':
+        """
+        Fuse two independent estimates of the same pose state.
+        This is statistical fusion (information form), not geometric composition.
+        """
+        assert isinstance(other, poseWithCovariance)
+
+        x1 = self._as_state_vector()
+        x2 = other._as_state_vector()
+        P1 = self.covariance.as_array()
+        P2 = other.covariance.as_array()
+
+        # Align angle branches so linear fusion uses the shortest angular difference.
+        x2_aligned = x2.copy()
+        for idx in (3, 4, 5):
+            delta = self._wrap_to_pi(x2[idx] - x1[idx])
+            x2_aligned[idx] = x1[idx] + delta
+
+        P1_inv = np.linalg.pinv(P1)
+        P2_inv = np.linalg.pinv(P2)
+        info = P1_inv + P2_inv
+        P_fused = np.linalg.pinv(info)
+        x_fused = P_fused @ (P1_inv @ x1 + P2_inv @ x2_aligned)
+
+        # Keep angles in a canonical range.
+        for idx in (3, 4, 5):
+            x_fused[idx] = self._wrap_to_pi(x_fused[idx])
+
+        fused_pose = pose(
+            position(float(x_fused[0]), float(x_fused[1]), float(x_fused[2])),
+            orientation(float(x_fused[3]), float(x_fused[4]), float(x_fused[5]))
+        )
+        return poseWithCovariance(fused_pose, covariance(P_fused))
+
     def plot2D(self, ax: plt.Axes, **kwargs):
         # Plot ellipse representing 95% confidence interval in x-y plane
         from matplotlib.patches import Ellipse
@@ -326,3 +374,100 @@ class frame:
         frame_origin = origin(origin_x, origin_y, origin_z)
 
         return cls(frame_origin, frame_size, resolution)
+
+
+def _build_pose_with_covariance(
+    x: float,
+    y: float,
+    yaw: float,
+    sigma_xy: float,
+    sigma_yaw: float,
+) -> poseWithCovariance:
+    x_t = pose(
+        position(float(x), float(y), 0.0),
+        orientation(0.0, 0.0, float(yaw))
+    )
+    P = np.diag([
+        sigma_xy ** 2,
+        sigma_xy ** 2,
+        0.05 ** 2,
+        np.deg2rad(1.0) ** 2,
+        np.deg2rad(1.0) ** 2,
+        sigma_yaw ** 2,
+    ])
+    return poseWithCovariance(x_t, covariance(P))
+
+
+def main() -> None:
+    # Case 1: Similar means, moderate uncertainty -> fused estimate gets tighter.
+    pwc_a1 = _build_pose_with_covariance(
+        x=0.0,
+        y=0.0,
+        yaw=np.deg2rad(8.0),
+        sigma_xy=0.80,
+        sigma_yaw=np.deg2rad(8.0),
+    )
+    pwc_b1 = _build_pose_with_covariance(
+        x=0.35,
+        y=-0.15,
+        yaw=np.deg2rad(12.0),
+        sigma_xy=0.75,
+        sigma_yaw=np.deg2rad(7.0),
+    )
+    fused_1 = pwc_a1.fuse_with(pwc_b1)
+
+    # Case 2: Means far apart and each source is uncertain -> fused estimate remains broad.
+    pwc_a2 = _build_pose_with_covariance(
+        x=-6.0,
+        y=0.0,
+        yaw=np.deg2rad(-20.0),
+        sigma_xy=6.0,
+        sigma_yaw=np.deg2rad(35.0),
+    )
+    pwc_b2 = _build_pose_with_covariance(
+        x=6.5,
+        y=0.5,
+        yaw=np.deg2rad(25.0),
+        sigma_xy=6.0,
+        sigma_yaw=np.deg2rad(35.0),
+    )
+    fused_2 = pwc_a2.fuse_with(pwc_b2)
+
+    trace_xy = lambda pwc: float(np.trace(pwc.covariance.as_array()[0:2, 0:2]))
+    print("Case 1 (similar poses):")
+    print(f"  trace(Pa_xy)={trace_xy(pwc_a1):.4f}, trace(Pb_xy)={trace_xy(pwc_b1):.4f}, trace(Pfused_xy)={trace_xy(fused_1):.4f}")
+    print("Case 2 (far-apart, high-uncertainty poses):")
+    print(f"  trace(Pa_xy)={trace_xy(pwc_a2):.4f}, trace(Pb_xy)={trace_xy(pwc_b2):.4f}, trace(Pfused_xy)={trace_xy(fused_2):.4f}")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    ax1 = axes[0]
+    pwc_a1.plot2D(ax1, edgecolor="tab:blue", facecolor="none", linewidth=2, label="estimate A")
+    pwc_b1.plot2D(ax1, edgecolor="tab:orange", facecolor="none", linewidth=2, label="estimate B")
+    fused_1.plot2D(ax1, edgecolor="tab:green", facecolor="none", linewidth=3, label="fused")
+    ax1.scatter([pwc_a1.pose.position.x], [pwc_a1.pose.position.y], color="tab:blue", s=25)
+    ax1.scatter([pwc_b1.pose.position.x], [pwc_b1.pose.position.y], color="tab:orange", s=25)
+    ax1.scatter([fused_1.pose.position.x], [fused_1.pose.position.y], color="tab:green", s=30)
+    ax1.set_title("Case 1: similar poses -> tighter fusion")
+    ax1.set_aspect("equal", adjustable="box")
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+
+    ax2 = axes[1]
+    pwc_a2.plot2D(ax2, edgecolor="tab:blue", facecolor="none", linewidth=2, label="estimate A")
+    pwc_b2.plot2D(ax2, edgecolor="tab:orange", facecolor="none", linewidth=2, label="estimate B")
+    fused_2.plot2D(ax2, edgecolor="tab:red", facecolor="none", linewidth=3, label="fused")
+    ax2.scatter([pwc_a2.pose.position.x], [pwc_a2.pose.position.y], color="tab:blue", s=25)
+    ax2.scatter([pwc_b2.pose.position.x], [pwc_b2.pose.position.y], color="tab:orange", s=25)
+    ax2.scatter([fused_2.pose.position.x], [fused_2.pose.position.y], color="tab:red", s=30)
+    ax2.set_title("Case 2: far-apart poses -> broad fusion")
+    ax2.set_aspect("equal", adjustable="box")
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
