@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-from .GroundSeg import ground_seg
 from .spatial import pose, orientation
 import open3d as o3d
 
@@ -554,10 +553,6 @@ class lidarScan3D:
         objects = lidarScan3D(self.points3D[objectsMask])
         return ground, objects
     
-    def RMF_GroundSeg(self):
-        # This function performs the ground segmentation using the RMF algorithm
-        ground, objects = ground_seg(self.points3D)
-        return lidarScan3D(ground), lidarScan3D(objects)
     
     def voxelGridFilter(self, voxel_size):
         # Determine the grid indices for each point
