@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
-from .GroundSeg import ground_seg
 from .spatial import pose, orientation
+import open3d as o3d
 
 class lidarScan2D:
     def __init__(self, angles, ranges, labels=None):
@@ -117,6 +117,17 @@ class lidarScan2D:
         # Remove labels if they exist
         if self.labels is not None:
             self.labels = None
+
+    def voxelGridFilter_o3d(self, voxel_size):
+        if len(self.points3D) == 0:
+            return
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.asarray(self.points3D))
+
+        down_pcd = pcd.voxel_down_sample(voxel_size) # It uses centroid method(avg) instead of center of voxel or random point in voxel
+        
+        self.points3D = np.asarray(down_pcd.points, dtype=np.float32)
 
     def filterOutByLabel(self, label):
         assert self.labels is not None
@@ -242,6 +253,198 @@ class lidarScan3D:
         ax.set_zlabel('Z')
         ax.axis('equal')
         plt.show()
+    
+    def plot_o3d(self, title='Open3D_LiDAR_Scan', show_plane=False, compare_scan=None):
+
+        def _build_geometries(scan_obj, include_plane=False):
+            # 1. Create Point Cloud
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(scan_obj.points3D[:, :3])
+
+            # 2. Handle Colors
+            if hasattr(scan_obj, "colors") and scan_obj.colors is not None:
+                c = scan_obj.colors
+                if c.max() > 1.0:
+                    c = c / 255.0
+                pcd.colors = o3d.utility.Vector3dVector(c)
+            else:
+                pcd.paint_uniform_color([0.2, 0.5, 1.0])
+
+            geometries_local = [pcd]
+
+            # 3. Optional Plane
+            if include_plane and hasattr(scan_obj, "_plane_normal") and hasattr(scan_obj, "_plane_d"):
+                n = scan_obj._plane_normal
+                d = scan_obj._plane_d
+                x_min, x_max = np.percentile(scan_obj.points3D[:, 0], [2, 98])
+                y_min, y_max = np.percentile(scan_obj.points3D[:, 1], [2, 98])
+
+                xx, yy = np.meshgrid(
+                    np.linspace(x_min, x_max, 2),
+                    np.linspace(y_min, y_max, 2)
+                )
+                zz = (-n[0] * xx - n[1] * yy - d) / (n[2] + 1e-12)
+
+                plane_vertices = np.stack((xx.flatten(), yy.flatten(), zz.flatten()), axis=1)
+                triangles = [[0, 2, 1], [1, 2, 3]]
+
+                plane_mesh = o3d.geometry.TriangleMesh()
+                plane_mesh.vertices = o3d.utility.Vector3dVector(plane_vertices)
+                plane_mesh.triangles = o3d.utility.Vector3iVector(triangles)
+                plane_mesh.paint_uniform_color([0.2, 1.0, 0.2])
+                geometries_local.append(plane_mesh)
+
+            # 4. Add Axes
+            axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
+            geometries_local.append(axes)
+            return geometries_local
+
+        # Single-view mode (original behavior)
+        if compare_scan is None:
+            geometries = _build_geometries(self, include_plane=show_plane)
+
+            vis = o3d.visualization.Visualizer()
+            vis.create_window(window_name=title, width=1024, height=768)
+
+            for geom in geometries:
+                vis.add_geometry(geom)
+
+            opt = vis.get_render_option()
+            opt.background_color = np.asarray([1, 1, 1])
+            opt.point_size = 2.0
+
+            vis.run()
+            vis.destroy_window()
+            return
+
+        # Compare mode: two Open3D views side-by-side (same visualizer style)
+        left_geometries = _build_geometries(self, include_plane=show_plane)
+        right_geometries = _build_geometries(compare_scan, include_plane=False)
+
+        win_w = 900
+        win_h = 768
+        left_pos = 40
+        top_pos = 60
+        right_pos = left_pos + win_w + 20
+
+        vis_left = o3d.visualization.Visualizer()
+        vis_left.create_window(window_name=f"{title} | Ground", width=win_w, height=win_h, left=left_pos, top=top_pos)
+        for geom in left_geometries:
+            vis_left.add_geometry(geom)
+
+        vis_right = o3d.visualization.Visualizer()
+        vis_right.create_window(window_name=f"{title} | Original", width=win_w, height=win_h, left=right_pos, top=top_pos)
+        for geom in right_geometries:
+            vis_right.add_geometry(geom)
+
+        opt_left = vis_left.get_render_option()
+        opt_left.background_color = np.asarray([1, 1, 1])
+        opt_left.point_size = 2.0
+
+        opt_right = vis_right.get_render_option()
+        opt_right.background_color = np.asarray([1, 1, 1])
+        opt_right.point_size = 2.0
+
+        while True:
+            alive_left = vis_left.poll_events()
+            if alive_left:
+                vis_left.update_renderer()
+
+            alive_right = vis_right.poll_events()
+            if alive_right:
+                vis_right.update_renderer()
+
+            if (not alive_left) or (not alive_right):
+                break
+
+        vis_left.destroy_window()
+        vis_right.destroy_window()
+
+    def BEV_GroundSeg(self, grid_res=0.5, height_thresh=0.2,
+                        smooth_kernel=5, abs_height_limit=1.5):
+
+        points_numpy = self.points3D
+        if points_numpy.size == 0:
+            return lidarScan3D(np.empty((0, 3))), lidarScan3D(np.empty((0, 3)))
+
+
+        min_x = float(np.min(points_numpy[:, 0]))
+        max_x = float(np.max(points_numpy[:, 0]))
+        min_y = float(np.min(points_numpy[:, 1]))
+        max_y = float(np.max(points_numpy[:, 1]))
+        span_pad = float(grid_res)
+        min_x -= span_pad
+        max_x += span_pad
+        min_y -= span_pad
+        max_y += span_pad
+        pts = points_numpy
+        outside_pts = np.empty((0, 3), dtype=points_numpy.dtype)
+
+        if pts.shape[0] == 0:
+            return lidarScan3D(np.empty((0, 3))), lidarScan3D(points_numpy.copy())
+
+        grid_w = int(np.ceil((max_x - min_x) / grid_res)) + 1
+        grid_h = int(np.ceil((max_y - min_y) / grid_res)) + 1
+
+        idx_x = np.clip(((pts[:, 0] - min_x) / grid_res).astype(np.int64), 0, grid_w - 1)
+        idx_y = np.clip(((pts[:, 1] - min_y) / grid_res).astype(np.int64), 0, grid_h - 1)
+        flat_idx = idx_x * grid_h + idx_y
+
+        # Get min Z per cell (empty cells stay inf)
+        min_z = np.full((grid_w * grid_h,), np.inf, dtype=np.float32)
+        np.minimum.at(min_z, flat_idx, pts[:, 2].astype(np.float32))
+
+        min_z_2d = min_z.reshape(grid_w, grid_h)
+        pad = smooth_kernel // 2
+
+        # Fill empty cells (Morphological Dilation)
+        filled = sp.ndimage.minimum_filter(
+            min_z_2d,
+            size=(smooth_kernel * 2 + 1, smooth_kernel * 2 + 1),
+            mode='constant',
+            cval=np.inf
+        )
+        min_z_2d = np.where(np.isinf(min_z_2d), filled, min_z_2d)
+
+        # Erosion (Min-Pool): Pulls curbs and walls down to road level locally
+        eroded_z_2d = sp.ndimage.minimum_filter(
+            min_z_2d,
+            size=(3, 3),
+            mode='constant',
+            cval=np.inf
+        )
+
+        # Smooth the surface (Avg-Pool)
+        valid_mask = np.isfinite(eroded_z_2d).astype(np.float32)
+        finite_values = np.where(np.isfinite(eroded_z_2d), eroded_z_2d, 0.0).astype(np.float32)
+        window_area = float(smooth_kernel * smooth_kernel)
+        sum_z = sp.ndimage.uniform_filter(
+            finite_values,
+            size=(smooth_kernel, smooth_kernel),
+            mode='constant',
+            cval=0.0
+        ) * window_area
+        count_z = sp.ndimage.uniform_filter(
+            valid_mask,
+            size=(smooth_kernel, smooth_kernel),
+            mode='constant',
+            cval=0.0
+        ) * window_area
+        smoothed_z_2d = np.divide(
+            sum_z,
+            count_z,
+            out=np.full_like(sum_z, np.nan, dtype=np.float32),
+            where=count_z > 0
+        )
+
+        smoothed_z = smoothed_z_2d.reshape(-1)
+        point_sloped_z = smoothed_z[flat_idx]
+
+        ground_mask = (pts[:, 2] - point_sloped_z <= height_thresh) & \
+                    (pts[:, 2] < abs_height_limit)
+
+        nonground_pts = np.concatenate([pts[~ground_mask], outside_pts], axis=0)
+        return lidarScan3D(pts[ground_mask].copy()), lidarScan3D(nonground_pts.copy())
 
     def ROR(self, k, r):
         # This function removes outliers from the 3D scan by comparing the distance to the k-th nearest neighbor to a specified radius
@@ -350,10 +553,6 @@ class lidarScan3D:
         objects = lidarScan3D(self.points3D[objectsMask])
         return ground, objects
     
-    def RMF_GroundSeg(self):
-        # This function performs the ground segmentation using the RMF algorithm
-        ground, objects = ground_seg(self.points3D)
-        return lidarScan3D(ground), lidarScan3D(objects)
     
     def voxelGridFilter(self, voxel_size):
         # Determine the grid indices for each point
