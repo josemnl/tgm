@@ -21,12 +21,16 @@ import cv2
 from tgm.utilities import read3DLidarBIN
 
 # Path to the bag folder (the directory that contains metadata.yaml)
-BAG_DIR = Path('./logs/underwater/rosbag2_2025_10_13-14_53_47/')
-EXP_DIR = Path('./logs/underwater/rosbag2_2025_10_13-14_53_47/export/')
+#BAG_DIR = Path('./logs/underwater/rosbag2_2025_10_13-14_53_47/')
+#EXP_DIR = Path('./logs/underwater/rosbag2_2025_10_13-14_53_47/export/')
+BAG_DIR = Path('./logs/underwater/rosbag2_2025_12_14-09_56_06/')
+EXP_DIR = Path('./logs/underwater/rosbag2_2025_12_14-09_56_06/export2/')
+
 
 POSE_TOPIC = '/mocap/saabmarine/pose'
 LIDAR_TOPIC = '/sonar/point_cloud'
 CAMERA_TOPIC = '/saabmarine/camera/image_raw'
+ODOM_TOPIC = '/saabmarine/dr/odom'
 
 
 def ensure_dir(path: Path) -> None:
@@ -41,6 +45,16 @@ def decode_pose(msg) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     pos = msg.pose.position
     ori = msg.pose.orientation
+    position = np.array([pos.x, pos.y, pos.z], dtype=np.float32)
+    orientation = np.array([ori.x, ori.y, ori.z, ori.w], dtype=np.float32)
+    header = np.array([msg.header.stamp.sec, msg.header.stamp.nanosec], dtype=np.int32)
+    return position, orientation, header
+
+def decode_odometry(msg) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Decode nav_msgs/msg/Odometry to position and orientation arrays.
+       The twist information is descarded for now."""
+    pos = msg.pose.pose.position
+    ori = msg.pose.pose.orientation
     position = np.array([pos.x, pos.y, pos.z], dtype=np.float32)
     orientation = np.array([ori.x, ori.y, ori.z, ori.w], dtype=np.float32)
     header = np.array([msg.header.stamp.sec, msg.header.stamp.nanosec], dtype=np.int32)
@@ -160,6 +174,7 @@ if __name__ == '__main__':
         i = 0
         isSavePose = False
         isSaveCamera = False
+        isSaveOdom = False
         for connection, timestamp, rawdata in reader.messages():
             if connection.topic == POSE_TOPIC:
                 if not isSavePose:
@@ -174,6 +189,20 @@ if __name__ == '__main__':
                 except Exception as e:
                     print(f"[WARN] Failed to decode/save pose @ {timestamp}: {e}")
                 isSavePose = False  # Reset flag after saving pose
+
+            if connection.topic == ODOM_TOPIC:
+                if not isSaveOdom:
+                    continue
+                msg = reader.deserialize(rawdata, connection.msgtype)
+                try:
+                    position, orientation, header = decode_odometry(msg)
+                    odom_path = EXP_DIR / f"{str(i).zfill(6)}_odom.csv"
+                    with open(odom_path, 'w') as f:
+                        f.write(f"{position[0]},{position[1]},{position[2]},{orientation[0]},{orientation[1]},{orientation[2]},{orientation[3]}\n")
+                    print(f"Saved odometry: {odom_path}")
+                except Exception as e:
+                    print(f"[WARN] Failed to decode/save odometry @ {timestamp}: {e}")
+                isSaveOdom = False  # Reset flag after saving odometry
 
             if connection.topic == CAMERA_TOPIC:
                 if not isSaveCamera:
@@ -197,6 +226,7 @@ if __name__ == '__main__':
                     i += 1
                     isSavePose = True
                     isSaveCamera = True
+                    isSaveOdom = True
                     # Expand points to Nx4 for compatibility
                     pts = np.hstack([pts, np.ones((pts.shape[0], 1), dtype=pts.dtype)])
                     bin_path = EXP_DIR / f"{str(i).zfill(6)}.bin"
