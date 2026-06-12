@@ -6,7 +6,7 @@ import os
 from tgm.utilities import read3DLidarCSV, read3DLidarBIN, readPose, loadConfigAsDict
 from tgm import (
     sensorModel3DGPU, TGM, lsqnl_matching3D,
-    position, orientation, pose, frame, origin, size, poseWithCovariance,
+    position, orientation, pose, covariance, frame, origin, size, poseWithCovariance,
 )
 
 import cupy as cp
@@ -51,7 +51,12 @@ def run3D(logID, conf):
     # Main loop
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
+    odom_t = None
+    step_odom_t = None
     for i in range(conf.initialTimeStep, conf.initialTimeStep + conf.simHorizon):
+
+        # Print progress
+        print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
 
         # IMPORT SENSOR DATA
         cp.cuda.Device().synchronize()
@@ -105,6 +110,34 @@ def run3D(logID, conf):
             v_t = x_t - x_prev
         
         print('Current pose at time step ' + str(i) + ': (' + str(x_t.position.x) + ', ' + str(x_t.position.y) + ', ' + str(x_t.position.z) + '), with orientation (' + str(x_t.orientation.roll) + ', ' + str(x_t.orientation.pitch) + ', ' + str(x_t.orientation.yaw) + ')')
+
+        # IMPORT ODOMETRY DATA AND COMPUTE ODOMETRY-BASED POSE IF AVAILABLE
+        if conf.isSLAM and conf.isOdom:
+            try:
+                odom_prev = odom_t
+                step_odom_prev = step_odom_t
+                odom_t = readPose(conf.lidarPath + str(i).zfill(6) + "_odom.csv")
+                step_odom_t = i
+                print('Odometry message at time step ' + str(i) + ': (' + str(odom_t.position.x) + ', ' + str(odom_t.position.y) + ', ' + str(odom_t.position.z) + '), with orientation (' + str(odom_t.orientation.roll) + ', ' + str(odom_t.orientation.pitch) + ', ' + str(odom_t.orientation.yaw) + ')')
+                if odom_prev is not None:
+                    delta_odom = (odom_t - odom_prev) / (step_odom_t - step_odom_prev)
+                    odom_x_t = x_prev + delta_odom
+                    print('Odometry-based pose at time step ' + str(i) + ': (' + str(odom_x_t.position.x) + ', ' + str(odom_x_t.position.y) + ', ' + str(odom_x_t.position.z) + '), with orientation (' + str(odom_x_t.orientation.roll) + ', ' + str(odom_x_t.orientation.pitch) + ', ' + str(odom_x_t.orientation.yaw) + ')')
+                else:
+                    odom_x_t = None
+            except:
+                odom_x_t = None
+
+        # FUSE ODOMETRY-BASED POSE WITH SLAM-BASED POSE IF AVAILABLE
+        if conf.isSLAM and conf.isOdom and odom_x_t is not None:
+            poseWithCov = poseWithCovariance(x_t, cov)
+            # Create a uniformly distributed covariance for the odometry-based pose (this is a placeholder, in practice you would use the actual covariance from the odometry)
+            odom_cov = np.diag([0.05, 0.05, 0.05, np.deg2rad(0.05), np.deg2rad(0.05), np.deg2rad(0.05)])**2
+            odom_cov = covariance(odom_cov)
+            odomPoseWithCov = poseWithCovariance(odom_x_t, odom_cov)
+            poseWithCov = poseWithCov.fuse_with(odomPoseWithCov)
+            x_t = poseWithCov.pose
+            cov = poseWithCov.covariance
 
         # GENERATE GRID MAP FROM POINT CLOUD
         cp.cuda.Device().synchronize()
@@ -160,12 +193,14 @@ def run3D(logID, conf):
         print('-------------------------------------')
 
         # Pause indefinitely for every i multiple of 50
-        if (i - conf.initialTimeStep) % 100 == 0 and i != conf.initialTimeStep:
-            plt.pause(0.1)
-            input("Press Enter to continue...")
+        #if (i - conf.initialTimeStep) % 100 == 0 and i != conf.initialTimeStep:
+        #    plt.pause(0.1)
+        #    input("Press Enter to continue...")
 
-        # Print progress
-        print('Frame:   ' + str(i-conf.initialTimeStep+1) + ' / ' + str(conf.simHorizon))
+        # If this is the last frame, save the last static layer of the TGM
+        if i == conf.initialTimeStep + conf.simHorizon - 1:
+            tgm.staticMap.saveState(videoPath + 'final_static_layer.grid')
+            print('Saved final static layer of the TGM to ' + videoPath + 'final_static_layer.grid')
 
 if __name__ == '__main__':
     # Config file
