@@ -18,9 +18,15 @@ VALID_LOGS = [0, 2, 3, 5, 7, 8, 9, 11, 13, 14, 15, 16, 18, 19, 22, 23, 24, 25]
 
 FILTERS = ['ROR', 'SOR', 'DROR']
 
+ROR_VALUES = [0.14, 0.16, 0.18, 0.20, 0.22, 0.24]
+SOR_VALUES = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+DROR_VALUES = [0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
+
+weatherPriors = [0.0, 0.01, 0.02]
+
 MAX_WORKERS = 12
 
-IS_PARALLEL = False
+IS_PARALLEL = True
 
 def snowRunLoop():
     configPath = './config/'
@@ -55,26 +61,49 @@ def snowRunLoop():
 
         # Update the filter
         for filter in FILTERS:
-            newConf = copy.deepcopy(conf)
-            if filter == 'ROR':
-                newConf.isROR = True
-                newConf.isSOR = False
-                newConf.isDROR = False
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.ROR_k) + '-r-' + str(newConf.ROR_r)
-            elif filter == 'SOR':
-                newConf.isROR = False
-                newConf.isSOR = True
-                newConf.isDROR = False
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.SOR_k) + '-s-' + str(newConf.SOR_s)
-            elif filter == 'DROR':
-                newConf.isROR = False
-                newConf.isSOR = False
-                newConf.isDROR = True
-                logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.DROR_k) + '-rho-' + str(newConf.DROR_rho)
+            for weatherPrior in weatherPriors:
+                if filter == 'ROR':
+                    for r in ROR_VALUES:
+                        newConf = copy.deepcopy(conf)
+                        newConf.ROR_r = r
+                        newConf.isROR = True
+                        newConf.isSOR = False
+                        newConf.isDROR = False
+                        newConf.weatherPrior = weatherPrior
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.ROR_k) + '-r-' + str(newConf.ROR_r) + '-weatherPrior-' + str(newConf.weatherPrior)
+                        print('Adding task: ' + logID)
+                        tasks.append((logID, newConf))
+                elif filter == 'SOR':
+                    for s in SOR_VALUES:
+                        newConf = copy.deepcopy(conf)
+                        newConf.SOR_s = s
+                        newConf.isROR = False
+                        newConf.isSOR = True
+                        newConf.isDROR = False
+                        newConf.weatherPrior = weatherPrior
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.SOR_k) + '-s-' + str(newConf.SOR_s) + '-weatherPrior-' + str(newConf.weatherPrior)
+                        print('Adding task: ' + logID)
+                        tasks.append((logID, newConf))
+                elif filter == 'DROR':
+                    for rho in DROR_VALUES:
+                        newConf = copy.deepcopy(conf)
+                        newConf.DROR_rho = rho
+                        newConf.isROR = False
+                        newConf.isSOR = False
+                        newConf.isDROR = True
+                        newConf.weatherPrior = weatherPrior
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(newConf.DROR_k) + '-rho-' + str(newConf.DROR_rho) + '-weatherPrior-' + str(newConf.weatherPrior)
+                        print('Adding task: ' + logID)
+                        tasks.append((logID, newConf))
 
-            print('Adding task: ' + logID)
+    # Print the number of tasks
+    print('Initial number of tasks: ' + str(len(tasks)))
 
-            tasks.append((logID, newConf))
+    # Remove tasks that have already been completed
+    tasks = [task for task in tasks if not os.path.exists('./results/' + task[0] + '/IoU.csv')]
+
+    # Print the number of tasks left
+    print('Number of tasks left: ' + str(len(tasks)))
 
     if IS_PARALLEL:
         with concurrent.futures.ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
