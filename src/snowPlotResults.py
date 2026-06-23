@@ -14,6 +14,10 @@ ROR_VALUES = [0.14, 0.16, 0.18, 0.20, 0.22, 0.24]
 SOR_VALUES = [0.00, 0.10, 0.20, 0.30, 0.40, 0.50]
 DROR_VALUES = [0.04, 0.05, 0.06, 0.07, 0.08, 0.09]
 
+WEATHER_PRIORS = [0.0, 0.01, 0.02, 0.03, 0.04, 0.05]
+MARKERS = ['o', 's', '^', 'D', 'v', 'P']
+COLORS = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown']
+
 TEST_LOGS = [22]
 
 def detailedPlot():
@@ -444,8 +448,229 @@ def sumaryTable():
         print('F1_t: ' + str(meanF1_t))
         print('')
 
+def ablationPlot():
+    configPath = './config/'
+    # Load default config file
+    defConfFile = 'config'
+    conf = loadConfigAsDict(configPath, defConfFile)
+
+    # Load specific config file
+    snowConfig = 'snowyKitti'
+    specificConf = loadConfigAsDict(configPath, snowConfig)
+
+    # Update default config file with specific config file
+    conf.__dict__.update(specificConf.__dict__)
+
+    for filter in ['ROR', 'SOR', 'DROR']:
+        AccPrecision_t = [[] for _ in WEATHER_PRIORS]
+        AccRecall_t = [[] for _ in WEATHER_PRIORS]
+
+        for i, weather_prior in enumerate(WEATHER_PRIORS):
+            for log in VALID_LOGS:
+                # Define the logID
+                if filter == 'ROR':
+                    logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.ROR_k) + '-r-' + str(conf.ROR_r)
+                elif filter == 'SOR':
+                    logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.SOR_k) + '-s-' + str(conf.SOR_s)
+                elif filter == 'DROR':
+                    logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.DROR_k) + '-rho-' + str(conf.DROR_rho)
+
+                logID += '-weatherPrior-' + str(weather_prior)
+
+                # Define the folder
+                folder = RESULTS_ROOT + logID + '/'
+                if not os.path.isdir(folder):
+                    print('Missing folder: ' + folder)
+                    continue
+
+                # Load files
+                Precision_t = np.loadtxt(folder + 'precision_t.csv', delimiter=',')
+                Recall_t = np.loadtxt(folder + 'recall_t.csv', delimiter=',')
+
+                AccPrecision_t[i].extend(np.ravel(Precision_t))
+                AccRecall_t[i].extend(np.ravel(Recall_t))
+
+        # Remove NaN values
+        AccPrecision_t = [[x for x in AccPrecision_t[i] if not np.isnan(x)] for i in range(len(AccPrecision_t))]
+        AccRecall_t = [[x for x in AccRecall_t[i] if not np.isnan(x)] for i in range(len(AccRecall_t))]
+
+        # Compute the mean values
+        meanPrecision_t = [np.mean(AccPrecision_t[i]) if AccPrecision_t[i] else np.nan for i in range(len(AccPrecision_t))]
+        meanRecall_t = [np.mean(AccRecall_t[i]) if AccRecall_t[i] else np.nan for i in range(len(AccRecall_t))]
+
+        # Plot precision and recall vs weatherPrior
+        plt.plot(WEATHER_PRIORS, meanPrecision_t, label='Precision (TGM)', marker='o', color='blue')
+        plt.plot(WEATHER_PRIORS, meanRecall_t, label='Recall (TGM)', marker='s', color='red')
+
+        plt.legend(loc='lower left', bbox_to_anchor=(0.0, 0.0))
+        plt.ylim(0, 1)
+
+        plt.xlabel('weatherPrior')
+        plt.ylabel('Average metric')
+
+        plt.gcf().set_size_inches(7, 3.5)
+        plt.xticks(WEATHER_PRIORS)
+
+        # Add grid lines
+        plt.grid(which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+        plt.minorticks_on()
+
+        # Adjust layout
+        plt.tight_layout()
+
+        # Save the plot
+        plt.savefig(META_RESULTS_FOLDER + 'Ablation' + filter + '_PrecisionRecall_vs_weatherPrior.png')
+        plt.savefig(META_RESULTS_FOLDER + 'Ablation' + filter + '_PrecisionRecall_vs_weatherPrior.svg', format='svg', dpi=1200)
+
+        # Clear the plot
+        plt.clf()
+
+def ablationPlot2():
+    # This function is for plotting the precision-recall curve for each weather prior value
+    # It works similarly to sesnsitivityPlot, but instead of plotting the precision-recall curve for baseline and TGM, it plots the precision-recall curve for TGM with different weather prior values
+
+    configPath = './config/'
+    # Load default config file
+    defConfFile = 'config'
+    conf = loadConfigAsDict(configPath, defConfFile)
+
+    # Load specific config file
+    snowConfig = 'snowyKitti'
+    specificConf = loadConfigAsDict(configPath, snowConfig)
+
+    # Update default config file with specific config file
+    conf.__dict__.update(specificConf.__dict__)
+
+    for filter in ['ROR', 'SOR', 'DROR']:
+        if filter == 'ROR':
+            filter_values = ROR_VALUES
+            filter_variable_txt = 'r'
+        elif filter == 'SOR':
+            filter_values = SOR_VALUES
+            filter_variable_txt = 's'
+        elif filter == 'DROR':
+            filter_values = DROR_VALUES
+            filter_variable_txt = r'$\gamma$'
+
+        for j, weather_prior in enumerate(WEATHER_PRIORS):
+            AccPrecision_t = [[] for _ in filter_values]
+            AccRecall_t = [[] for _ in filter_values]
+            missing_folder_counts = [0 for _ in filter_values]
+            missing_file_counts = [0 for _ in filter_values]
+
+            for i, value in enumerate(filter_values):
+                for log in VALID_LOGS:
+                    # Define the logID
+                    if filter == 'ROR':
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.ROR_k) + '-r-' + str(value)
+                    elif filter == 'SOR':
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.SOR_k) + '-s-' + str(value)
+                    elif filter == 'DROR':
+                        logID = 'SnowyKitti-' + str(log).zfill(2) + '-' + filter + '-k-' + str(conf.DROR_k) + '-rho-' + str(value)
+
+                    logID += '-weatherPrior-' + str(weather_prior)
+
+                    # Define the folder
+                    folder = RESULTS_ROOT + logID + '/'
+                    if not os.path.isdir(folder):
+                        missing_folder_counts[i] += 1
+                        continue
+
+                    precision_path = folder + 'precision_t.csv'
+                    recall_path = folder + 'recall_t.csv'
+                    if not os.path.isfile(precision_path) or not os.path.isfile(recall_path):
+                        missing_file_counts[i] += 1
+                        continue
+
+                    precision_t = np.loadtxt(precision_path, delimiter=',')
+                    recall_t = np.loadtxt(recall_path, delimiter=',')
+
+                    AccPrecision_t[i].extend(np.ravel(precision_t))
+                    AccRecall_t[i].extend(np.ravel(recall_t))
+
+            # Remove NaN values
+            samples_before = [len(AccPrecision_t[i]) for i in range(len(AccPrecision_t))]
+            AccPrecision_t = [[x for x in AccPrecision_t[i] if not np.isnan(x)] for i in range(len(AccPrecision_t))]
+            AccRecall_t = [[x for x in AccRecall_t[i] if not np.isnan(x)] for i in range(len(AccRecall_t))]
+            samples_after = [len(AccPrecision_t[i]) for i in range(len(AccPrecision_t))]
+
+            # Compute the mean values
+            meanPrecision_t = [np.mean(AccPrecision_t[i]) if AccPrecision_t[i] else np.nan for i in range(len(AccPrecision_t))]
+            meanRecall_t = [np.mean(AccRecall_t[i]) if AccRecall_t[i] else np.nan for i in range(len(AccRecall_t))]
+
+            # Report missing or empty points to explain why some values do not show up
+            for i, value in enumerate(filter_values):
+                if samples_before[i] == 0:
+                    print(
+                        'No samples for filter ' + filter +
+                        ', weatherPrior ' + str(weather_prior) +
+                        ', ' + filter_variable_txt + ' = ' + str(value) +
+                        ' (missing folders: ' + str(missing_folder_counts[i]) +
+                        ', missing files: ' + str(missing_file_counts[i]) + ')'
+                    )
+                elif samples_after[i] == 0:
+                    print(
+                        'All samples NaN for filter ' + filter +
+                        ', weatherPrior ' + str(weather_prior) +
+                        ', ' + filter_variable_txt + ' = ' + str(value) +
+                        ' (nan count: ' + str(samples_before[i]) +
+                        ', missing folders: ' + str(missing_folder_counts[i]) +
+                        ', missing files: ' + str(missing_file_counts[i]) + ')'
+                    )
+                elif missing_folder_counts[i] > 0 or missing_file_counts[i] > 0:
+                    print(
+                        'Partial data for filter ' + filter +
+                        ', weatherPrior ' + str(weather_prior) +
+                        ', ' + filter_variable_txt + ' = ' + str(value) +
+                        ' (samples: ' + str(samples_after[i]) +
+                        '/' + str(samples_before[i]) +
+                        ', missing folders: ' + str(missing_folder_counts[i]) +
+                        ', missing files: ' + str(missing_file_counts[i]) + ')'
+                    )
+
+            valid_indices = [
+                i for i in range(len(filter_values))
+                if not np.isnan(meanPrecision_t[i]) and not np.isnan(meanRecall_t[i])
+            ]
+
+            meanPrecision_t = np.array([meanPrecision_t[i] for i in valid_indices], dtype=float)
+            meanRecall_t = np.array([meanRecall_t[i] for i in valid_indices], dtype=float)
+
+            if meanPrecision_t.size == 0 or meanRecall_t.size == 0:
+                continue
+
+            plt.plot(meanRecall_t, meanPrecision_t, label='weatherPrior = ' + str(weather_prior), marker=MARKERS[j], linewidth=1.5, color=COLORS[j])
+
+            for idx, value_idx in enumerate(valid_indices):
+                value_txt = str(filter_values[value_idx])
+                plt.annotate('  ' + filter_variable_txt + ' = ' + value_txt + '   ',
+                             (meanRecall_t[idx], meanPrecision_t[idx]),
+                             ha='right', va='top', color = COLORS[j])
+
+        plt.legend(loc='lower left', bbox_to_anchor=(0.0, 0.0))
+        #plt.ylim(0, 1)
+        #plt.xlim(0, 1)
+
+        plt.xlabel('Recall')
+        plt.ylabel('Precision')
+
+        plt.gcf().set_size_inches(7, 3.5)
+
+        plt.gca().xaxis.set_major_formatter(plt.FormatStrFormatter('%.2f'))
+        plt.gca().yaxis.set_major_formatter(plt.FormatStrFormatter('%.2f'))
+
+        plt.grid(which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+        plt.minorticks_on()
+
+        plt.tight_layout()
+
+        plt.savefig(META_RESULTS_FOLDER + 'Ablation' + filter + '_PrecisionRecallCurve_by_weatherPrior.png')
+        plt.savefig(META_RESULTS_FOLDER + 'Ablation' + filter + '_PrecisionRecallCurve_by_weatherPrior.svg', format='svg', dpi=1200)
+
+        plt.clf()
 
 if __name__ == '__main__':
-    detailedPlot()
-    sensitivityPlot()
-    sumaryTable()
+    #detailedPlot()
+    #sensitivityPlot()
+    #sumaryTable()
+    ablationPlot2()
